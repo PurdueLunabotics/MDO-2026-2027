@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "response": "granular_response",
+  "data_kind": "synthetic",
+  "source": "Invented numbers for software tests; no physical experiment or DEM run",
+  "revision": "teaching-fixture-1",
+  "material": "synthetic fixture, not calibrated BP-1",
+  "validation": "Software contract tests only. No predictive accuracy claimed.",
+  "units": {
+    "froude": "1",
+    "capture": "1",
+    "lift": "1"
+  },
+  "conditions": {
+    "drum_diameter": {
+      "value": 0.28,
+      "units": "m",
+      "absolute_tolerance": 0.0001
+    },
+    "drum_length": {
+      "value": 0.25,
+      "units": "m",
+      "absolute_tolerance": 0.0001
+    },
+    "cut_depth": {
+      "value": 0.012,
+      "units": "m",
+      "absolute_tolerance": 0.0001
+    },
+    "soil_density": {
+      "value": 1500.0,
+      "units": "kg/m**3",
+      "absolute_tolerance": 0.1
+    },
+    "gravity": {
+      "value": 9.80665,
+      "units": "m/s**2",
+      "absolute_tolerance": 0.0001
+    },
+    "scoop_opening": {
+      "value": 0.035,
+      "units": "m",
+      "absolute_tolerance": 0.0001
+    },
+    "fill_fraction": {
+      "value": 0.4,
+      "units": "1",
+      "absolute_tolerance": 4.000000000000001e-06
+    },
+    "usable_volume_fraction": {
+      "value": 0.9,
+      "units": "1",
+      "absolute_tolerance": 9e-06
+    },
+    "stored_soil_density": {
+      "value": 1250.0,
+      "units": "kg/m**3",
+      "absolute_tolerance": 0.0125
+    },
+    "scoops_per_revolution": {
+      "value": 4.0,
+      "units": "1",
+      "absolute_tolerance": 4e-05
+    },
+    "cut_pressure": {
+      "value": 18000.0,
+      "units": "Pa",
+      "absolute_tolerance": 0.18000000000000002
+    }
+  },
+  "rows": [
+    [
+      0.0,
+      0.65,
+      0.15
+    ],
+    [
+      0.1,
+      0.59,
+      0.16
+    ],
+    [
+      0.2,
+      0.54,
+      0.17
+    ],
+    [
+      0.3,
+      0.5,
+      0.18
+    ]
+  ]
+}

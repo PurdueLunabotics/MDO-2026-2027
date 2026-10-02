@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*_out/
+reports/
+.pytest_cache/
+results/
+*.egg-info/
+# Keep large raw simulator/test runs outside Git; commit small processed datasets
+# and their provenance manifests deliberately under a discipline's data folder.
+raw_runs/

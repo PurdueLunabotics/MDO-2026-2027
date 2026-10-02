@@ -1,0 +1,155 @@
+"""Self-contained HTML + SVG drawings. No graphics/browser dependency to generate.
+
+Drawings use exactly the same kinematics as the constraints. Driver evaluations
+are replayed, not finite-difference perturbations or invented iteration states.
+"""
+from html import escape
+import json
+import math
+from pathlib import Path
+from .config import ROUTE
+from .linkage import sweep_poses
+
+
+def values_from_snapshot(snapshot):
+    return {name: item["value"] for group in ("design", "assumptions", "outputs")
+            for name, item in snapshot[group].items()}
+
+
+def geometry_svg(values, extended=False, title=None, travel=False):
+    v = values.__getitem__
+    poses, _ = sweep_poses(values)
+    cx, cy = ((v("travel_x"),v("travel_y")) if travel else
+              (poses[-1] if extended else (v("stowed_x"),v("stowed_y"))))
+    rd, rw = v("drum_diameter") / 2, v("wheel_diameter") / 2
+    xlim = max(1.05, max(p[0] for p in poses) + rd + .12)
+    yhi = max(.85, v("top_pivot_height") + .12, max(p[1] for p in poses) + rd + .12)
+    ylo = min(-.55, min(p[1] for p in poses) - rd - .12)
+    scale = min(1060 / (2 * xlim), 540 / (yhi - ylo))
+    ox, oy = 600, 95 + yhi * scale
+    def point(x, y):
+        return ox + x * scale, oy - y * scale
+    def line(x1, y1, x2, y2, color, width=3, dash=""):
+        a,b = point(x1,y1); c,d = point(x2,y2)
+        return f'<line x1="{a:.3f}" y1="{b:.3f}" x2="{c:.3f}" y2="{d:.3f}" stroke="{color}" stroke-width="{width}" stroke-dasharray="{dash}"/>'
+    def circle(x,y,r,color,fill="none",width=2):
+        a,b=point(x,y)
+        return f'<circle cx="{a:.3f}" cy="{b:.3f}" r="{r*scale:.3f}" stroke="{color}" fill="{fill}" stroke-width="{width}"/>'
+    def label(x,y,text,dx=0,dy=0):
+        a,b=point(x,y)
+        return f'<text x="{a+dx:.2f}" y="{b+dy:.2f}" font-size="16" fill="#24354b">{escape(text)}</text>'
+    def rect(x,y,w,h,fill,stroke="none",dash=""):
+        a,b=point(x,y+h)
+        return f'<rect x="{a:.3f}" y="{b:.3f}" width="{w*scale:.3f}" height="{h*scale:.3f}" fill="{fill}" stroke="{stroke}" stroke-width="2" stroke-dasharray="{dash}"/>'
+    state = "Raised · travel / deposition" if travel else ("Extended · digging" if extended else "Compact · starting envelope")
+    title = title or state
+    actuator_length = v("travel_actuator_length") if travel else (v("actuator_extended_length") if extended else v("actuator_retracted_length"))
+    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 770" role="img" aria-label="{escape(title, quote=True)}">',
+           '<rect width="1200" height="770" rx="16" fill="#f7fafc"/>',
+           f'<text x="35" y="36" font-family="sans-serif" font-size="24" font-weight="700" fill="#142a43">{escape(title)}</text>',
+           '<g font-family="sans-serif">',
+           '<text x="35" y="67" font-size="16" fill="#546579">Side elevation · mirrored front and rear · each visible drum represents a shaft-linked pair</text>',
+           rect(-xlim, ylo, 2*xlim, -ylo, "#eee9e1"),
+           rect(-.75, 0, 1.5, .75, "none", "#5282ac", "8 5"),
+           line(-xlim,0,xlim,0,"#8c7960",2),
+           line(-xlim,-v("pit_depth"),xlim,-v("pit_depth"),"#ac7756",1,"6 5"),
+           rect(-v("wheelbase")/2, rw, v("wheelbase"), 2*rw+v("chassis_height")-rw, "#dce7f0", "#67839f")]
+    for sign in (-1,1):
+        svg += [circle(sign*v("wheelbase")/2,rw,rw,"#354657","#cbd6df",3)]
+        path=" ".join(f'{point(sign*x,y)[0]:.2f},{point(sign*x,y)[1]:.2f}' for x,y in poses)
+        svg += [f'<polyline points="{path}" fill="none" stroke="#9aafba" stroke-width="2" stroke-dasharray="3 5"/>',
+                line(sign*v("pivot_x"),v("bottom_pivot_height"),sign*cx,cy,"#246f99",7),
+                line(sign*v("actuator_pivot_x"),v("top_pivot_height"),sign*cx,cy,"#d77422",7),
+                circle(sign*cx,cy,rd,"#a54b1e","#e6b68e",3),
+                circle(sign*cx,cy,.009,"#172e45","#172e45"),
+                circle(sign*v("actuator_pivot_x"),v("top_pivot_height"),.009,"#172e45","#172e45"),
+                circle(sign*v("pivot_x"),v("bottom_pivot_height"),.009,"#172e45","#172e45")]
+    svg += [label(v("actuator_pivot_x"),v("top_pivot_height"),"A",-22,-12),
+            label(v("pivot_x"),v("bottom_pivot_height"),"B",-22,22),
+            label(cx,cy,"C",12,-10), label(-.74,.75,"1.50 m × 0.75 m stowed envelope",8,-10),
+            label(-xlim+.03,0,"Ground level",0,-10),
+            label(-xlim+.03,-v("pit_depth"),f'Pit floor: −{v("pit_depth"):.2f} m',0,22)]
+    top = cy + rd; bottom = cy - rd
+    svg += [f'<text x="35" y="672" font-size="18" fill="#24354b">Actuator: {actuator_length*1000:.1f} mm · Fixed arm: {v("arm_length")*1000:.1f} mm · Drum Ø {2*rd*1000:.1f} mm</text>',
+            f'<text x="35" y="705" font-size="18" fill="#24354b">Drum top: {top:+.3f} m · Drum bottom: {bottom:+.3f} m · A: {v("top_pivot_height"):.3f} m · B: {v("bottom_pivot_height"):.3f} m</text>',
+            '<text x="35" y="739" font-size="15" fill="#546579">Blue = fixed arm · Orange = linear actuator · Dotted arc = sampled motion · Ground is y = 0</text>',
+            '</g></svg>']
+    return "".join(svg)
+
+
+def route_svg(one_way_time=45.0):
+    points=[(0.,0.)]; heading=0.
+    for d, degrees in ROUTE:
+        x,y=points[-1]
+        points.append((x+d*math.cos(heading), y+d*math.sin(heading)))
+        heading+=math.radians(degrees)
+    min_x=min(p[0] for p in points)
+    coords=lambda p: (80+(p[0]-min_x)*90, 450-p[1]*70)
+    line=" ".join(f'{coords(p)[0]:.1f},{coords(p)[1]:.1f}' for p in points)
+    labels=[]
+    for i, ((d,deg),p,q) in enumerate(zip(ROUTE,points,points[1:])):
+        x,y=coords(((p[0]+q[0])/2,(p[1]+q[1])/2))
+        labels.append(f'<text x="{x+12:.1f}" y="{y-12:.1f}" font-size="17">{d:g} m</text>')
+        if deg:
+            x,y=coords(q)
+            labels.append(f'<text x="{x+12:.1f}" y="{y+18:.1f}" font-size="14">{deg:g}° left</text>')
+    x,y=coords(points[-1])
+    start_x,start_y=coords(points[0])
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 550" role="img" aria-label="Traversal route"><rect width="630" height="550" fill="#f7fafc"/><g font-family="sans-serif" fill="#24354b"><text x="25" y="35" font-size="22">{one_way_time:g} s outbound + {one_way_time:g} s return</text><polyline points="{line}" stroke="#246f99" stroke-width="5" fill="none"/><circle cx="{start_x:.1f}" cy="{start_y:.1f}" r="7" fill="#246f99"/><text x="{start_x-15:.1f}" y="{start_y+35:.1f}" font-size="16">Excavate</text><circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="#d77422"/><text x="{x-45:.1f}" y="{y+40:.1f}" font-size="16">Deposit</text>{"".join(labels)}<text x="25" y="535" font-size="15">Return follows the same path in reverse order; yaw signs reverse.</text></g></svg>'
+
+
+def write_report(record, output, iterations=()):
+    output=Path(output)
+    final, baseline=record["final"],record["baseline"]
+    values=values_from_snapshot(final)
+    one_way_time=values["traversal_time_one_way"]
+    route_text=" → ".join(f'{d:g} m' + (f' → {abs(a):g}° {"left" if a > 0 else "right"}' if a else "") for d,a in ROUTE)
+    turn_count=sum(a != 0 for _,a in ROUTE)
+    prefix=output.stem
+    drawings=[]
+    for name,extended,travel in (("retracted",False,False),("travel",False,True),("extended",True,False)):
+        svg=geometry_svg(values,extended,travel=travel)
+        (output.parent/f'{prefix}_{name}.svg').write_text(svg,encoding="utf-8")
+        drawings.append(svg)
+    status=record["status"].replace("_"," ").upper()
+    provenance=record.get("model_metadata",final.get("model_metadata",{}))
+    def fmt(n): return f'{n:,.5g}'
+    rows=[]
+    for name,item in final["design"].items():
+        value,low,high=item["value"],item["lower"],item["upper"]
+        fraction=(value-low)/(high-low)
+        bound="Lower bound" if fraction<.005 else ("Upper bound" if fraction>.995 else "Interior")
+        rows.append(f'<tr><th>{escape(name)}</th><td>{fmt(low)}</td><td><b>{fmt(value)}</b></td><td>{fmt(high)}</td><td>{escape(item["units"] or "—")}</td><td><div class="track"><i style="left:{100*max(0,min(1,fraction)):.2f}%"></i></div>{bound}</td></tr>')
+    output_rows="".join(f'<tr><th>{escape(name)}</th><td>{fmt(baseline["outputs"][name]["value"])}</td><td><b>{fmt(item["value"])}</b></td><td>{escape(item["units"] or "—")}</td></tr>' for name,item in final["outputs"].items())
+    constraint_rows="".join(f'<tr><th>{escape(name)}</th><td>{fmt(item["margin"])}</td><td>{escape(item["units"] or "—")}</td><td class="{"pass" if item["passed"] else "fail"}">{"PASS" if item["passed"] else "FAIL"}</td></tr>' for name,item in final["constraints"].items())
+    assumptions="".join(f'<tr><th>{escape(name)}</th><td>{fmt(item["value"])}</td><td>{escape(item["units"] or "—")}</td></tr>' for name,item in final["assumptions"].items())
+    history=[{"label":"Starting design", "snapshot":baseline},*iterations,{"label":"Final iterate", "snapshot":final}]
+    frames=[]
+    for entry in history:
+        snap=entry["snapshot"]
+        vals=values_from_snapshot(snap)
+        frames.append({"label":entry["label"],"feasible":snap["feasible"],
+                       "points":snap["outputs"]["construction_points"]["value"],
+                       "retracted":geometry_svg(vals),"extended":geometry_svg(vals,True)})
+    data=json.dumps(frames,ensure_ascii=True).replace("</","<\\/")
+    css='''body{margin:0;background:#eef3f7;color:#203249;font:15px/1.55 system-ui,sans-serif}main{max-width:1240px;margin:auto;padding:35px 24px}h1{font-size:32px;margin:0}h2{margin-top:0;font-size:22px}p{max-width:1000px}.sub{color:#536780}.card{background:white;border-radius:14px;padding:24px;margin:22px 0;box-shadow:0 3px 16px #1e3d5610}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}svg{width:100%;height:auto}.metrics{display:flex;flex-wrap:wrap;gap:18px}.metric{flex:1;min-width:150px;padding:15px;background:#f0f6fa;border-radius:8px}.metric b{display:block;font-size:25px}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14px}th,td{text-align:left;border-bottom:1px solid #e4ebf1;padding:10px 12px}thead{background:#eaf1f6}tbody th{font-weight:500}th:first-child{overflow-wrap:anywhere}.track{width:170px;height:9px;background:#dce7ee;border-radius:8px;position:relative;margin:8px 0}.track i{display:block;position:absolute;width:5px;height:17px;background:#176d96;top:-4px;transform:translateX(-50%)}.pass{color:#12694d}.fail{color:#a33323}.badge{display:inline-block;background:#dfeef6;padding:5px 12px;border-radius:30px;font-weight:700}.note{padding:12px 15px;border-left:4px solid #d77422;background:#fff5e8}input[type=range]{width:100%;margin:14px 0}summary{cursor:pointer;font-weight:650}a{color:#12668e}@media(max-width:800px){.grid{grid-template-columns:1fr}main{padding:20px 10px}.card{padding:16px}}@media print{body{background:white}.card{box-shadow:none;break-inside:avoid}.replay{display:none}}'''
+    metrics="".join(f'<div class="metric">{label}<b>{fmt(final["outputs"][name]["value"])} {unit}</b></div>' for name,label,unit in
+                    [("construction_points","Construction productivity","pts"),("dry_mass","Robot mass","kg"),("cycle_time","Full cycle","s"),("actuation_time","Raise + lower","s"),("tip_stability_margin","Uneven-load tip reserve","m")])
+    html=f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Rover MDO design report</title><style>{css}</style></head><body><main>
+<h1>Rover MDO · design report</h1><p class="sub">Fixed-time route · four bucket drums · mirrored actuator linkages · OpenMDAO {escape(record['openmdao_version'])}</p>
+<p>Calibration status: {escape(provenance.get('calibration','not recorded'))}.</p>
+<span class="badge">{escape(status)}</span><p>Optimizer success: {escape(str(record['optimizer_success']))}. Modeled feasibility: <b>{final['feasible']}</b>. All dimensions and results below describe the final saved iterate.</p>
+<div class="metrics">{metrics}</div>
+<p class="note">Uncalibrated conceptual screens. Payload is limited by reachable soil and drum storage; partial fill is allowed. The provisional trench screen requires wheel diameter at least as large as trench depth. Travel drums must clear a wheel-diameter step; loaded-route stability limits raising them. The static tip screen checks one drum pair full and the other empty, with both pairs fully extended. Other half-loaded arm positions require a software interlock; this model does not verify it. The geometry drawings are reference schematics, not CAD of optional drum, wheel or suspension models. These screens need terrain, obstacle and asymmetric-load tests. Tube strength and RPM validity also require physical validation. See MODEL.md and the model cards; 3D packaging and joint strength remain separate checks. Failed iterates remain visible and are labeled as such.</p>
+<section class="card"><h2>Final geometry</h2><div class="grid">{drawings[0]}{drawings[1]}{drawings[2]}</div><p>The compact starting pose fits the dashed envelope. After deployment, the drums clear a wheel-diameter step in the travel pose. The 2.50 m deployed height and 0.45 m pit floor are checked separately. Collision clearance covers the sampled travel-to-dig arc.</p><p><a href="{prefix}_retracted.svg">Open starting drawing</a> · <a href="{prefix}_travel.svg">Open travel drawing</a> · <a href="{prefix}_extended.svg">Open digging drawing</a> · <a href="n2.html">Open sparse N2 diagram</a></p></section>
+<section class="card replay"><h2>Geometry through driver evaluations</h2><p>Recorded driver evaluations, including line-search trials; finite-difference perturbations are excluded. The slider starts at the final iterate.</p><label for="iteration">Evaluation</label><input id="iteration" type="range" min="0" max="{len(frames)-1}" value="{len(frames)-1}" step="1"><p id="iteration-label"></p><div class="grid"><div id="history-retracted"></div><div id="history-extended"></div></div></section>
+<section class="card"><h2>Route and cycle accounting</h2><div class="grid"><div>{route_svg(one_way_time)}</div><div><p>Outbound: {route_text}.</p><p><b>{one_way_time:g} s outbound + {one_way_time:g} s return</b>, including {turn_count} route turns per direction. Total translation: {values['route_distance']:g} m; route yaw: {values['route_turn_angle']:g}°. Yaw signs reverse on return.</p><p>Lower and rotate in place → dwell if needed → raise loaded drums → outbound → dump one pair → separate {math.degrees(values['turn_angle']):g}° turn → dump second pair → return along the reversed path.</p><p>Cycle counts the lowering, excavation and raising phases once. The actuator/lowering overlap is removed once; rotation never creates soil beyond the fully extended cutting envelope. The modeled cycle deposits from the raised travel position; the tip screen also covers extended-position deposition.</p><p>Whole-cycle cross-check: {final['whole_cycles']['completed']} completed cycles; {fmt(final['whole_cycles']['berm_volume_m3'])} m³; {fmt(final['whole_cycles']['construction_points'])} points. Remaining time is idle.</p></div></div></section>
+<section class="card"><h2>Design variables and bounds</h2><p>Marks show each result within its physical bounds. Bounds other than the 359 mm wheel/drum caps are exploratory choices.</p><div class="scroll"><table><thead><tr><th>Variable</th><th>Lower</th><th>Final</th><th>Upper</th><th>Units</th><th>Position in range</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>
+<section class="card"><h2>Outputs</h2><div class="scroll"><table><thead><tr><th>Output</th><th>Starting design</th><th>Final iterate</th><th>Units</th></tr></thead><tbody>{output_rows}</tbody></table></div></section>
+<section class="card"><h2>Constraint margins</h2><p>Nonnegative means satisfied, allowing the documented scaled numerical tolerance.</p><div class="scroll"><table><thead><tr><th>Constraint</th><th>Margin</th><th>Units</th><th>Check</th></tr></thead><tbody>{constraint_rows}</tbody></table></div></section>
+<section class="card"><details><summary>Fixed assumptions</summary><table><thead><tr><th>Input</th><th>Value</th><th>Units</th></tr></thead><tbody>{assumptions}</tbody></table></details></section>
+<section class="card"><details><summary>Model provenance and evidence</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{escape(json.dumps(provenance,indent=2))}</pre></details></section>
+<p class="sub">Objective = w_mass × 4.4 V/(t m) + w_energy × 1.5 V/(t E), with V in cm³, t in minutes, m in kg, E in Wh. Energy consumed is used, not motor power ratings.</p>
+<script id="iteration-data" type="application/json">{data}</script><script>const frames=JSON.parse(document.getElementById('iteration-data').textContent);const slider=document.getElementById('iteration');function showFrame(){{const f=frames[Number(slider.value)];document.getElementById('iteration-label').textContent=f.label+' · '+(f.feasible?'modeled constraints pass':'infeasible trial')+' · '+f.points.toFixed(1)+' points';document.getElementById('history-retracted').innerHTML=f.retracted;document.getElementById('history-extended').innerHTML=f.extended;}}slider.addEventListener('input',showFrame);showFrame();</script>
+</main></body></html>'''
+    output.with_suffix('.html').write_text(html,encoding="utf-8")

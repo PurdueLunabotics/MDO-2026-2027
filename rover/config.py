@@ -1,0 +1,138 @@
+"""Edit this file first. SI units except explicitly marked rpm and W*h.
+
+Every numerical physics coefficient below is an UNCALIBRATED estimate.
+Bounds are exploratory modeling bounds, not requirements, except the 359 mm caps.
+Power ratings are mechanical shaft power, per motor (four drive, two drum).
+"""
+
+# name: (initial value, lower bound, upper bound, OpenMDAO units)
+DESIGN = {
+    "wheel_diameter": (0.30, 0.18, 0.359, "m"),
+    "wheel_width": (0.10, 0.05, 0.359, "m"),
+    "drum_diameter": (0.28, 0.16, 0.359, "m"),
+    "drum_length": (0.25, 0.12, 0.359, "m"),  # each of four drums
+    "drive_motor_power": (100.0, 25.0, 300.0, "W"),
+    "drive_gear_ratio": (100.0, 15.0, 180.0, None),
+    "drum_motor_power": (100.0, 20.0, 400.0, "W"),  # each pair shares one
+    "drum_rpm": (20.0, 5.0, 120.0, "rpm"),
+    "dump_rpm": (15.0, 5.0, 60.0, "rpm"),
+    "drum_gear_ratio": (120.0, 30.0, 400.0, None),
+    "cut_depth": (0.012, 0.003, 0.025, "m"),  # scoop protrusion / maximum bite
+    "frame_tube_diameter": (0.055, 0.025, 0.10, "m"),
+    "frame_wall": (0.002, 0.001, 0.005, "m"),
+    "arm_tube_diameter": (0.050, 0.025, 0.10, "m"),
+    "arm_wall": (0.002, 0.001, 0.005, "m"),
+    "battery_capacity": (50.0, 10.0, 200.0, "W*h"),
+    "actuator_speed": (0.025, 0.005, 0.08, "m/s"),
+    "travel_actuator_length": (0.38, 0.30, 0.65, "m"),
+    "actuator_retracted_length": (0.45, 0.25, 0.65, "m"),  # compact starting pose
+    "actuator_extended_length": (0.68, 0.45, 1.05, "m"),
+    "top_pivot_height": (0.45, 0.35, 0.70, "m"),  # above level ground
+    "actuator_pivot_x": (0.15, 0.05, 0.30, "m"),  # actuator mount; independent of arm pivot_x
+    "bottom_pivot_height": (0.15, 0.09, 0.30, "m"),
+    "arm_length": (0.60, 0.30, 0.70, "m"),
+    "pivot_x": (0.13, 0.05, 0.30, "m"),  # front station from rover center; rear mirrored
+    "wheelbase": (0.40, 0.38, 0.50, "m"),  # intentionally short RASSOR-style design range
+    "track_width": (0.54, 0.50, 0.699, "m"),  # wheel center spacing; width envelope also applies
+    "actuator_force_rating": (2000.0, 500.0, 6000.0, "N"),  # each of two
+}
+
+# name: (value, units). These are fixed during one optimization, but editable.
+ASSUMPTIONS = {
+    "gravity": (9.80665, "m/s**2"),
+    "run_time": (900.0, "s"),
+    "traversal_time_one_way": (45.0, "s"),  # includes all route turns, excludes deposition
+    "travel_speed": (1.0, "m/s"),  # reference profile shape, rescaled to 45 s
+    "acceleration": (0.40, "m/s**2"),  # reference profile shape, not an optimized quantity
+    "turn_angle": (3.141592653589793, "rad"),  # mandatory half-loaded deposit turn
+    "overhead_time": (8.0, "s"),  # alignment only; linkage motion is modeled separately
+    "electronics_power": (25.0, "W"),
+    "actuator_idle_power": (2.0, "W"),  # per active motor, plus mechanical/efficiency
+    "soil_density": (1500.0, "kg/m**3"),  # excavated bulk density, uncertain
+    "berm_density": (1500.0, "kg/m**3"),  # deposited volume = retained mass / density
+    "fill_fraction": (0.40, None),
+    "delivery_efficiency": (0.90, None),  # fraction retained ABOVE grade IN target
+    "capture_fraction": (0.65, None),  # retained fraction of reachable fresh soil; uncalibrated
+    "cut_pressure": (18000.0, "Pa"),  # effective cutting resistance, not BP-1 data
+    "cut_engagement": (0.15, None),  # fraction of full-width cut engaged
+    "internal_lift_factor": (0.15, None),  # internal soil torque / (payload*g*radius)
+    "vertical_cut_fraction": (0.50, None),
+    "force_imbalance": (0.15, None),  # residual horizontal force after cancellation
+    "dump_revolutions": (3.0, None),  # each pair unloads sequentially
+    "drum_efficiency": (0.70, None),  # combined motor + gearbox electrical efficiency
+    "drum_gear_efficiency": (0.80, None),
+    "drive_efficiency": (0.72, None),
+    "drive_gear_efficiency": (0.80, None),
+    "motor_rated_rpm": (3000.0, "rpm"),
+    "traction_coefficient": (0.60, None),
+    "rocker_load_factor": (1.20, None),  # worst contact pressure / equal-share pressure
+    "wheel_deflection_fraction": (0.07, None),  # deflection / wheel diameter
+    "rolling_base": (0.04, None),
+    "rolling_pressure_scale": (200000.0, "Pa"),
+    "allowable_ground_pressure": (25000.0, "Pa"),  # engineering screening assumption
+    "scrub_coefficient": (0.25, None),
+    "turn_speed_fraction": (0.35, None),  # wheel rim speed relative to travel speed
+    "turn_accel_fraction": (0.50, None),
+    "chassis_height": (0.35, "m"),  # top = wheel diameter + chassis height
+    "drum_pair_gap": (0.06, "m"),  # combined shaft/bearing/center clearance
+    "fixed_mass": (6.0, "kg"),  # electronics, wiring, guards ONLY; structure is separate
+    "wheel_areal_mass": (8.0, "kg/m**2"),
+    "drum_areal_mass": (5.0, "kg/m**2"),
+    "motor_mass_per_watt": (0.006, "kg/W"),
+    "gear_mass_per_torque": (0.05, "kg/(N*m)"),
+    "drive_fixed_mass": (0.35, "kg"),  # per wheel motor/gearbox
+    "drum_fixed_mass": (0.50, "kg"),  # per pair motor/gearbox
+    "battery_specific_energy": (140.0, "W*h/kg"),  # complete pack
+    "battery_usable_fraction": (0.80, None),
+    "battery_c_rate": (15.0, "1/h"),  # continuous pack power / nominal energy
+    "mass_score_weight": (1.0, None),
+    "energy_score_weight": (1.0, None),
+    "transport_clearance": (0.08, "m"),
+    "mechanism_clearance": (0.015, "m"),
+    "minimum_pivot_spacing": (0.08, "m"),
+    "minimum_stroke": (0.04, "m"),
+    "actuator_housing_allowance": (0.04, "m"),
+    "pit_depth": (0.45, "m"),
+    "actuator_efficiency": (0.65, None),
+    "actuator_safety_factor": (1.50, None),
+    "breakout_force": (100.0, "N"),  # each pair; preliminary extraction resistance
+    "actuator_fixed_mass": (0.60, "kg"),
+    "actuator_mass_per_force": (0.0004, "kg/N"),
+    "actuator_mass_per_power": (0.003, "kg/W"),
+    "actuator_mass_per_length": (1.0, "kg/m"),
+    "stored_soil_density": (1250.0, "kg/m**3"),
+    "usable_volume_fraction": (0.90, None),
+    "scoop_opening": (0.035, "m"),
+    "scoop_depth_fraction": (0.50, None),  # empirical screen, not a universal law
+    "scoops_per_revolution": (4.0, None),
+    "max_dig_froude": (0.30, None),  # provisional validity limit, NOT a measured cutoff
+    "max_dump_froude": (0.20, None),
+    "drum_spinup_time": (2.0, "s"),
+    "drum_torque_service_factor": (1.25, None),
+    "minimum_dig_depth": (0.005, "m"),
+    "minimum_payload": (0.05, "kg"),
+    "fresh_site_distance": (0.80, "m"),  # move to a new footprint EACH cycle
+    "site_speed": (0.10, "m/s"),
+    "available_excavation_area": (12.0, "m**2"),  # explicit planning assumption, not a rule
+    "tube_density": (2700.0, "kg/m**3"),
+    "tube_youngs_modulus": (69e9, "Pa"),
+    "tube_yield_strength": (240e6, "Pa"),  # replace with actual material/joint allowables
+    "structure_safety_factor": (2.0, None),
+    "structure_load_factor": (1.5, None),
+    "allowable_deflection": (0.005, "m"),
+    "joint_mass": (2.0, "kg"),
+    "differential_mass": (1.0, "kg"),
+}
+
+# One-way path: translate [m], then rotate [degrees]. All outbound turns are left.
+# Reverse traversal follows these segments in reverse order with opposite yaw.
+# Each segment is rest-to-rest. Total = 9 m and 180 degrees each way.
+ROUTE = ((2.0, 90.0), (3.0, 45.0), (3.0, 45.0), (1.0, 0.0))
+
+# name: (upper limit, units); guidebook section 13. These are stowed dimensions.
+REQUIREMENTS = {
+    "dry_mass": (80.0, "kg"),
+    "rover_length": (1.50, "m"),
+    "rover_width": (0.75, "m"),
+    "rover_height": (0.75, "m"),
+}
