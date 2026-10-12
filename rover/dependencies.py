@@ -28,7 +28,7 @@ def dependencies(component):
                 "rover_length": {"stowed_length"}, "rover_height": {"stowed_height"},
                 "rover_width": names("track_width wheel_width drum_length drum_pair_gap")}
     if component == "LinkageGeometry":
-        core = names("arm_length top_pivot_height bottom_pivot_height pivot_x actuator_pivot_x")
+        core = names("arm_length top_pivot_height bottom_pivot_height pivot_x actuator_pivot_x actuator_attachment_fraction")
         retract = core | {"actuator_retracted_length"}
         travel = core | {"travel_actuator_length"}
         extend = core | {"actuator_extended_length"}
@@ -41,6 +41,7 @@ def dependencies(component):
             "extended_x": extend, "extended_y": extend,
             "sweep_x_min": sweep, "sweep_x_max": sweep,
             "actuator_leverage_max": sweep,
+            "actuator_attachment_distance": names("arm_length actuator_attachment_fraction"),
             "actuator_toggle_margin": sweep | {"mechanism_clearance"},
             "stowed_length": retract | envelope, "stowed_height": retract | high,
             "deployed_length": sweep | envelope, "deployed_height": sweep | high,

@@ -18,9 +18,10 @@ def tube_section(diameter, wall):
 
 class StructureGeometry(Discipline):
     CONFIG_INPUTS = tuple(sorted(names("frame_tube_diameter frame_wall arm_tube_diameter arm_wall tube_density wheelbase track_width top_pivot_height wheel_diameter joint_mass differential_mass pivot_x actuator_pivot_x")))
-    OUTPUT_UNITS = {"structure_mass": "kg", "arm_linear_mass": "kg/m", "frame_section_margin": "m", "arm_section_margin": "m"}
+    OUTPUT_UNITS = {"structure_mass": "kg", "rocker_mass": "kg", "arm_linear_mass": "kg/m", "frame_section_margin": "m", "arm_section_margin": "m"}
     DEPENDENCIES = {
         "structure_mass": names("frame_tube_diameter frame_wall tube_density wheelbase track_width top_pivot_height wheel_diameter joint_mass differential_mass pivot_x actuator_pivot_x"),
+        "rocker_mass": names("frame_tube_diameter frame_wall tube_density wheelbase"),
         "arm_linear_mass": names("arm_tube_diameter arm_wall tube_density"),
         "frame_section_margin": names("frame_tube_diameter frame_wall"),
         "arm_section_margin": names("arm_tube_diameter arm_wall"),
@@ -34,6 +35,8 @@ class StructureGeometry(Discipline):
         length = 2*v("wheelbase") + v("track_width") + 2*tower
         area, _, _ = tube_section(v("frame_tube_diameter"), v("frame_wall"))
         outputs["structure_mass"] = area*length*v("tube_density") + v("joint_mass") + v("differential_mass")
+        # Subset of structure_mass, not an additional mass-accounting term.
+        outputs["rocker_mass"] = 2*v("wheelbase")*area*v("tube_density")
         outputs["arm_linear_mass"] = tube_section(v("arm_tube_diameter"), v("arm_wall"))[0]*v("tube_density")
         for part in ("frame", "arm"):
             outputs[part+"_section_margin"] = 0.25*v(part+"_tube_diameter")-v(part+"_wall")

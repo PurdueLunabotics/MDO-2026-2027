@@ -11,7 +11,7 @@ available so the club can compare your replacement against the same mission.
 excavation=MyExcavation))` replaces only excavation. Factories must create a fresh
 component each time. Other replaceable slots are structure_geometry,
 linkage, wheel_mass, drum_mass, geometry, linkage_loads, structure_loads,
-mass_properties, relocation, trench_traversal, tip_stability, and mobility.
+mass_properties, relocation, trench_traversal, tip_stability, obstacle_stability, and mobility.
 
 Read CONFIG_INPUTS, COUPLED_INPUTS, OUTPUT_UNITS and DEPENDENCIES on the component.
 For older components read setup() and dependencies.py. Preserve required outputs
@@ -87,6 +87,31 @@ architectures can coexist as separate modules, with one selected per run.
 | tip_stability_margin | static CG distance to the closest wheel-center support edge with one drum pair full, the other empty, and both fully extended, m |
 | tip_worst_mask | retained diagnostic: 3 means front pair full and rear pair empty; the reverse (12) is symmetric |
 | pivot_x / actuator_pivot_x | separate longitudinal positions of arm and actuator chassis pivots; front/rear mirrored |
+| actuator_attachment_fraction | dimensionless B-to-actuator-pin distance divided by arm_length; 0 < fraction <= 1, fixed by default at 1 (drum tip); move to DESIGN to optimize |
+| actuator_attachment_distance | B-to-actuator-pin distance in metres; drum remains at full arm_length |
+
+The arm-attachment integration adds these config/report fields without renaming
+existing ports or changing native units. Linkage replacements must now supply
+actuator_attachment_distance as well as the previous outputs. The additive JSON
+fields retain schema version 2; older geometry snapshots imply tip attachment.
+The reference f=1 outputs are unchanged. Move the fraction from ASSUMPTIONS to
+DESIGN with `(1.0, 0.001, 1.0, None)` to include it in optimization; retain failed
+final iterates and check multiple starts. Interior attachment changes kinematics,
+virtual-work force leverage, toggle reserve, and the equivalent linkage mass
+placement. StructureLoads retains its elementary full-arm load envelopes; it does
+not resolve bending at the new pin bracket or provide joint strength validation.
+
+The obstacle integration adds `obstacle_height` and signed `rocker_pivot_offset`
+(m). StructureGeometry replacements must supply `rocker_mass` (kg), a subset of
+structure_mass for TWO rockers, never added separately to dry mass. MassProperties
+replacements must supply `loaded_sprung_mass` (kg) and `loaded_sprung_cg_x/z` (m,
+original level-ground coordinates), excluding wheel/drive masses and rockers.
+ObstacleStability replacements preserve `obstacle_pose_margin` and
+`obstacle_tip_margin` (m, positive feasible) and diagnostics including validity,
+evaluated height, worst wheel, chassis angles and posed CG. The additive fields
+retain JSON schema version 2. Existing level-ground outputs are unchanged.
+See [OBSTACLE_TRAVERSAL.md](OBSTACLE_TRAVERSAL.md) for the new mass grouping,
+guarded-pose reporting and unverified ditch requirement.
 
 ## Your first replacement
 

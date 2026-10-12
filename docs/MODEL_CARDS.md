@@ -18,9 +18,22 @@ needs a card with provenance, domain, held-out validation error and reproduction
 | SiteRelocation | Empty move to a fresh lane with two turns | Trench exit, slip/sinkage and site topology | Timed relocation and power tests/Chrono |
 | TrenchTraversal | Wheel diameter >= stationary trench depth | Slip, sinkage, edge collapse and vehicle dynamics | SCM/Chrono runs and held-out physical exit tests |
 | TipStability | Level-ground center of gravity within wheel-center rectangle for one full pair and one empty pair, both fully extended | Other half-loaded arm poses need a software interlock; soil motion, dumping reaction, slopes, individual wheel lift/contact and compliance omitted | Asymmetric-load balance tests; validated multibody and terrain simulations |
+| ObstacleStability | Fully loaded travel pose, each wheel raised 0.40 m; centered rockers with average-angle differential; geometric reach and projected gravity support | Estimated +0.10 m pivot offset; point contacts, no joint stops/load equilibrium, climb path, traction, collisions, soil or dynamics; 0.50 m ditch unverified | CAD geometry/CG and loaded articulation/balance tests; full crossing trials |
 | Mission | Repeated full cycles, explicit overlap and fresh lanes | Detailed site layout, partial delivery, battery voltage/thermal history | Timed full mission and electrical logs |
 
 ## Assumptions requiring particular attention
+
+- Arm attachment revision: `actuator_attachment_fraction` selects the pin along
+  the straight arm, measured from the chassis pivot (default 1; domain 0<f<=1).
+  It is fixed in ASSUMPTIONS by default; moving it into DESIGN makes it optimizable.
+  Geometry intersects circles at that pin and extends to the drum tip. Loads use
+  virtual work at the pin; gravity energy remains based on drum lift. MassProperties
+  retains an equivalent rod between mean proximal and distal link endpoints.
+  Evidence is analytical geometry, numerical virtual work, gravity-work conservation,
+  and invalid-triangle tests in `tests/test_arm_attachment.py`; no hardware data
+  or fitted relationships are used. Calibration status remains uncalibrated.
+  Actuator-body interference, bracket mass/strength, actual link mass distribution,
+  and assembled-frame load sharing still require CAD and physical tests.
 
 - Dig/dump Fr bounds 0.30/0.20 are provisional validity screens, not measured
   cutoffs for these drums. Capture and lift speed functions are hypotheses only
@@ -41,6 +54,13 @@ needs a card with provenance, domain, held-out validation error and reproduction
   confirm the actual legal zone and maneuver space.
 
 ## Replacement card template
+
+The active obstacle screen and pending ditch requirement are documented in
+[OBSTACLE_TRAVERSAL.md](OBSTACLE_TRAVERSAL.md). The user confirmed centered pivots
+and an average-angle differential; +0.10 m pivot offset is an editable estimate.
+Geometry/mass/support tests are analytical, without calibration data. A positive
+obstacle screen is not experimental validation or proof of climbing capability.
+The circular-like ditch still lacks a width/radius and is explicitly unverified.
 
 ```text
 Name, revision, author:

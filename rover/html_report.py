@@ -8,7 +8,7 @@ import json
 import math
 from pathlib import Path
 from .config import ROUTE
-from .linkage import sweep_poses
+from .linkage import sweep_poses, attachment_point
 
 
 def values_from_snapshot(snapshot):
@@ -21,6 +21,8 @@ def geometry_svg(values, extended=False, title=None, travel=False):
     poses, _ = sweep_poses(values)
     cx, cy = ((v("travel_x"),v("travel_y")) if travel else
               (poses[-1] if extended else (v("stowed_x"),v("stowed_y"))))
+    fraction = values.get("actuator_attachment_fraction", 1.0)
+    jx, jy = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, fraction)
     rd, rw = v("drum_diameter") / 2, v("wheel_diameter") / 2
     xlim = max(1.05, max(p[0] for p in poses) + rd + .12)
     yhi = max(.85, v("top_pivot_height") + .12, max(p[1] for p in poses) + rd + .12)
@@ -59,9 +61,10 @@ def geometry_svg(values, extended=False, title=None, travel=False):
         path=" ".join(f'{point(sign*x,y)[0]:.2f},{point(sign*x,y)[1]:.2f}' for x,y in poses)
         svg += [f'<polyline points="{path}" fill="none" stroke="#9aafba" stroke-width="2" stroke-dasharray="3 5"/>',
                 line(sign*v("pivot_x"),v("bottom_pivot_height"),sign*cx,cy,"#246f99",7),
-                line(sign*v("actuator_pivot_x"),v("top_pivot_height"),sign*cx,cy,"#d77422",7),
+                line(sign*v("actuator_pivot_x"),v("top_pivot_height"),sign*jx,jy,"#d77422",7),
                 circle(sign*cx,cy,rd,"#a54b1e","#e6b68e",3),
                 circle(sign*cx,cy,.009,"#172e45","#172e45"),
+                circle(sign*jx,jy,.009,"#172e45","#172e45"),
                 circle(sign*v("actuator_pivot_x"),v("top_pivot_height"),.009,"#172e45","#172e45"),
                 circle(sign*v("pivot_x"),v("bottom_pivot_height"),.009,"#172e45","#172e45")]
     svg += [label(v("actuator_pivot_x"),v("top_pivot_height"),"A",-22,-12),
@@ -69,10 +72,12 @@ def geometry_svg(values, extended=False, title=None, travel=False):
             label(cx,cy,"C",12,-10), label(-.74,.75,"1.50 m × 0.75 m stowed envelope",8,-10),
             label(-xlim+.03,0,"Ground level",0,-10),
             label(-xlim+.03,-v("pit_depth"),f'Pit floor: −{v("pit_depth"):.2f} m',0,22)]
+    if fraction < 1:
+        svg.append(label(jx,jy,"D",12,18))
     top = cy + rd; bottom = cy - rd
     svg += [f'<text x="35" y="672" font-size="18" fill="#24354b">Actuator: {actuator_length*1000:.1f} mm · Fixed arm: {v("arm_length")*1000:.1f} mm · Drum Ø {2*rd*1000:.1f} mm</text>',
             f'<text x="35" y="705" font-size="18" fill="#24354b">Drum top: {top:+.3f} m · Drum bottom: {bottom:+.3f} m · A: {v("top_pivot_height"):.3f} m · B: {v("bottom_pivot_height"):.3f} m</text>',
-            '<text x="35" y="739" font-size="15" fill="#546579">Blue = fixed arm · Orange = linear actuator · Dotted arc = sampled motion · Ground is y = 0</text>',
+            f'<text x="35" y="739" font-size="15" fill="#546579">Blue = fixed arm · Orange = actuator · Attachment B-D: {fraction*v("arm_length")*1000:.1f} mm ({fraction:.1%} of arm) · Ground is y = 0</text>',
             '</g></svg>']
     return "".join(svg)
 
@@ -135,11 +140,21 @@ def write_report(record, output, iterations=()):
     css='''body{margin:0;background:#eef3f7;color:#203249;font:15px/1.55 system-ui,sans-serif}main{max-width:1240px;margin:auto;padding:35px 24px}h1{font-size:32px;margin:0}h2{margin-top:0;font-size:22px}p{max-width:1000px}.sub{color:#536780}.card{background:white;border-radius:14px;padding:24px;margin:22px 0;box-shadow:0 3px 16px #1e3d5610}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}svg{width:100%;height:auto}.metrics{display:flex;flex-wrap:wrap;gap:18px}.metric{flex:1;min-width:150px;padding:15px;background:#f0f6fa;border-radius:8px}.metric b{display:block;font-size:25px}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14px}th,td{text-align:left;border-bottom:1px solid #e4ebf1;padding:10px 12px}thead{background:#eaf1f6}tbody th{font-weight:500}th:first-child{overflow-wrap:anywhere}.track{width:170px;height:9px;background:#dce7ee;border-radius:8px;position:relative;margin:8px 0}.track i{display:block;position:absolute;width:5px;height:17px;background:#176d96;top:-4px;transform:translateX(-50%)}.pass{color:#12694d}.fail{color:#a33323}.badge{display:inline-block;background:#dfeef6;padding:5px 12px;border-radius:30px;font-weight:700}.note{padding:12px 15px;border-left:4px solid #d77422;background:#fff5e8}input[type=range]{width:100%;margin:14px 0}summary{cursor:pointer;font-weight:650}a{color:#12668e}@media(max-width:800px){.grid{grid-template-columns:1fr}main{padding:20px 10px}.card{padding:16px}}@media print{body{background:white}.card{box-shadow:none;break-inside:avoid}.replay{display:none}}'''
     metrics="".join(f'<div class="metric">{label}<b>{fmt(final["outputs"][name]["value"])} {unit}</b></div>' for name,label,unit in
                     [("construction_points","Construction productivity","pts"),("dry_mass","Robot mass","kg"),("cycle_time","Full cycle","s"),("actuation_time","Raise + lower","s"),("tip_stability_margin","Uneven-load tip reserve","m")])
+    obstacle_card = ""
+    if "obstacle_pose_valid" in values:
+        pose_status = ("Requested pose is geometrically reachable." if values["obstacle_pose_valid"] > .5
+                       else "Guarded pose: requested height is unreachable. Tip, CG and angle diagnostics use the reported guarded height; they are not predictions at the requested height.")
+        obstacle_card = f'''<section class="card"><h2>Loaded obstacle stability</h2>
+<p>{escape(pose_status)}</p><p>All four drums loaded, arms fixed in travel position; each wheel raised in turn. Requested height: {values['obstacle_height']:.3f} m. Evaluated height: {values['obstacle_evaluated_height']:.3f} m.</p>
+<p>Reach reserve: {values['obstacle_pose_margin']:+.5f} m. Gravity tip reserve: {values['obstacle_tip_margin']:+.5f} m. Centered rocker pivots: {values['rocker_pivot_offset']:+.3f} m above the wheel-center line (editable estimate).</p>
+<p>Average-angle differential: chassis pitch {math.degrees(values['obstacle_chassis_pitch']):+.2f}°, roll {math.degrees(values['obstacle_chassis_roll']):+.2f}°. Point-contact platforms are assumed; joint stops/load equilibrium, climbing torque, traction, collisions and terrain dynamics remain unverified.</p>
+<p class="note">Ditch requirement remains unverified. The 0.50 m deep ditch is circle-like, but width/radius is unknown. The excavation-trench screen below does not verify this requirement.</p></section>'''
     html=f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Rover MDO design report</title><style>{css}</style></head><body><main>
 <h1>Rover MDO · design report</h1><p class="sub">Fixed-time route · four bucket drums · mirrored actuator linkages · OpenMDAO {escape(record['openmdao_version'])}</p>
 <p>Calibration status: {escape(provenance.get('calibration','not recorded'))}.</p>
 <span class="badge">{escape(status)}</span><p>Optimizer success: {escape(str(record['optimizer_success']))}. Modeled feasibility: <b>{final['feasible']}</b>. All dimensions and results below describe the final saved iterate.</p>
 <div class="metrics">{metrics}</div>
+{obstacle_card}
 <p class="note">Uncalibrated conceptual screens. Payload is limited by reachable soil and drum storage; partial fill is allowed. The provisional trench screen requires wheel diameter at least as large as trench depth. Travel drums must clear a wheel-diameter step; loaded-route stability limits raising them. The static tip screen checks one drum pair full and the other empty, with both pairs fully extended. Other half-loaded arm positions require a software interlock; this model does not verify it. The geometry drawings are reference schematics, not CAD of optional drum, wheel or suspension models. These screens need terrain, obstacle and asymmetric-load tests. Tube strength and RPM validity also require physical validation. See MODEL.md and the model cards; 3D packaging and joint strength remain separate checks. Failed iterates remain visible and are labeled as such.</p>
 <section class="card"><h2>Final geometry</h2><div class="grid">{drawings[0]}{drawings[1]}{drawings[2]}</div><p>The compact starting pose fits the dashed envelope. After deployment, the drums clear a wheel-diameter step in the travel pose. The 2.50 m deployed height and 0.45 m pit floor are checked separately. Collision clearance covers the sampled travel-to-dig arc.</p><p><a href="{prefix}_retracted.svg">Open starting drawing</a> · <a href="{prefix}_travel.svg">Open travel drawing</a> · <a href="{prefix}_extended.svg">Open digging drawing</a> · <a href="n2.html">Open sparse N2 diagram</a></p></section>
 <section class="card replay"><h2>Geometry through driver evaluations</h2><p>Recorded driver evaluations, including line-search trials; finite-difference perturbations are excluded. The slider starts at the final iterate.</p><label for="iteration">Evaluation</label><input id="iteration" type="range" min="0" max="{len(frames)-1}" value="{len(frames)-1}" step="1"><p id="iteration-label"></p><div class="grid"><div id="history-retracted"></div><div id="history-extended"></div></div></section>
