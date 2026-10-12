@@ -18,6 +18,14 @@ While it remains a subdirectory of the all-years repository, GitHub will not
 discover that nested workflow; a workflow in the parent repository root would
 be needed to test it there.
 
+The CI optimization uses the recorded feasible start in
+`tests/fixtures/obstacle_feasible_start.json`, matching the optimizer regression
+test. It still requires passing derivative checks, optimizer success and final
+feasibility. The baseline step evaluates the default design separately and can
+report infeasibility. Default-start optimization failures remain documented in
+`docs/VERIFICATION.md`; this workflow does not establish convergence from every
+starting design or experimentally validate the rover.
+
 ## Install and run
 
 Python 3.12+; Windows commands below (on macOS/Linux use `.venv/bin/python`). The existing local .venv can be reused.
