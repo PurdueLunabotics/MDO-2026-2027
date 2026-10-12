@@ -39,6 +39,7 @@ DESIGN = {
 
 # name: (value, units). These are fixed during one optimization, but editable.
 ASSUMPTIONS = {
+    "actuator_attachment_fraction": (1.0, None),  # B-to-pin / arm length; 0 < f <= 1; move to DESIGN to optimize
     "gravity": (9.80665, "m/s**2"),
     "run_time": (900.0, "s"),
     "traversal_time_one_way": (45.0, "s"),  # includes all route turns, excludes deposition
@@ -122,6 +123,8 @@ ASSUMPTIONS = {
     "allowable_deflection": (0.005, "m"),
     "joint_mass": (2.0, "kg"),
     "differential_mass": (1.0, "kg"),
+    "obstacle_height": (0.40, "m"),  # fully loaded, travel pose, one wheel raised
+    "rocker_pivot_offset": (0.10, "m"),  # estimated above wheel-center line; editable
 }
 
 # One-way path: translate [m], then rotate [degrees]. All outbound turns are left.

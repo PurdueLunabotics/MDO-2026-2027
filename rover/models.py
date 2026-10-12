@@ -14,6 +14,7 @@ from .mass_properties import MassProperties
 from .relocation import SiteRelocation
 from .trench import TrenchTraversal
 from .tip_stability import TipStability
+from .alternatives.obstacle_stability import ObstacleStability
 from .mobility import Mobility
 from .wheels import WheelMass
 from .drums import DrumMass
@@ -35,6 +36,7 @@ class ModelSet:
     relocation: Callable = SiteRelocation
     trench_traversal: Callable = TrenchTraversal
     tip_stability: Callable = TipStability
+    obstacle_stability: Callable = ObstacleStability
     mobility: Callable = Mobility
 
     def metadata(self):

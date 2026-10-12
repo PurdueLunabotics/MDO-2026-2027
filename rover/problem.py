@@ -54,6 +54,7 @@ MARGINS = {
     "structure_stress_margin": (1e8, "Pa"), "structure_deflection_margin": (0.005, "m"),
     "structure_buckling_margin": (10000.0, "N"), "mobility_stability_margin": (0.3, "m"),
     "tip_stability_margin": (0.3, "m"),
+    "obstacle_pose_margin": (0.4, "m"), "obstacle_tip_margin": (0.4, "m"),
     "excavation_area_margin": (12.0, "m**2"),
     "site_drive_margin": (300.0, "N"),
 }
@@ -63,14 +64,18 @@ def validate(values):
     """Catch invalid inputs before they become division errors or NaNs in a driver."""
     zero_allowed = {"electronics_power", "actuator_idle_power", "rolling_base",
                     "scrub_coefficient", "internal_lift_factor", "vertical_cut_fraction",
-                    "force_imbalance", "mass_score_weight", "energy_score_weight"}
+                    "force_imbalance", "mass_score_weight", "energy_score_weight",
+                    "obstacle_height", "rocker_pivot_offset"}
     fractions = {name for name in ASSUMPTIONS if "fraction" in name or "efficiency" in name}
     fractions |= {"cut_engagement", "delivery_efficiency", "force_imbalance"}
     for name, value in values.items():
-        if not math.isfinite(value) or value < 0 or (value == 0 and name not in zero_allowed):
+        if not math.isfinite(value) or (value < 0 and name != "rocker_pivot_offset") or (value == 0 and name not in zero_allowed):
             raise ValueError(f"{name} must be finite and {'nonnegative' if name in zero_allowed else 'positive'}.")
         if name in fractions and value > 1:
             raise ValueError(f"{name} must be <= 1.")
+    minimum_wheelbase = DESIGN["wheelbase"][1] if "wheelbase" in DESIGN else values["wheelbase"]
+    if abs(values["rocker_pivot_offset"]) >= minimum_wheelbase/2:
+        raise ValueError("Absolute rocker_pivot_offset must be smaller than half the minimum wheelbase.")
     if not 0 < values["wheel_deflection_fraction"] < 0.5:
         raise ValueError("wheel_deflection_fraction must be between 0 and 0.5.")
     if values["scoops_per_revolution"] != int(values["scoops_per_revolution"]):
@@ -102,6 +107,11 @@ def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=Fal
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
                               "source_files_sha256": {p.relative_to(Path(__file__).parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                                                        for p in sorted(Path(__file__).parent.rglob("*.py"))}}
+    problem.model_metadata["traversal_requirements"] = {
+        "obstacle_height_m": values["obstacle_height"],
+        "obstacle_status": "posed gravity support and geometric reach screens only",
+        "ditch_depth_m": 0.50, "ditch_profile": "user: circle-like",
+        "ditch_status": "unverified: width/radius and crossing contact sequence unknown"}
     model = problem.model
     inputs = om.IndepVarComp()
     for name, value in values.items():
@@ -122,6 +132,7 @@ def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=Fal
     model.add_subsystem("relocation", models.relocation(), promotes=["*"])
     model.add_subsystem("trench_traversal", models.trench_traversal(), promotes=["*"])
     model.add_subsystem("tip_stability", models.tip_stability(), promotes=["*"])
+    model.add_subsystem("obstacle_stability", models.obstacle_stability(), promotes=["*"])
     model.add_subsystem("mobility", models.mobility(), promotes=["*"])
     model.add_subsystem("mission", Mission(), promotes=["*"])
     for name, (_, lower, upper, _) in DESIGN.items():

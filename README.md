@@ -18,6 +18,14 @@ While it remains a subdirectory of the all-years repository, GitHub will not
 discover that nested workflow; a workflow in the parent repository root would
 be needed to test it there.
 
+The CI optimization uses the recorded feasible start in
+`tests/fixtures/obstacle_feasible_start.json`, matching the optimizer regression
+test. It still requires passing derivative checks, optimizer success and final
+feasibility. The baseline step evaluates the default design separately and can
+report infeasibility. Default-start optimization failures remain documented in
+`docs/VERIFICATION.md`; this workflow does not establish convergence from every
+starting design or experimentally validate the rover.
+
 ## Install and run
 
 Python 3.12+; Windows commands below (on macOS/Linux use `.venv/bin/python`). The existing local .venv can be reused.
@@ -52,8 +60,24 @@ Outputs include self-contained HTML, JSON, three geometry SVGs, a sparse N2 diag
 - Travel drums clear a wheel-diameter step while loaded-route stability screens excessive height; both are provisional.
 - Full, empty and one-pair-loaded CG/yaw inertia using actual drum positions.
 - Static tip margin with one drum pair full, the other empty, and both arms fully extended; other half-loaded poses require a software interlock.
+- Fully loaded travel-pose gravity support and suspension reach with each wheel
+  raised 0.40 m. The average-angle differential and centered pivots use an editable
+  `rocker_pivot_offset=0.10 m` estimate. The original 0.40 m wheelbase baseline is
+  now infeasible for this added requirement; a 0.46 m wheelbase baseline passes.
+  See [obstacle geometry and limitations](docs/OBSTACLE_TRAVERSAL.md). The 0.50 m
+  deep, circle-like ditch remains unverified until its width/radius is known.
 - Adjustable wheelbase and track width, both screened against the stowed envelope, structure, and mobility constraints.
 - Independent horizontal placement of the actuator and arm pivots.
+- Selectable actuator pin position along the arm: `actuator_attachment_fraction`
+  is measured from the chassis pivot; 1.0 retains the drum-tip connection and 0.5
+  connects halfway along the arm. Its domain is 0 < fraction <= 1; the drum stays
+  at full arm length. Use `--set actuator_attachment_fraction=0.8` to select a fixed
+  pin position; actuator lengths may need to change for closure. It is fixed in
+  ASSUMPTIONS by default to preserve the reference optimizer. To optimize the pin
+  position too, move it to DESIGN as `(1.0, 0.001, 1.0, None)`; SLSQP can fail with
+  that additional variable, so inspect final margins and use multiple starts.
+  JSON reports include the fraction and `actuator_attachment_distance` in metres,
+  and geometry drawings show the pin as D when it is inside the arm.
 - Separate dig/dump RPM, provisional granular-flow validity limits, independent gearing, torque-speed screens and startup energy.
 - Tube-frame/arm mass and elementary stress, stiffness and buckling constraints.
 - Explicit cutting/lowering overlap and power, with fresh-site relocation and finite excavation area.

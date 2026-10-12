@@ -18,6 +18,7 @@ OUTPUTS = {
     "required_actuator_force": "N", "linkage_mass": "kg", "stroke": "m",
     "stowed_x": "m", "stowed_y": "m", "travel_x": "m", "travel_y": "m", "extended_x": "m", "extended_y": "m",
     "sweep_x_min": "m", "sweep_x_max": "m", "actuator_leverage_max": None,
+    "actuator_attachment_distance": "m",
     "stowed_length": "m", "stowed_height": "m", "deployed_length": "m", "deployed_height": "m",
     "route_distance": "m", "route_turn_angle": "deg", "route_translation_time": "s",
     "route_turn_time": "s", "route_peak_acceleration": "m/s**2",
@@ -31,7 +32,8 @@ from .mass_properties import MassProperties
 from .relocation import SiteRelocation
 from .trench import TrenchTraversal
 from .tip_stability import TipStability
-for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, TrenchTraversal, TipStability):
+from .alternatives.obstacle_stability import ObstacleStability
+for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, TrenchTraversal, TipStability, ObstacleStability):
     OUTPUTS.update(component.OUTPUT_UNITS)
 
 

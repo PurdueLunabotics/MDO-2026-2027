@@ -4,7 +4,7 @@ This is an OpenMDAO conceptual sizing model under Earth gravity. FEASIBLE means 
 
 ## Requirements and architecture
 
-Four wheels with side rockers and skid steering; four bucket drums on front/rear shaft-linked pairs; four wheel motors, two drum motors, two linear actuators. Each fixed arm joins a lower chassis pivot to a drum shaft; its actuator joins a separately located upper pivot to that shaft. Front/rear geometry is mirrored. Each wheel/drum diameter and width/length remains strictly below 360 mm.
+Four wheels with side rockers and skid steering; four bucket drums on front/rear shaft-linked pairs; four wheel motors, two drum motors, two linear actuators. Each fixed arm joins a lower chassis pivot to a drum shaft; its actuator joins a separately located upper pivot to a selectable point along that arm. Front/rear geometry is mirrored. Each wheel/drum diameter and width/length remains strictly below 360 mm.
 
 The supplied 9/17/26 Lunabotics Guidebook sections 13.3/13.4/13.9 supplied the 1.50 x 0.75 x 0.75 m stowed envelope, 80 kg inspection mass (without regolith), 2.50 m deployed height and penetration-force requirement. Section 17.1 supplies the 4.4 and 1.5 score multipliers. Section 11.1 describes BP-1 and an approximately 0.45 m pit. The supplied requirements CSV identifies additional manual checks. Confirm current event interpretations independently.
 
@@ -20,16 +20,29 @@ ModelSet factories replace individual components. New disciplines keep CONFIG_IN
 
 Wheel-center track width is now a design variable alongside wheelbase. Both are screened by the stowed envelope, structural loads and mobility constraints.
 
-For lower arm pivot B=(pivot_x,h_b), upper actuator pivot A=(actuator_pivot_x,h_t), arm L, actuator length l, s=|A-B|, u=(A-B)/s and outward normal n=(u_z,-u_x):
+For lower arm pivot B=(pivot_x,h_b), upper actuator pivot A=(actuator_pivot_x,h_t), arm L, actuator length l, attachment fraction f=actuator_attachment_fraction, r=f*L, s=|A-B|, u=(A-B)/s and outward normal n=(u_z,-u_x):
 
 ```text
-a=(L^2+s^2-l^2)/(2s)
-C=B+a*u+sqrt(L^2-a^2)*n
+a=(r^2+s^2-l^2)/(2s)
+D=B+a*u+sqrt(r^2-a^2)*n
+C=B+(D-B)/f
 ```
+
+D is the actuator pin; C remains the drum shaft at full arm length L.
+The dimensionless input f defaults to 1 (the previous tip attachment), with
+physical domain 0<f<=1. Zero cannot generate an arm moment. It is fixed in
+ASSUMPTIONS during optimization by default, preserving the reference design
+space. To optimize it, move it into DESIGN with `(1.0, 0.001, 1.0, None)`; those
+positive lower bounds are exploratory numerical bounds, not hardware data.
+The output actuator_attachment_distance=r is in metres from B, not from C.
+Triangle closure uses r, not L; actuator lengths generally need to change when
+moving the pin. The existing clearance screens concern the drum envelope, not
+actuator-to-arm interference or the actuator body; check those in a CAD sweep.
+Historical report snapshots without f are drawn with the original f=1 geometry.
 
 The outward branch is sampled at 81 equally spaced arm angles. The compact starting pose uses actuator_retracted_length; after startup the shorter travel_actuator_length raises the drum, then actuator_extended_length lowers it to dig. Wheelbase is a design variable. The compact pose must fit the starting envelope. The travel drum bottom must clear a step equal to wheel diameter, rather than a fixed 0.50 m rock; this is a provisional wheel-first screen for drums ahead of the wheels, not a measured obstacle capability. Its loaded center of gravity enters the level-ground mobility stability screen, while mechanism self-clearance is checked across the travel-to-dig sweep. Triangle closure, positive spacing, stroke/body packaging, toggle reserve, pit floor, mounting and envelope constraints remain. Full drum submergence is not required. The provisional trench screen is wheel_diameter >= trench_depth. Guarded arithmetic only keeps infeasible trials finite; signed margins reject them.
 
-Nominal per-cycle actuation time is twice (extended_length - travel_length)/actuator_speed. Per-actuator extraction force uses the maximum virtual-work leverage |(C_x-B_x)*|A-C| / ((C-B)×(A-B))| over the sampled arm sweep, multiplied by loaded-pair weight plus breakout allowance. This reduces to length/s when the pivots align vertically. A positive actuator-toggle margin keeps the force arm away from zero. Rated force is divided by the actuator safety factor. Energy charges raising full/lowering empty gravity work, breakout work over cut_depth and active idle, without regeneration. Initial deployment from the compact pose is treated as one-time setup outside repeated cycles. Exact lowering load history, force-speed curves, rod/pin/bearing strength, breakout and cylinder envelopes remain open calibration/design tasks. Battery sizing sums drum and actuator peaks during simultaneous cutting/lowering.
+Nominal per-cycle actuation time is twice (extended_length - travel_length)/actuator_speed. Per-actuator extraction force uses the maximum virtual-work leverage |(C_x-B_x)*|A-D| / ((D-B)×(A-B))| over the sampled arm sweep, multiplied by loaded-pair weight plus breakout allowance. This reduces to length/(f*s) when the pivots align vertically. The actuator-toggle margin uses ((D-B)×(A-B))/s minus mechanism_clearance, so an inward pin does not receive the drum tip's larger toggle reserve. Rated force is divided by the actuator safety factor. Energy charges raising full/lowering empty gravity work, breakout work over cut_depth and active idle, without regeneration; moving the pin does not multiply gravity work by the force leverage. Initial deployment from the compact pose is treated as one-time setup outside repeated cycles. Exact lowering load history, force-speed curves, rod/pin/bearing strength, breakout and cylinder envelopes remain open calibration/design tasks. Battery sizing sums drum and actuator peaks during simultaneous cutting/lowering.
 
 ## Reachable soil, storage and cut depth
 
@@ -83,7 +96,7 @@ Elementary load envelopes cover longitudinal supports, crossmember torsion under
 
 ## Mass properties and fixed-time mobility
 
-Sum local component Izz plus m*(x^2+y^2) about chassis-center yaw. Include wheel/drive units, structure/equipment, linkage, drums and payload at their actual longitudinal/lateral stations. The reference linkage center uses the midpoint from the mean of the two chassis pivots to the drum shaft; CAD should resolve the unequal arm and actuator masses. Full/empty states are symmetric; front-pair-only load shifts CG. Equivalent cylinder inertia and payload CG R/3 below the shaft are approximations needing CAD/material-distribution data. A displaced CG's translational kinetic contribution is included by using inertia about the actual yaw axis.
+Sum local component Izz plus m*(x^2+y^2) about chassis-center yaw. Include wheel/drive units, structure/equipment, linkage, drums and payload at their actual longitudinal/lateral stations. The reference linkage center uses the midpoint between the mean chassis pivots (A+B)/2 and mean distal endpoints (C+D)/2; local yaw inertia retains an equivalent rod between those means. This reproduces the previous result at f=1; CAD should resolve the unequal arm and actuator masses. Full/empty states are symmetric; front-pair-only load shifts CG. Equivalent cylinder inertia and payload CG R/3 below the shaft are approximations needing CAD/material-distribution data. A displaced CG's translational kinetic contribution is included by using inertia about the actual yaw axis.
 
 Each reference segment stops/starts: peak=min(requested_speed,sqrt(distance*acceleration)), time=distance/peak+peak/acceleration. Scale total to 45 s with velocities /k and accelerations /k^2. Motor upgrades do not shorten the schedule. Turning wheel-rim distance=abs(yaw)*track/2; effective mass=Izz/(track/2)^2. Scrub moment=coefficient*mass*g*wheelbase/4. Energy sums resistance work and rest-to-rest kinetic energy without regeneration.
 
@@ -96,6 +109,20 @@ The static screen checks the prescribed asymmetric case: one front/rear drum pai
 The optimizer checks this one half-loaded arm position only. Control software must prevent other half-loaded poses with a smaller support margin; that interlock is not modeled or verified here. The mission still calculates deposition time and the half-loaded turn using the raised travel pose, so the static check does not establish ground clearance or dynamic stability for an extended-position dump. Soil shifting, dumping reaction, slopes, acceleration, individual wheel unloading and changing terrain support are omitted. A measured stability envelope or validated multibody/terrain simulation can replace this component through `ModelSet`.
 
 ## Fresh-site motion
+
+The requested fully loaded 0.40 m obstacle now has geometric reach and gravity
+support constraints through `ModelSet.obstacle_stability`. The user confirmed
+centered side-rocker pivots and an average-angle differential, with an editable
++0.10 m pivot height estimate above the axle line. The posed model preserves
+rocker/shaft dimensions, transforms mounted mass separately from wheel/rocker
+mass, and checks all four raised-wheel cases. Signed `obstacle_pose_margin` and
+`obstacle_tip_margin` are metres, positive feasible. Unreachable poses are
+flagged and retain a failing requested-height margin; finite guarded diagnostics
+are explicitly labeled. See [equations and domain](docs/OBSTACLE_TRAVERSAL.md).
+These necessary static screens do not verify the actual climbing path, joint
+loads/stops, collision, traction or dynamics. The 0.50 m deep, circle-like ditch
+remains unverified because width/radius is unknown. Existing wheel-diameter
+screens are not repurposed to claim compliance with that requirement.
 
 Empty relocation translates to a neighboring fresh lane with two 90-degree turns; rest-to-rest time, kinetic/scrub/rolling energy, torque and level-ground traction are charged. Lane offset must exceed total drum width. Each cycle reserves the rectangle enclosing both drum stations, including the center gap; cumulative area must fit available_excavation_area. A real site planner must still check maneuver space and legal-zone topology. Trench traversal currently requires wheel_diameter >= trench_depth; this is a geometric placeholder, not a traction or exit simulation. These area/path values are planning assumptions, not asserted competition rules.
 
