@@ -16,6 +16,42 @@ def values_from_snapshot(snapshot):
             for name, item in snapshot[group].items()}
 
 
+def plate_frame_svg(values):
+    """Coordinate-driven axial-member schematic, explicitly not a CAD outline."""
+    from .alternatives.plate_frame import plate_geometry, PLATE_EDGES
+    g = plate_geometry(values)
+    nodes = g["nodes"]
+    low, high = min(nodes[:, 1])-.07, max(nodes[:, 1])+.07
+    scale = min(650., 350./(high-low))
+    point = lambda p: (300+p[0]*scale, 470-(p[1]-low)*scale)
+    pieces = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 550" role="img" aria-label="Plate frame axial-member geometry">',
+              '<rect width="1100" height="550" fill="#f7fafc"/>',
+              '<g font-family="sans-serif" fill="#203249">',
+              '<text x="25" y="35" font-size="23">Plate frame: provisional member topology</text>',
+              '<text x="25" y="63" font-size="15">Lengths and directions follow the mounting coordinates; this is not the manufactured cutout outline.</text>']
+    for i, j in PLATE_EDGES:
+        x1, y1 = point(nodes[i]); x2, y2 = point(nodes[j])
+        pieces.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="#7898b0" stroke-width="{values["plate_spoke_width"]*scale:.2f}"/>')
+    for p, label in zip(nodes, ("S: suspension axle", "A: front actuator", "B: front arm", "A: rear actuator", "B: rear arm")):
+        x, y = point(p)
+        anchor = 'end' if p[0] < 0 else 'start'
+        offset = -14 if p[0] < 0 else 14
+        pieces.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="#d77422"/><text x="{x+offset:.2f}" y="{y-12:.2f}" text-anchor="{anchor}" font-size="13">{escape(label)}</text>')
+    lines = [f'Plate thickness: {values["plate_thickness"]*1000:.2f} mm (fixed)',
+             f'Common strip width: {values["plate_spoke_width"]*1000:.2f} mm',
+             f'CF ID / OD: {values["cf_tube_inner_diameter"]*1000:.2f} / {g["cf_od"]*1000:.2f} mm',
+             f'Plate spacing / CF span: {values["cf_tube_span"]*1000:.1f} mm',
+             f'Rocker bearing spacing: {g["rocker_span"]*1000:.1f} mm',
+             f'Wheel-to-rocker gap: {values["wheel_rocker_gap"]*1000:.1f} mm',
+             'Central support: pin, balanced mirrored gravity only.',
+             'CF material properties are PROVISIONAL.',
+             'Spoke buckling is a strip screen,', 'not whole-plate buckling validation.']
+    for i, line in enumerate(lines):
+        pieces.append(f'<text x="640" y="{145+30*i}" font-size="15">{escape(line)}</text>')
+    pieces.append('</g></svg>')
+    return ''.join(pieces)
+
+
 def geometry_svg(values, extended=False, title=None, travel=False):
     v = values.__getitem__
     poses, _ = sweep_poses(values)
@@ -147,16 +183,40 @@ def write_report(record, output, iterations=()):
         obstacle_card = f'''<section class="card"><h2>Loaded obstacle stability</h2>
 <p>{escape(pose_status)}</p><p>All four drums loaded, arms fixed in travel position; each wheel raised in turn. Requested height: {values['obstacle_height']:.3f} m. Evaluated height: {values['obstacle_evaluated_height']:.3f} m.</p>
 <p>Reach reserve: {values['obstacle_pose_margin']:+.5f} m. Gravity tip reserve: {values['obstacle_tip_margin']:+.5f} m. Centered rocker pivots: {values['rocker_pivot_offset']:+.3f} m above the wheel-center line (editable estimate).</p>
-<p>Average-angle differential: chassis pitch {math.degrees(values['obstacle_chassis_pitch']):+.2f}°, roll {math.degrees(values['obstacle_chassis_roll']):+.2f}°. Point-contact platforms are assumed; joint stops/load equilibrium, climbing torque, traction, collisions and terrain dynamics remain unverified.</p>
+<p>Average-angle differential: chassis pitch {math.degrees(values['obstacle_chassis_pitch']):+.2f}°, roll {math.degrees(values['obstacle_chassis_roll']):+.2f}°. Point-contact platforms are assumed; joint stops/load equilibrium, climbing torque, traction, other hardware interference and terrain dynamics remain unverified.</p>
 <p class="note">Ditch requirement remains unverified. The 0.50 m deep ditch is circle-like, but width/radius is unknown. The excavation-trench screen below does not verify this requirement.</p></section>'''
+    clearance_card = ""
+    if "obstacle_drum_wheel_gap_bound" in values:
+        clearance_status = (
+            "Requested-height clearance screen." if values["obstacle_clearance_pose_valid"] > .5
+            else "Guarded clearance: requested pose is unreachable. The gap is a diagnostic at the guarded height, not a prediction at the requested height; the margin remains failed."
+        )
+        clearance_card = f'''<section class="card"><h2>Obstacle drum–wheel clearance</h2>
+<p>{escape(clearance_status)} Evaluated height: {values['obstacle_clearance_evaluated_height']:.3f} m.</p>
+<p>Conservative gap bound: {values['obstacle_drum_wheel_gap_bound']:+.5f} m. Required clearance: {values['mechanism_clearance']:.5f} m. Constraint margin: {values['obstacle_drum_wheel_margin']:+.5f} m.</p>
+<p>All 16 drum–wheel pairs are checked in each of four raised-wheel poses. Spheres enclose the rigid cylindrical envelopes, including the drums' outer cutting radius. A positive bound guarantees envelope separation; a negative bound is inconclusive about actual cylinder collision and is conservatively rejected.</p>
+<p>Arms remain fixed in travel position. Intermediate crossing poses, wheel/frame deflection, terrain contact and interference with hubs, shafts, arms or the frame are outside this screen.</p></section>'''
+    frame_card = ""
+    if "plate_spoke_width" in values:
+        frame_drawing = plate_frame_svg(values)
+        (output.parent/f'{prefix}_frame.svg').write_text(frame_drawing, encoding="utf-8")
+        frame_card = f'''<section class="card"><h2>Plate-frame structural screen</h2>{frame_drawing}
+<p>Aluminum plates: 6061-T6, fixed 6.35 mm sheet. Four CF rods: fixed 25.4 mm ID, adjustable wall and span. Aluminum box-section rockers and round suspension axle have separate dimensions. Two-force plate strips omit junction bending.</p>
+<p>All four drums loaded; mirrored compact and travel-to-dig gravity poses. Cutting, self-recovery, obstacle load redistribution, connections, local tube-wall and whole-plate buckling are outside this structural screen.</p>
+<p>Maximum relative upper/lower mount displacement: {values['frame_mount_relative_deflection']*1000:.3f} mm. Rocker-end flexure: {values['rocker_deflection']*1000:.3f} mm. Axle-overhang flexure: {values['axle_deflection']*1000:.3f} mm. Arm-tip flexure: {values['arm_deflection']*1000:.3f} mm.</p>
+<p>The retained {values['allowable_deflection']*1000:.2f} mm limit applies to their conservative eighth-norm envelope, not one assembled-frame displacement. Aluminum strength, CF flexural strength and strip buckling have separate margins below.</p>
+<p class="note">CF density, bending modulus and flexural strength remain PROVISIONAL until an actual tube/layup is selected. Numerical feasibility is conditional on those inputs. Frame load solution valid: {bool(values['frame_load_solution_valid'])}; plate geometry valid: {bool(values['plate_geometry_valid'])}. Failed arithmetic trials retain failed strength/deflection/buckling margins.</p>
+<p><a href="{prefix}_frame.svg">Open frame schematic</a></p></section>'''
     html=f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Rover MDO design report</title><style>{css}</style></head><body><main>
 <h1>Rover MDO · design report</h1><p class="sub">Fixed-time route · four bucket drums · mirrored actuator linkages · OpenMDAO {escape(record['openmdao_version'])}</p>
 <p>Calibration status: {escape(provenance.get('calibration','not recorded'))}.</p>
 <span class="badge">{escape(status)}</span><p>Optimizer success: {escape(str(record['optimizer_success']))}. Modeled feasibility: <b>{final['feasible']}</b>. All dimensions and results below describe the final saved iterate.</p>
 <div class="metrics">{metrics}</div>
 {obstacle_card}
+{clearance_card}
+{frame_card}
 <p class="note">Uncalibrated conceptual screens. Payload is limited by reachable soil and drum storage; partial fill is allowed. The provisional trench screen requires wheel diameter at least as large as trench depth. Travel drums must clear a wheel-diameter step; loaded-route stability limits raising them. The static tip screen checks one drum pair full and the other empty, with both pairs fully extended. Other half-loaded arm positions require a software interlock; this model does not verify it. The geometry drawings are reference schematics, not CAD of optional drum, wheel or suspension models. These screens need terrain, obstacle and asymmetric-load tests. Tube strength and RPM validity also require physical validation. See MODEL.md and the model cards; 3D packaging and joint strength remain separate checks. Failed iterates remain visible and are labeled as such.</p>
-<section class="card"><h2>Final geometry</h2><div class="grid">{drawings[0]}{drawings[1]}{drawings[2]}</div><p>The compact starting pose fits the dashed envelope. After deployment, the drums clear a wheel-diameter step in the travel pose. The 2.50 m deployed height and 0.45 m pit floor are checked separately. Collision clearance covers the sampled travel-to-dig arc.</p><p><a href="{prefix}_retracted.svg">Open starting drawing</a> · <a href="{prefix}_travel.svg">Open travel drawing</a> · <a href="{prefix}_extended.svg">Open digging drawing</a> · <a href="n2.html">Open sparse N2 diagram</a></p></section>
+<section class="card"><h2>Final geometry</h2><div class="grid">{drawings[0]}{drawings[1]}{drawings[2]}</div><p>The compact starting pose fits the dashed envelope. After deployment, the drums clear a wheel-diameter step in the travel pose. The 2.50 m deployed height and 0.45 m pit floor are checked separately. The level-ground linkage clearance covers the sampled travel-to-dig arc; the obstacle drum–wheel screen separately checks four raised-wheel travel poses. These drawings show level-ground geometry.</p><p><a href="{prefix}_retracted.svg">Open starting drawing</a> · <a href="{prefix}_travel.svg">Open travel drawing</a> · <a href="{prefix}_extended.svg">Open digging drawing</a> · <a href="{prefix}_n2.html">Open sparse N2 diagram</a></p></section>
 <section class="card replay"><h2>Geometry through driver evaluations</h2><p>Recorded driver evaluations, including line-search trials; finite-difference perturbations are excluded. The slider starts at the final iterate.</p><label for="iteration">Evaluation</label><input id="iteration" type="range" min="0" max="{len(frames)-1}" value="{len(frames)-1}" step="1"><p id="iteration-label"></p><div class="grid"><div id="history-retracted"></div><div id="history-extended"></div></div></section>
 <section class="card"><h2>Route and cycle accounting</h2><div class="grid"><div>{route_svg(one_way_time)}</div><div><p>Outbound: {route_text}.</p><p><b>{one_way_time:g} s outbound + {one_way_time:g} s return</b>, including {turn_count} route turns per direction. Total translation: {values['route_distance']:g} m; route yaw: {values['route_turn_angle']:g}°. Yaw signs reverse on return.</p><p>Lower and rotate in place → dwell if needed → raise loaded drums → outbound → dump one pair → separate {math.degrees(values['turn_angle']):g}° turn → dump second pair → return along the reversed path.</p><p>Cycle counts the lowering, excavation and raising phases once. The actuator/lowering overlap is removed once; rotation never creates soil beyond the fully extended cutting envelope. The modeled cycle deposits from the raised travel position; the tip screen also covers extended-position deposition.</p><p>Whole-cycle cross-check: {final['whole_cycles']['completed']} completed cycles; {fmt(final['whole_cycles']['berm_volume_m3'])} m³; {fmt(final['whole_cycles']['construction_points'])} points. Remaining time is idle.</p></div></div></section>
 <section class="card"><h2>Design variables and bounds</h2><p>Marks show each result within its physical bounds. Bounds other than the 359 mm wheel/drum caps are exploratory choices.</p><div class="scroll"><table><thead><tr><th>Variable</th><th>Lower</th><th>Final</th><th>Upper</th><th>Units</th><th>Position in range</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>

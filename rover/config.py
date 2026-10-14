@@ -132,6 +132,55 @@ ASSUMPTIONS = {
 # Each segment is rest-to-rest. Total = 9 m and 180 degrees each way.
 ROUTE = ((2.0, 90.0), (3.0, 45.0), (3.0, 45.0), (1.0, 0.0))
 
+# Optional plate-frame profile. Reference DESIGN/ASSUMPTIONS above stay intact.
+# Bounds and starting section sizes are exploratory, not purchased hardware.
+PLATE_FRAME_DESIGN = {
+    "cf_tube_span": (0.28, 0.16, 0.46, "m"),  # plate center-to-center spacing
+    "cf_tube_wall": (0.002, 0.001, 0.006, "m"),  # OD = fixed ID + 2*wall
+    "plate_spoke_width": (0.035, 0.012, 0.070, "m"),  # in-plane; all eight strips share it
+    "rocker_box_width": (0.035, 0.020, 0.065, "m"),  # transverse dimension
+    "rocker_box_height": (0.055, 0.025, 0.090, "m"),
+    "rocker_wall": (0.002, 0.001, 0.005, "m"),
+    "axle_outer_diameter": (0.055, 0.025, 0.090, "m"),
+    "axle_wall": (0.003, 0.001, 0.006, "m"),
+    "rocker_pivot_offset": (0.10, 0.020, 0.150, "m"),  # centered longitudinally; adjustable axle height
+}
+PLATE_FRAME_ASSUMPTIONS = {
+    "plate_thickness": (0.00635, "m"),  # USER: 1/4 inch 6061-T6 sheet
+    "cf_tube_inner_diameter": (0.0254, "m"),  # USER: connector requires 1 inch ID
+    "wheel_rocker_gap": (0.0127, "m"),  # USER: wheel inner face to rocker outer face
+    "plate_hub_radius": (0.030, "m"),  # provisional central mounting pad
+    "plate_cutout_clearance": (0.005, "m"),  # provisional minimum cutout inradius after strips
+    "frame_mount_clearance": (0.003, "m"),  # provisional material beyond CF tube envelope
+    "minimum_axle_overhang": (0.010, "m"),  # provisional space between plate and rocker bearing
+    "plate_buckling_k": (1.0, None),  # pinned-ended weak-axis strip screen, not whole-plate buckling
+    "cf_density": (1600.0, "kg/m**3"),  # PROVISIONAL: actual tube/layup not selected
+    "cf_flexural_modulus": (70e9, "Pa"),  # PROVISIONAL effective bending modulus, not fiber modulus
+    "cf_flexural_strength": (350e6, "Pa"),  # PROVISIONAL screening value; not a certified allowable
+}
+
+
+def configuration(structure="reference"):
+    """Independent dictionaries per Problem; no mutation of reference config."""
+    if structure not in ("reference", "plate-frame"):
+        raise ValueError(f"Unknown structure profile {structure!r}")
+    design, assumptions = dict(DESIGN), dict(ASSUMPTIONS)
+    if structure == "plate-frame":
+        # Generic frame tubes are replaced by explicit rockers, CF rods and axle.
+        for name in ("frame_tube_diameter", "frame_wall"):
+            entry = design.pop(name)
+            assumptions[name] = (entry[0], entry[-1])
+        assumptions.pop("rocker_pivot_offset", None)
+        design.update(PLATE_FRAME_DESIGN)
+        assumptions.update(PLATE_FRAME_ASSUMPTIONS)
+    return design, assumptions
+
+
+def input_spec(name):
+    """Unit/default lookup for adapters, including optional profile inputs."""
+    return DESIGN.get(name, ASSUMPTIONS.get(name,
+           PLATE_FRAME_DESIGN.get(name, PLATE_FRAME_ASSUMPTIONS.get(name))))
+
 # name: (upper limit, units); guidebook section 13. These are stowed dimensions.
 REQUIREMENTS = {
     "dry_mass": (80.0, "kg"),

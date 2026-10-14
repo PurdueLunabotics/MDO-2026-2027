@@ -6,7 +6,7 @@ use ordinary real scalars: finite differences support later non-complex-safe mod
 
 import math
 import openmdao.api as om
-from .config import DESIGN, ASSUMPTIONS
+from .config import input_spec
 
 
 def scalar(inputs, name):
@@ -18,7 +18,7 @@ class SimpleComponent(om.ExplicitComponent):
 
     def inputs_from_config(self, *names):
         for name in names:
-            entry = DESIGN.get(name, ASSUMPTIONS.get(name))
+            entry = input_spec(name)
             self.add_input(name, val=entry[0], units=entry[-1])
 
     def setup_partials(self):

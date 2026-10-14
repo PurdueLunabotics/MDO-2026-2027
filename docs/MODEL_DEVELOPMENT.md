@@ -11,7 +11,8 @@ available so the club can compare your replacement against the same mission.
 excavation=MyExcavation))` replaces only excavation. Factories must create a fresh
 component each time. Other replaceable slots are structure_geometry,
 linkage, wheel_mass, drum_mass, geometry, linkage_loads, structure_loads,
-mass_properties, relocation, trench_traversal, tip_stability, obstacle_stability, and mobility.
+mass_properties, relocation, trench_traversal, tip_stability, obstacle_stability,
+obstacle_clearance, and mobility.
 
 Read CONFIG_INPUTS, COUPLED_INPUTS, OUTPUT_UNITS and DEPENDENCIES on the component.
 For older components read setup() and dependencies.py. Preserve required outputs
@@ -29,6 +30,17 @@ dictionary; it is saved with the factories and source-file hashes.
 The empirical example records its dataset hash, conditions and domain this way.
 
 ## Parallel team ownership
+
+The plate-frame integration is an explicit optional profile, selected with
+`build_problem(structure="plate-frame")` or CLI `--structure plate-frame`.
+`configuration()` returns per-Problem dictionaries so inactive reference frame
+dimensions do not become unused optimizer variables. Its four ModelSet factories
+coordinate structure mass/loads, frame CG placement and rocker obstacle CG.
+Reports and recorded-case playback receive the selected profile's input/margin
+specifications. Keep `ModelSet()` reference factories and reference configuration
+available for comparisons. See PLATE_FRAME.md for additive ports and the changed
+interpretation of structural stress/deflection/buckling in this profile; profile
+activation is deliberate, not an implicit factory fallback.
 
 Keep alternative implementations in separate files under `rover/alternatives/`.
 The default model stays available for an identical-design comparison. Teams can
@@ -50,7 +62,8 @@ problem = build_problem(models=models)
 ```
 
 Each factory above must be imported from a real optional model module; these
-names are placeholders. No alternative is selected by default. Wheel/drum mass
+names are placeholders. Optional replacements must be explicitly selected; the
+requested obstacle stability and clearance components are already active defaults. Wheel/drum mass
 outputs are totals for FOUR wheels/drums; `drum_mass` includes the TWO reference
 motor/gear assemblies unless a replacement explicitly preserves that boundary.
 `GeometryMass` adds those outputs once to the dry mass. Do not add the same motor,
@@ -100,6 +113,16 @@ final iterates and check multiple starts. Interior attachment changes kinematics
 virtual-work force leverage, toggle reserve, and the equivalent linkage mass
 placement. StructureLoads retains its elementary full-arm load envelopes; it does
 not resolve bending at the new pin bracket or provide joint strength validation.
+
+The obstacle-clearance integration adds a ModelSet.obstacle_clearance factory
+and four native scalar outputs: obstacle_drum_wheel_gap_bound [m],
+obstacle_drum_wheel_margin [m], obstacle_clearance_pose_valid [dimensionless],
+and obstacle_clearance_evaluated_height [m]. Its coupled travel_x/travel_y inputs
+come from LinkageGeometry; travel_y is adapted as vertical z. Config inputs reuse
+existing wheel/drum dimensions, rocker geometry, obstacle height and
+mechanism_clearance. The new signed margin is enforced and reported alongside
+the existing reach and gravity margins. All other factory defaults and contracts
+are preserved. The detailed domain/guard contract is in OBSTACLE_TRAVERSAL.md.
 
 The obstacle integration adds `obstacle_height` and signed `rocker_pivot_offset`
 (m). StructureGeometry replacements must supply `rocker_mass` (kg), a subset of

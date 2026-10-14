@@ -19,7 +19,7 @@ discover that nested workflow; a workflow in the parent repository root would
 be needed to test it there.
 
 The CI optimization uses the recorded feasible start in
-`tests/fixtures/obstacle_feasible_start.json`, matching the optimizer regression
+`tests/fixtures/obstacle_clearance_feasible_start.json`, matching the optimizer regression
 test. It still requires passing derivative checks, optimizer success and final
 feasibility. The baseline step evaluates the default design separately and can
 report infeasibility. Default-start optimization failures remain documented in
@@ -45,6 +45,22 @@ The last command demonstrates a replaceable response using explicitly synthetic 
 Outputs include self-contained HTML, JSON, three geometry SVGs, a sparse N2 diagram and optimizer SQLite history. Baseline mode has no optimizer recording. Default names are results/baseline.* or results/optimization.*; `--output results/my_design.json` sets a separate stem. The CLI returns nonzero if optimization fails or the final design is infeasible. Reports retain failed final iterates and show constraint margins. Derivative checks are numerical checks, not physical validation.
 
 ## Change assumptions
+
+For the proposed CF-tube / aluminum-plate / box-rocker frame, use
+`--structure plate-frame`. The reference model remains the default for comparisons.
+For example:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --structure plate-frame --baseline --output results/plate_frame/baseline.json
+.\.venv\Scripts\python.exe main.py --structure plate-frame --check-derivatives --output results/plate_frame/optimization.json
+```
+
+The fixed sheet thickness is 6.35 mm and CF tube ID is 25.4 mm. Profile inputs
+live in `PLATE_FRAME_DESIGN` and `PLATE_FRAME_ASSUMPTIONS` in `rover/config.py`;
+the reported design/assumption lists reflect the selected profile. Spoke width,
+CF wall/span, box rocker and axle sections, and centered axle height can vary.
+CF material properties and the plate topology are provisional. See
+[the frame equations, load scope and limitations](docs/PLATE_FRAME.md).
 
 ```powershell
 .\.venv\Scripts\python.exe main.py --baseline --set soil_density=1800 --output results/dense_soil.json
@@ -110,7 +126,7 @@ Whole-cycle estimates are reported alongside continuous throughput. Other compet
 | rover/trench.py | Provisional trench traversal screen, replaceable by an SCM surrogate |
 | rover/mobility.py | Fixed-time route force, power and energy |
 | rover/components.py | Shared adapter, drive/battery/fixed mass accounting and mission |
-| rover/alternatives/ | Optional team models; none selected by default |
+| rover/alternatives/ | Replaceable team models; obstacle stability and drum–wheel clearance selected by default |
 | rover/dependencies.py | Legacy component dependency declarations |
 | rover/calibration.py | Strict response-table validation; no extrapolation |
 | rover/problem.py | Assembly, signed constraints, optimizer |

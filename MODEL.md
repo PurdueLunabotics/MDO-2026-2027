@@ -83,6 +83,16 @@ Digging uses all drums; dumping uses one pair at a time. Conservative ring spin 
 
 ## Structure and mass
 
+The optional `--structure plate-frame` profile replaces the following reference
+screens with coordinate-driven two-force plate strips, transverse CF rod flexure,
+aluminum box rockers and a round suspension axle. It fixes the user-specified
+6.35 mm sheet and 25.4 mm CF ID; common spoke width and CF wall/span are optimized.
+Only mirrored fully loaded level-ground gravity is in its structural load scope.
+Cutting/recovery and local/whole-plate instability require separate verification.
+CF properties remain provisional. Its mass placement, output interpretations,
+geometry failure domains and unchanged 5 mm envelope are documented in
+[PLATE_FRAME.md](docs/PLATE_FRAME.md). `ModelSet()` retains the reference below.
+
 Frame tubes are two longitudinal wheelbase members, one track-width crossmember and two pivot towers from axle height to the upper pivot, including its horizontal offset. Arms have a separate section family. For diameter d, wall t and di=d-2t:
 
 ```text
@@ -123,6 +133,17 @@ These necessary static screens do not verify the actual climbing path, joint
 loads/stops, collision, traction or dynamics. The 0.50 m deep, circle-like ditch
 remains unverified because width/radius is unknown. Existing wheel-diameter
 screens are not repurposed to claim compliance with that requirement.
+
+`ModelSet.obstacle_clearance` additionally enforces a conservative drum–wheel
+gap bound at those four travel poses. Spheres enclose each rigid wheel/drum
+cylinder with radius `sqrt(R^2+(axial_length/2)^2)`. Transform the four drum centers
+with chassis pitch then roll about the suspension shaft and compare all 64 pairs.
+The margin is minimum sphere gap minus mechanism_clearance (default 0.015 m).
+Positive bounds prove envelope separation; negative bounds are inconclusive
+about cylinder collision and are conservatively rejected. Unreachable poses
+have flagged guarded diagnostics and a failing margin. Other hardware and the
+actual crossing trajectory remain unverified. See OBSTACLE_TRAVERSAL.md for the
+port contract, domain guard and geometric limitations.
 
 Empty relocation translates to a neighboring fresh lane with two 90-degree turns; rest-to-rest time, kinetic/scrub/rolling energy, torque and level-ground traction are charged. Lane offset must exceed total drum width. Each cycle reserves the rectangle enclosing both drum stations, including the center gap; cumulative area must fit available_excavation_area. A real site planner must still check maneuver space and legal-zone topology. Trench traversal currently requires wheel_diameter >= trench_depth; this is a geometric placeholder, not a traction or exit simulation. These area/path values are planning assumptions, not asserted competition rules.
 

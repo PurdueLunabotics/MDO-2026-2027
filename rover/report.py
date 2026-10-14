@@ -33,21 +33,32 @@ from .relocation import SiteRelocation
 from .trench import TrenchTraversal
 from .tip_stability import TipStability
 from .alternatives.obstacle_stability import ObstacleStability
-for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, TrenchTraversal, TipStability, ObstacleStability):
+from .alternatives.obstacle_clearance import ObstacleClearance
+for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, TrenchTraversal, TipStability, ObstacleStability, ObstacleClearance):
     OUTPUTS.update(component.OUTPUT_UNITS)
 
 
-def snapshot(problem):
+def snapshot(problem, configuration=None):
     def get(name):
         return problem.get_val(name).item()
+
+    specs = configuration or getattr(problem, "model_metadata", {}).get("configuration", {})
+    design = specs.get("design", DESIGN)
+    assumptions = specs.get("assumptions", ASSUMPTIONS)
+    margins = specs.get("margins", MARGINS)
+    output_units = dict(OUTPUTS)
+    if getattr(problem, "model_metadata", {}).get("structure_profile") == "plate-frame" or "plate_thickness" in assumptions:
+        from .alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
+        output_units.update(PlateStructureGeometry.OUTPUT_UNITS)
+        output_units.update(PlateStructureLoads.OUTPUT_UNITS)
 
     constraints = {}
     for name, (upper, units) in REQUIREMENTS.items():
         margin = upper - get(name)
         constraints[name] = {"margin": margin, "units": units, "passed": margin >= -1e-6 * upper}
-    for name, (scale, units) in MARGINS.items():
+    for name, (scale, units) in margins.items():
         constraints[name] = {"margin": get(name), "units": units, "passed": get(name) >= -1e-6 * scale}
-    for name, (_, low, high, units) in DESIGN.items():
+    for name, (_, low, high, units) in design.items():
         margin = min(get(name) - low, high - get(name))
         constraints[name + "_bounds"] = {"margin": margin, "units": units,
                                         "passed": margin >= -1e-6 * (high - low)}
@@ -60,9 +71,9 @@ def snapshot(problem):
     return {
         "model_metadata": getattr(problem, "model_metadata", {}),
         "feasible": all(c["passed"] for c in constraints.values()),
-        "design": {name: {"value": get(name), "lower": spec[1], "upper": spec[2], "units": spec[-1]} for name, spec in DESIGN.items()},
-        "assumptions": {name: {"value": get(name), "units": spec[-1]} for name, spec in ASSUMPTIONS.items()},
-        "outputs": {name: {"value": get(name), "units": units} for name, units in OUTPUTS.items()},
+        "design": {name: {"value": get(name), "lower": spec[1], "upper": spec[2], "units": spec[-1]} for name, spec in design.items()},
+        "assumptions": {name: {"value": get(name), "units": spec[-1]} for name, spec in assumptions.items()},
+        "outputs": {name: {"value": get(name), "units": units} for name, units in output_units.items()},
         "constraints": constraints,
         "whole_cycles": {
             "completed": cycles, "idle_time_s": idle_time, "berm_volume_m3": whole_volume,
