@@ -1,8 +1,8 @@
 # Loaded obstacle stability and unverified ditch traversal
 
 The user requires traversal of a 0.40 m obstacle and a 0.50 m deep ditch while
-fully loaded in the travel pose. The optimizer now enforces a geometric reach
-and gravity-support screen for the obstacle. These do not establish climbing
+fully loaded in the travel pose. The optimizer now enforces geometric reach,
+gravity-support and conservative drum–wheel clearance screens for the obstacle. These do not establish climbing
 capability. Ditch traversal remains unverified. The existing `trench_traverse_margin` concerns the stationary
 excavation trench, and `wheel_first_margin` is a wheel-diameter drum-clearance
 placeholder. Neither port is repurposed by this work.
@@ -113,8 +113,55 @@ The unchanged 0.40 m wheelbase baseline has h_max=0.39331 m and fails reach.
 A 0.46 m wheelbase at otherwise baseline inputs has positive reach and tip
 reserves. Original failed solver iterates remain failed; see VERIFICATION.md.
 Passing this static screen still leaves internal joint/load equilibrium,
-climbing torque, traction, contact loss, body/drum collisions and terrain failure
+climbing torque, traction, contact loss, other hardware interference and terrain failure
 unverified. A rock's height alone also does not specify its approach shape.
+
+## Conservative drum–wheel clearance (revision 1)
+
+`ModelSet.obstacle_clearance` selects `ObstacleClearance` from
+`rover/alternatives/obstacle_clearance.py`, active by default. All existing model
+factories, design bounds, masses, route and score equations retain their meanings.
+This additive integration introduces four scalar outputs and one enforced margin;
+reports retain schema version 2 and include the new fields and model evidence.
+
+The linkage supplies `travel_x` and `travel_y` (its legacy vertical coordinate).
+Level-ground drum centers are `(±travel_x, ±(drum_length+drum_pair_gap)/2, travel_y)`.
+Subtract the original shaft height `wheel_diameter/2+rocker_pivot_offset`, apply
+pitch then roll, and add the posed shaft origin. The same posed wheel centers
+used in the suspension geometry are used for clearance.
+
+Each cylinder is enclosed by a sphere of radius `sqrt(R^2+(length/2)^2)`.
+For wheels, axial length is wheel_width; for drums it is drum_length and R is the
+outer cutting radius. The gap lower bound is the minimum center distance minus
+the two sphere radii, across 16 pairs in each of four raised-wheel cases (64 pairs).
+It is a sufficient conservative screen, not an exact cylinder-intersection test.
+Positive bounds guarantee separation of the modeled envelopes. Negative bounds
+are inconclusive about actual cylinder collision and are conservatively rejected.
+
+At reachable poses:
+
+```text
+obstacle_drum_wheel_margin = obstacle_drum_wheel_gap_bound - mechanism_clearance
+```
+
+The existing mechanism_clearance is used without a new hardware assumption
+(default 0.015 m). The margin uses the existing 0.4 m constraint scale and
+0.0004 m optimizer inward reserve. No earlier constraint is relaxed.
+
+The strict pure helper rejects unreachable poses. The adapter instead explicitly
+evaluates the existing guarded height, sets `obstacle_clearance_pose_valid=0`,
+reports `obstacle_clearance_evaluated_height`, and limits its margin to at most
+`requested_reach_margin-0.0001 m`. This offset is a numerical invalid-domain
+failure marker, not a calibrated clearance or obstacle-height requirement. It
+also prevents a guarded boundary pose from appearing feasible within reporting
+tolerance. Guarded gap bounds are not predictions at the requested height.
+
+This checks the prescribed static endpoints only. No intermediate crossing path,
+wheel/frame deformation, terrain contact, or hub/shaft/arm/frame interference is
+modeled. The reference dimensions and travel linkage must be replaced or checked
+against CAD and actual fully loaded articulation before hardware conclusions.
+Tests use analytic limits and explicitly synthetic geometry; there is no fitted
+relationship or experimental calibration dataset.
 
 ## Ditch research and missing terrain definition
 

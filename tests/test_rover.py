@@ -72,8 +72,10 @@ class RoverTests(unittest.TestCase):
         report=snapshot(p)
         self.assertFalse(report["feasible"])
         self.assertFalse(report["constraints"]["obstacle_pose_margin"]["passed"])
+        self.assertFalse(report["constraints"]["obstacle_drum_wheel_margin"]["passed"])
         self.assertTrue(all(c["passed"] for n,c in report["constraints"].items()
-                            if n not in {"obstacle_pose_margin","obstacle_tip_margin"}))
+                            if n not in {"obstacle_pose_margin","obstacle_tip_margin",
+                                         "obstacle_drum_wheel_margin"}))
         self.assertLessEqual(p.get_val("payload_mass").item(), p.get_val("fresh_volume").item()*1500)
         self.assertAlmostEqual(p.get_val("dump_time").item(), 2*(3*60/15+2))
         self.assertAlmostEqual(p.get_val("turn_time").item(), travel_profile(math.pi * p.get_val("track_width").item() / 2, .35, .2)[0])
@@ -203,6 +205,8 @@ class RoverTests(unittest.TestCase):
             self.assertIn('45 s outbound + 45 s return',html)
             self.assertIn('Guarded pose: requested height is unreachable',html)
             self.assertIn('Ditch requirement remains unverified',html)
+            self.assertIn('Obstacle drum–wheel clearance',html)
+            self.assertIn('Guarded clearance: requested pose is unreachable',html)
             self.assertTrue((output.parent/'design_extended.svg').exists())
 
     def test_invalid_config(self):
@@ -222,10 +226,11 @@ class RoverTests(unittest.TestCase):
                 build_problem({"wheel_diameter": .36})
 
     def test_optimization_and_derivative_stability(self):
-        # Verified feasible physical start, with unchanged success/feasibility
+        # Verified feasible numerical start, with unchanged success/feasibility
         # assertions. The original cold-start failures remain documented.
-        fixture=json.loads((Path(__file__).parent/"fixtures"/"obstacle_feasible_start.json").read_text())
+        fixture=json.loads((Path(__file__).parent/"fixtures"/"obstacle_clearance_feasible_start.json").read_text())
         p = self.problem(**fixture["inputs"])
+        self.assertTrue(snapshot(p)["feasible"])
         before = p.get_val("construction_points").item()
         checks = p.check_totals(of=["construction_points", *MARGINS], wrt=list(DESIGN),
                                method="fd", form="central", step=3e-5, step_calc="rel_avg", out_stream=None)

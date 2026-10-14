@@ -12,6 +12,7 @@ needs a card with provenance, domain, held-out validation error and reproduction
 | LinkageGeometry/Loads | Mirrored planar arms with independently located actuator and arm pivots; valid triangle/clearance; provisional wheel-diameter step clearance; sampled maximum virtual-work leverage and rated force screen | Validated obstacle capability, cylinder envelopes, real force-speed/thermal curves, joint/rod strength, lowering load history | CAD sweep, obstacle/actuator tests and extraction tests |
 | StructureGeometry | Two longitudinal tubes, crossmember, two towers, two arms | Exact hardware/joint manufacturing mass | BOM, weighed prototype, CAD |
 | StructureLoads | Small-deflection elastic beam envelopes, valid tube sections | Assembled frame load sharing, joint strength, local shell buckling, fatigue | Beam/FEA plus load/deflection tests |
+| Plate-frame profile (optional) | Moving-mount axial plate strips, CF rod bending, box rocker/axle/arm gravity screens, explicit mass placement | Provisional topology/CF properties; junction bending, whole-plate/local wall buckling, joints, recovery/cutting and obstacle reactions omitted | Independent equilibrium/energy tests, selected tube data, CAD/BOM, shell FEA and physical load tests |
 | Excavation | Stationary plunge, fresh site each cycle, stated Fr domain | Collapse, recutting, impact, complete material-flow dynamics | Bench/EDEM torque, force, mass and energy histories |
 | MassProperties | Empty/full/front-pair-only loads; rigid payload; central yaw axis | Slosh and exact CAD mass distribution | CAD and measured CG/inertia |
 | Mobility | Fixed-time level route, prescribed profiles, equal wheel torque | Validated slip/sinkage and controller tracking, wheel rotational inertia | Loaded route tests or validated Chrono |
@@ -19,6 +20,7 @@ needs a card with provenance, domain, held-out validation error and reproduction
 | TrenchTraversal | Wheel diameter >= stationary trench depth | Slip, sinkage, edge collapse and vehicle dynamics | SCM/Chrono runs and held-out physical exit tests |
 | TipStability | Level-ground center of gravity within wheel-center rectangle for one full pair and one empty pair, both fully extended | Other half-loaded arm poses need a software interlock; soil motion, dumping reaction, slopes, individual wheel lift/contact and compliance omitted | Asymmetric-load balance tests; validated multibody and terrain simulations |
 | ObstacleStability | Fully loaded travel pose, each wheel raised 0.40 m; centered rockers with average-angle differential; geometric reach and projected gravity support | Estimated +0.10 m pivot offset; point contacts, no joint stops/load equilibrium, climb path, traction, collisions, soil or dynamics; 0.50 m ditch unverified | CAD geometry/CG and loaded articulation/balance tests; full crossing trials |
+| ObstacleClearance (revision 1) | Lower bound on drum–wheel surface gap from spheres enclosing rigid cylindrical envelopes; all 16 pairs in each of four prescribed single-wheel-raised travel poses; subtracts mechanism_clearance | Conservative over-rejection is possible; negative bounds do not prove cylinder collision. No intermediate crossing path, deflection, terrain, hubs/shafts/arms/frame interference; invalid poses have flagged guarded diagnostics and failing margins | Analytic software tests with synthetic geometry; no fitted data or hardware validation. Check CAD envelopes and measured loaded articulation, then use detailed cylinder/CAD geometry if the bounds over-reject |
 | Mission | Repeated full cycles, explicit overlap and fresh lanes | Detailed site layout, partial delivery, battery voltage/thermal history | Timed full mission and electrical logs |
 
 ## Assumptions requiring particular attention
@@ -54,6 +56,21 @@ needs a card with provenance, domain, held-out validation error and reproduction
   confirm the actual legal zone and maneuver space.
 
 ## Replacement card template
+
+### Plate-frame revision 1
+
+Select with `--structure plate-frame` or `build_problem(structure="plate-frame")`.
+Four coordinated factories in `rover/alternatives/plate_frame.py` preserve scalar
+mass/output boundaries. Fixed 6.35 mm 6061-T6 sheet and 25.4 mm CF ID come from
+the student. Spoke width, CF span/wall, box rocker/axle sections and centered axle
+height are adjustable. The four-radial/four-perimeter topology and CF properties
+are **provisional**, not calibrated CAD/material data. No fitted response or
+experimental dataset was introduced. Valid only for nondegenerate geometry and
+mirrored fully loaded level-ground gravity; central pin cannot carry unbalanced
+moments. Failed arithmetic remains failed. Plate strip buckling is not whole-plate
+buckling validation; CF local wall/joint behavior and excluded operational loads
+need separate checks. Detailed equations, domains, output meanings and material
+sources: [PLATE_FRAME.md](PLATE_FRAME.md). Numerical checks: VERIFICATION.md.
 
 The active obstacle screen and pending ditch requirement are documented in
 [OBSTACLE_TRAVERSAL.md](OBSTACLE_TRAVERSAL.md). The user confirmed centered pivots

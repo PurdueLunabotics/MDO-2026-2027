@@ -1,5 +1,112 @@
 # Current simulator verification
 
+## Optional plate-frame profile, 2026-10-14
+
+Implemented `--structure plate-frame` after the student's frame/load discussion.
+This is a preliminary analytical model, not plate FEA or experimental validation.
+The reference configuration/factories remain available. See PLATE_FRAME.md for
+the exact model, material assumptions, scope and additive/profile-specific ports.
+
+- Local .venv full suite: **78 tests passed in 50.405 s**, including 14 new frame
+  tests. Independent actuator force/moment balance, truss nodal equilibrium and
+  elastic-work equality, box-section subtraction, mass/energy conservation,
+  geometry/packing/mechanism failure cases, width/span trends, N2 sources,
+  smooth total derivatives and a complete frame optimizer regression all pass.
+- `main.py --structure plate-frame --baseline --output
+  results/plate_frame/baseline.json`: the new structural screens pass. The rover
+  remains infeasible at the original 0.40 m wheelbase: requested obstacle reach
+  margin -0.006687198 m, posed tip margin -0.022280099 m and clearance margin
+  -0.006787198 m. No obstacle requirement was relaxed.
+- `main.py --structure plate-frame --check-derivatives --output
+  results/plate_frame/optimization.json`: derivative step-size check passed;
+  SLSQP converged with all modeled constraints passing. Score 341.8832 ->
+  **2282.8164**, dry mass 38.2183 kg, payload 51.2393 kg.
+  Driver recorded 52 model evaluations and 22 derivative evaluations.
+  Final aluminum stress envelope 119.308 MPa, deflection envelope 3.6724 mm,
+  CF effective bending stress 121.528 MPa. Plate-strip buckling reserve
+  1223.213 N; rocker Euler reserve 5594.519 N; arm Euler reserve 10.0064 N.
+  Plate force-balance residual 5.68e-13 N. The 5 mm limit, metal allowable,
+  strength factor and structural load multiplier were not loosened.
+- Fixed user dimensions remain plate thickness 6.35 mm and CF ID 25.4 mm.
+  Several final section widths/walls/spans meet their exploratory lower bounds;
+  actual connector dimensions, local wall behavior and CF product properties
+  can change the result. The model does not certify the selected sections.
+- The reference drum, route, score and mission energy boundaries remain intact;
+  no rocker/drum/wheel mass is counted twice. Frame CG and sloping-rocker obstacle
+  CG are profile-specific rather than using the old frame rectangle lump.
+- Reference CLI baseline and derivative-checked default optimization were also
+  run: their scores/failures reproduce the earlier cold-start reference result.
+  Reference optimization remains **failed_or_infeasible** (2294.9805 points,
+  failed stress/deflection and five other constraints), not an accepted design.
+  Its saved report is results/plate_frame/reference_optimization.json.
+
+CF properties and the four-radial/four-perimeter plate topology are provisional.
+Two-force strips omit plate-junction bending and whole-plate buckling. Tube/axle
+flexure screens are not assembled-frame FEA; connections, local box/CF wall
+buckling and recovery/cutting/obstacle structural reactions require separate
+verification. No hardware or simulator calibration was performed.
+
+Per-output N2 files now use `<output_stem>_n2.html`, preventing reports of different
+profiles in one directory from linking to whichever diagram was written last.
+
+## Obstacle drum-wheel clearance integration
+
+Checked 2026-10-14 after completing the student's obstacle drum–wheel clearance
+component and its integration. This is an analytical software/envelope check,
+not simulator agreement, hardware calibration or experimental traversal validation.
+
+- Local .venv full suite: **64 tests passed**. The 13 clearance tests include
+  zero-pose and hand-calculated pitch/roll limits, rigid-distance conservation,
+  cross-pair minimum selection, sphere touching/overlap signs, an explicit case
+  of separated cylinders with overlapping enclosing spheres, finite/valid input
+  domains, unreachable/boundary rejection, smooth derivatives, actual linkage
+  sources and active/reportable constraints. Existing drum/mass, interface and
+  N2 dependency checks also pass.
+- The active ModelSet.obstacle_clearance factory compares 64 pairs at four
+  prescribed single-wheel-raised travel poses. The required buffer reuses
+  mechanism_clearance=0.015 m. Wheel/drum envelopes are rigid outer cylinders
+  enclosed in spheres; a negative sphere bound is inconclusive about actual
+  cylinder collision and is conservatively rejected. Default physical inputs,
+  old factories, constraints, solver tolerance, route and score are unchanged.
+- `results/obstacle_clearance_baseline.json`: original baseline remains
+  infeasible. Reach margin -0.0066872 m, guarded tip margin -0.0274500 m and new
+  clearance margin -0.0067872 m. Validity is zero; its gap bound is a guarded
+  diagnostic at 0.3933124 m, not a prediction at the requested 0.40 m height.
+- With only wheelbase changed to 0.46 m, baseline reach/support/clearance pass;
+  conservative gap bound 0.0888998 m and clearance margin 0.0738998 m.
+- Required default-start derivative check passed, but SLSQP failed with a line
+  search exit in `results/obstacle_clearance_optimization.json`. The final iterate
+  is retained as failed/infeasible (motor, battery, linkage/actuator, drum torque
+  and structure failures). A run from wheelbase 0.46 m likewise passed derivatives
+  but failed battery power, actuator force, drum torque and stress; see
+  `results/obstacle_clearance_reachable_optimization.json`. Neither is accepted.
+- The original obstacle fixture has a new margin of -0.1598726 m. It is retained
+  unchanged as a historical pre-clearance starting vector. A new explicit
+  numerical fixture, tests/fixtures/obstacle_clearance_feasible_start.json, is
+  verified feasible and uses additional initial motor/battery/structural reserves,
+  interior cut/RPM settings and shifted pivots. The historical reference wheel
+  coefficient 8 kg/m² is explicit. These are synthetic numerical inputs, not
+  measured hardware. CI and the optimizer regression now use this fixture with
+  the same derivative, optimizer-success, final-feasibility and objective-
+  improvement checks; the test additionally checks starting feasibility.
+- Derivative-checked optimization from that interior start converged feasible:
+  `results/obstacle_clearance_interior/optimization.json`, 2173.4109 → 2177.8442
+  modeled points. Final reach reserve 0.0571379 m, gravity tip reserve 0.0019441 m,
+  conservative gap bound 0.1077071 m and clearance margin 0.0927071 m. Energy
+  accounting residual run_energy-cycles*cycle_energy is 0.0 Wh at stored precision.
+  This locally converged result is not a global-optimum or hardware-performance
+  claim. The full regression suite reproduces a successful feasible improvement.
+
+JSON and HTML include the additive clearance fields, validity/evaluated height
+and model evidence. HTML distinguishes guarded diagnostics and level-ground
+schematics from the four posed checks. The alternatives package description now
+reflects its two active obstacle factories. No fitting dataset exists or is
+implied. Other hardware interference, intermediate climbing poses, flexible
+wheel/frame deformation, terrain dynamics and the underspecified 0.50 m ditch
+remain outside the screen. The default-start solver failure remains unresolved.
+
+Historical verification records follow.
+
 Checked 2026-10-11 after activating the requested 0.40 m raised-wheel gravity
 screen. The user confirmed centered rocker pivots, an average-angle differential
 and an estimated +0.10 m offset above the wheel-center line. This offset is

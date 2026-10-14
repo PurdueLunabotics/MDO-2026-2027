@@ -6,8 +6,7 @@ from pathlib import Path
 import openmdao
 import openmdao.api as om
 from openmdao.utils.assert_utils import assert_check_totals
-from rover.config import DESIGN
-from rover.problem import build_problem, MARGINS
+from rover.problem import build_problem
 from rover.report import snapshot, print_report
 from rover.html_report import write_report
 
@@ -15,6 +14,8 @@ from rover.html_report import write_report
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", action="store_true", help="Analyze without optimization")
+    parser.add_argument("--structure", choices=["reference", "plate-frame"], default="reference",
+                        help="Select reference tubes or the preliminary CF/plate/box-rocker frame")
     parser.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="Override a config value in its stated units")
     parser.add_argument("--optimizer", choices=["SLSQP", "COBYLA"], default="SLSQP")
     parser.add_argument("--maxiter", type=int, default=200)
@@ -26,7 +27,7 @@ def main():
         parser.error("--maxiter must be positive")
     try:
         overrides = dict(item.split("=", 1) for item in args.set)
-        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True)
+        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=args.structure)
     except (ValueError, TypeError) as exc:
         parser.error(str(exc))
     output = args.output or Path("results") / ("baseline.json" if args.baseline else "optimization.json")
@@ -41,7 +42,7 @@ def main():
         print_report("Starting design", baseline)
         if args.check_derivatives:
             checks = problem.check_totals(
-                of=["construction_points", *MARGINS], wrt=list(DESIGN),
+                of=["construction_points", *problem.margin_specs], wrt=list(problem.design_specs),
                 method="fd", form="central", step=3e-5, step_calc="rel_avg", out_stream=None)
             assert_check_totals(checks, atol=1e-3, rtol=2e-3)
             print("Total derivative step-size check passed (not a physics validation).")
@@ -57,7 +58,7 @@ def main():
             final = snapshot(problem)
             print_report("Final optimizer iterate", final)
             print(f"Optimizer success: {success}")
-        om.n2(problem, outfile=str(output.parent / "n2.html"), show_browser=False)
+        om.n2(problem, outfile=str(output.parent / f"{output.stem}_n2.html"), show_browser=False)
         record = {"schema_version": 2, "model_metadata": problem.model_metadata,
                   "openmdao_version": openmdao.__version__, "optimizer": args.optimizer,
                   "optimizer_success": success, "optimizer_result": message,
@@ -69,7 +70,7 @@ def main():
         if not args.baseline:
             reader = om.CaseReader(str(recorder_path))
             for i, case in enumerate(reader.get_cases("driver", recurse=False)):
-                iterations.append({"label": f"Driver evaluation {i + 1}", "snapshot": snapshot(case)})
+                iterations.append({"label": f"Driver evaluation {i + 1}", "snapshot": snapshot(case, configuration=problem.model_metadata["configuration"])})
         write_report(record, output, iterations)
         print(f"\nSaved {output.resolve()}")
         print(f"Report and geometry: {output.with_suffix('.html').resolve()}")

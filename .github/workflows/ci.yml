@@ -33,7 +33,7 @@ jobs:
           from pathlib import Path
 
           # Match the optimizer regression test; default-start failures remain documented.
-          start = json.loads(Path("tests/fixtures/obstacle_feasible_start.json").read_text())["inputs"]
+          start = json.loads(Path("tests/fixtures/obstacle_clearance_feasible_start.json").read_text())["inputs"]
           command = [sys.executable, "main.py", "--check-derivatives",
                      "--output", "results/ci_optimization.json"]
           for name, value in start.items():
