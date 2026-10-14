@@ -1,6 +1,6 @@
 {
-  "revision": 1,
-  "provenance": "Synthetic numerical regression start for the conservative drum-wheel obstacle constraint, checked 2026-10-14. Derived from a reachable-start failed optimization, with increased frame/arm diameters, motor ratings, battery capacity and actuator rating; smaller cut depth/RPM and shifted pivots provide interior reserves. All starting constraints pass. Historical reference wheel coefficient 8 kg/m^2 is explicit for reproducibility. Not hardware/calibration data or proof of a global optimum. Original pre-clearance fixture retained separately.",
+  "revision": 2,
+  "provenance": "Synthetic numerical regression start for the conservative drum-wheel obstacle constraint, checked 2026-10-14. Revision 2 changes only initial dig/dump RPM to 25/20 following the student-requested removal of the uncalibrated Froude caps; the old start now encounters an SLSQP line-search failure. All starting active constraints pass; derivative-checked optimization must still succeed, finish feasible and improve score. Other inputs retain revision 1's reachable-start geometry, increased frame/arm sections, motor/battery/actuator ratings and interior reserves. Historical reference wheel coefficient 8 kg/m^2 is explicit for reproducibility. Not hardware/calibration data or proof of a global optimum. Prior revision is preserved in Git; original pre-clearance fixture retained separately.",
   "inputs": {
     "wheel_diameter": 0.18000200647782558,
     "wheel_width": 0.18549302255589573,
@@ -9,8 +9,8 @@
     "drive_motor_power": 45.000842114220234,
     "drive_gear_ratio": 44.610050399194904,
     "drum_motor_power": 103.41288703020435,
-    "drum_rpm": 37.86839364231668,
-    "dump_rpm": 30.919329017866698,
+    "drum_rpm": 25.0,
+    "dump_rpm": 20.0,
     "drum_gear_ratio": 83.7425760753695,
     "cut_depth": 0.016850010212087714,
     "frame_tube_diameter": 0.06827153114792212,

@@ -1,0 +1,19 @@
+{
+  "revision": 1,
+  "optimizer": "COBYLA",
+  "maxiter": 5000,
+  "cobyla_radius": 0.02,
+  "provenance": "Synthetic numerical regression start for 30-degree slope and 0-to-40-cm one-wheel stability, checked 2026-10-14. A shortened 0.50 m arm and 0.49 m wheelbase, 0.64 m track and 0.22 m drums give a feasible start with interior stability and clearance reserves. Other values use reference defaults. A small scaled COBYLA initial radius avoids the invalid trials seen with its default radius; derivative-checked optimization must succeed, finish feasible and improve score. All physical constraints, solver tolerance and assertions are retained. SLSQP cold-start and unsuccessful reference runs remain explicitly failed; this fixture demonstrates a supported alternate solver instead of turning those failures into passes. Explicit wheel coefficient 8 kg/m^2, slope pi/6 and rock 0.40 m preserve current requirements. Not hardware/calibration data or proof of a global optimum.",
+  "inputs": {
+    "wheelbase": 0.49,
+    "arm_length": 0.5,
+    "travel_actuator_length": 0.38,
+    "actuator_retracted_length": 0.43,
+    "actuator_extended_length": 0.61,
+    "track_width": 0.64,
+    "drum_length": 0.22,
+    "wheel_areal_mass": 8,
+    "slope_angle": 0.5235987755982988,
+    "obstacle_height": 0.4
+  }
+}

@@ -7,6 +7,7 @@ use ordinary real scalars: finite differences support later non-complex-safe mod
 import math
 import openmdao.api as om
 from .config import input_spec
+from .motor_inventory import ReferenceAssemblyMass
 
 
 def scalar(inputs, name):
@@ -25,7 +26,7 @@ class SimpleComponent(om.ExplicitComponent):
         # Explicit structural dependencies, including BOTH sides of min/max branches.
         # These declarations make the N2 show only real possible input/output links.
         from .dependencies import dependencies
-        mapping = getattr(type(self), "DEPENDENCIES", None)
+        mapping = getattr(self, "DEPENDENCIES", None)
         if mapping is None:
             for cls in type(self).__mro__:
                 try:
@@ -46,12 +47,21 @@ class GeometryMass(SimpleComponent):
         "rover_length": "m", "rover_width": "m", "rover_height": "m",
     }
 
+    def initialize(self):
+        self.options.declare("assembly_mass_model", default=ReferenceAssemblyMass)
+
     def setup(self):
+        inventory = self.options["assembly_mass_model"]
+        from .dependencies import dependencies
+        self.DEPENDENCIES = {k:set(v) for k,v in dependencies("GeometryMass").items()}
+        self.DEPENDENCIES["drive_mass"] = inventory.input_names("drive")
+        self.DEPENDENCIES["dry_mass"] = inventory.input_names("drive") | {
+            "battery_capacity", "battery_specific_energy", "fixed_mass", "structure_mass",
+            "wheel_mass", "drum_mass", "linkage_mass"}
         self.inputs_from_config(
-            "wheel_width", "drum_length", "drive_motor_power", "drive_gear_ratio",
-            "battery_capacity", "motor_rated_rpm", "drive_gear_efficiency",
-            "track_width", "drum_pair_gap", "fixed_mass", "motor_mass_per_watt",
-            "gear_mass_per_torque", "drive_fixed_mass", "battery_specific_energy")
+            "wheel_width", "drum_length", "battery_capacity", "track_width",
+            "drum_pair_gap", "fixed_mass", "battery_specific_energy")
+        self.inputs_from_config(*sorted(inventory.input_names("drive")))
         self.add_input("linkage_mass", units="kg")
         self.add_input("structure_mass", units="kg")
         self.add_input("wheel_mass", units="kg")
@@ -63,10 +73,7 @@ class GeometryMass(SimpleComponent):
 
     def compute(self, inputs, outputs):
         v = lambda name: scalar(inputs, name)
-        motor_omega = v("motor_rated_rpm") * math.pi / 30
-        drive_torque = v("drive_motor_power") / motor_omega * v("drive_gear_ratio") * v("drive_gear_efficiency")
-        drive_mass = 4 * (v("drive_fixed_mass") + v("motor_mass_per_watt") * v("drive_motor_power")
-                          + v("gear_mass_per_torque") * drive_torque)
+        drive_mass = 4*self.options["assembly_mass_model"].per_motor(v, "drive")
         battery_mass = v("battery_capacity") / v("battery_specific_energy")
         outputs["drive_mass"], outputs["battery_mass"] = drive_mass, battery_mass
         outputs["dry_mass"] = v("fixed_mass") + v("structure_mass") + v("wheel_mass") + v("drum_mass") + drive_mass + battery_mass + v("linkage_mass")

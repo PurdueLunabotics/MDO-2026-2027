@@ -16,6 +16,7 @@ from .trench import TrenchTraversal
 from .tip_stability import TipStability
 from .alternatives.obstacle_stability import ObstacleStability
 from .alternatives.obstacle_clearance import ObstacleClearance
+from .alternatives.traversal_stability import TraversalStability
 from .mobility import Mobility
 from .wheels import WheelMass
 from .drums import DrumMass
@@ -39,6 +40,7 @@ class ModelSet:
     tip_stability: Callable = TipStability
     obstacle_stability: Callable = ObstacleStability
     obstacle_clearance: Callable = ObstacleClearance
+    traversal_stability: Callable = TraversalStability
     mobility: Callable = Mobility
 
     def metadata(self):
@@ -49,5 +51,7 @@ class ModelSet:
 def plate_frame_models():
     """Explicit coordinated profile; reference ModelSet() remains unchanged."""
     from .alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads, PlateMassProperties, PlateObstacleStability
+    from .alternatives.traversal_stability import PlateTraversalStability
     return ModelSet(structure_geometry=PlateStructureGeometry, structure_loads=PlateStructureLoads,
-                    mass_properties=PlateMassProperties, obstacle_stability=PlateObstacleStability)
+                    mass_properties=PlateMassProperties, obstacle_stability=PlateObstacleStability,
+                    traversal_stability=PlateTraversalStability)

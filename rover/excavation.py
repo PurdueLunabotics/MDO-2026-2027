@@ -8,6 +8,7 @@ sweep. Each cycle must move to a fresh site. No collapse/repeated-soil credit.
 import math
 from .components import scalar
 from .discipline import Discipline, names
+from .motors import ReferenceMotorProvider, motor_dependencies
 
 
 def segment_area(radius, depth):
@@ -17,9 +18,9 @@ def segment_area(radius, depth):
 
 
 def motor_torque(power, rated_rpm, ratio, efficiency, output_rpm):
-    """Linear PMDC envelope, with a separate continuous power/torque screen."""
-    rated = power/(rated_rpm*math.pi/30)*ratio*efficiency
-    return min(rated, 2*rated*(1-output_rpm*ratio/(2*rated_rpm)))
+    """Legacy helper retained for callers; the envelope has one shared owner."""
+    from .motors import ReferenceMotor, Gearmotor
+    return Gearmotor(ReferenceMotor(power,rated_rpm),ratio,efficiency,1.).available_torque(output_rpm)
 
 
 class Excavation(Discipline):
@@ -80,6 +81,20 @@ class Excavation(Discipline):
         "dig_reach_margin": names("drum_diameter extended_y minimum_dig_depth"),
     }
 
+    def initialize(self):
+        self.options.declare("motor_model", default=ReferenceMotorProvider)
+
+    def setup(self):
+        motor = self.options["motor_model"]
+        self.CONFIG_INPUTS = tuple(sorted((set(self.CONFIG_INPUTS)-ReferenceMotorProvider.input_names("drum"))
+                                          | motor.input_names("drum")))
+        changed = names("dig_power dump_power dig_energy dump_energy drum_power_margin drum_torque_margin dump_torque_margin")
+        mechanical = self.torque | self.force | self.spin | self.time | names(
+            "dump_revolutions dump_rpm drum_rpm drum_torque_service_factor actuator_idle_power")
+        self.DEPENDENCIES = motor_dependencies(self.DEPENDENCIES, changed, motor, "drum", mechanical)
+        self.OUTPUT_UNITS = dict(self.OUTPUT_UNITS)
+        super().setup()
+
     def granular_response(self, inputs, froude):
         """Constant reference retention/lift; measured data may replace this hook."""
         v = lambda n: scalar(inputs, n)
@@ -122,6 +137,11 @@ class Excavation(Discipline):
         dump_peak = dumping_torque*dump_omega
         dig_energy = (force*radius+0.5*internal)*omega*cutting_time + 0.5*inertia*omega**2
         dump_energy = 0.5*dump_internal*dump_omega*(dump_time-2*v("drum_spinup_time"))/2 + 0.5*inertia*dump_omega**2
+        # Work/peak are at the output shafts. Both pairs dig together;
+        # each pair dumps separately. Combined efficiency is applied once.
+        motor = self.options["motor_model"].create(v, "drum")
+        dig_electrical = motor.evaluate(dig_energy/2, dig_peak/2)
+        dump_electrical = motor.evaluate(dump_energy/2, dump_peak)
         idle = v("actuator_idle_power")
         result = {
             "payload_mass": mass, "payload_volume": mass/v("stored_soil_density"),
@@ -131,13 +151,13 @@ class Excavation(Discipline):
             "excavation_footprint": (2*abs(v("extended_x"))+2*radius)*(2*v("drum_length")+v("drum_pair_gap")),
             "cut_force": force, "drum_froude": fr,
             "dig_time": dig_time, "dig_overlap_time": lowering_time, "dump_time": dump_time,
-            "dig_power": dig_peak/v("drum_efficiency")+2*idle,
-            "dump_power": dump_peak/v("drum_efficiency")+idle,
-            "dig_energy": dig_energy/v("drum_efficiency")+2*idle*dig_time,
-            "dump_energy": dump_energy/v("drum_efficiency")+idle*dump_time,
-            "drum_power_margin": 2*v("drum_motor_power")*v("drum_gear_efficiency")-dig_peak*v("drum_torque_service_factor"),
-            "drum_torque_margin": 2*motor_torque(v("drum_motor_power"),v("motor_rated_rpm"),v("drum_gear_ratio"),v("drum_gear_efficiency"),v("drum_rpm"))-peak_torque*v("drum_torque_service_factor"),
-            "dump_torque_margin": motor_torque(v("drum_motor_power"),v("motor_rated_rpm"),v("drum_gear_ratio"),v("drum_gear_efficiency"),v("dump_rpm"))-dumping_torque*v("drum_torque_service_factor"),
+            "dig_power": 2*dig_electrical["peak"]+2*idle,
+            "dump_power": dump_electrical["peak"]+idle,
+            "dig_energy": 2*dig_electrical["energy"]+2*idle*dig_time,
+            "dump_energy": 2*dump_electrical["energy"]+idle*dump_time,
+            "drum_power_margin": 2*motor.peak_power()-dig_peak*v("drum_torque_service_factor"),
+            "drum_torque_margin": 2*motor.available_torque(v("drum_rpm"))-peak_torque*v("drum_torque_service_factor"),
+            "dump_torque_margin": motor.available_torque(v("dump_rpm"))-dumping_torque*v("drum_torque_service_factor"),
             "dig_froude_margin": v("max_dig_froude")-fr,
             "dump_froude_margin": v("max_dump_froude")-dump_omega**2*radius/v("gravity"),
             "penetration_margin": v("dry_mass")*v("gravity")-force*v("vertical_cut_fraction"),

@@ -6,7 +6,7 @@ was removed pending measured terrain and drivetrain data.
 import math
 from .components import scalar, travel_profile
 from .discipline import Discipline, names
-from .excavation import motor_torque
+from .motors import ReferenceMotorProvider, motor_dependencies
 
 
 class SiteRelocation(Discipline):
@@ -34,6 +34,19 @@ class SiteRelocation(Discipline):
         "site_turn_time": names("site_speed track_width acceleration turn_accel_fraction"),
     }
 
+    def initialize(self):
+        self.options.declare("motor_model", default=ReferenceMotorProvider)
+
+    def setup(self):
+        motor = self.options["motor_model"]
+        self.CONFIG_INPUTS = tuple(sorted((set(self.CONFIG_INPUTS)-ReferenceMotorProvider.input_names("drive"))
+                                          | motor.input_names("drive")))
+        changed = names("relocation_energy relocation_peak_power site_drive_margin")
+        mechanical = self.profile | self.rolling | {"wheel_diameter", "actuator_idle_power", "traction_coefficient"}
+        self.DEPENDENCIES = motor_dependencies(self.DEPENDENCIES, changed, motor, "drive", mechanical)
+        self.OUTPUT_UNITS = dict(self.OUTPUT_UNITS)
+        super().setup()
+
     def compute(self, inputs, outputs):
         v = lambda name: scalar(inputs, name)
         radius, half_track = v("wheel_diameter")/2, v("track_width")/2
@@ -44,20 +57,23 @@ class SiteRelocation(Discipline):
         weight = v("dry_mass")*v("gravity")
         turn_drag = weight*(v("rolling_base") + v("scrub_coefficient")*v("wheelbase")/(4*half_track))
         turn_mass = v("empty_yaw_inertia")/half_track**2
-        work = weight*v("rolling_base")*v("fresh_site_distance") + 0.5*v("dry_mass")*site_peak**2
-        work += turn_drag*math.pi*half_track + turn_mass*turn_peak**2
         site_force = weight*v("rolling_base") + v("dry_mass")*v("acceleration")
         turn_force = turn_drag + turn_mass*v("acceleration")*v("turn_accel_fraction")
         margins = []
+        motor = self.options["motor_model"].create(v, "drive")
         for required, speed in ((site_force, site_peak), (turn_force, turn_peak)):
             rpm = speed/radius*30/math.pi
-            available = 4*motor_torque(v("drive_motor_power"), v("motor_rated_rpm"),
-                                       v("drive_gear_ratio"), v("drive_gear_efficiency"), rpm)/radius
+            available = 4*motor.available_torque(rpm)/radius
             margins.append(min(available, weight*v("traction_coefficient")) - required)
         idle = 4*v("actuator_idle_power")
+        # Two quarter turns, each starting from rest; no regeneration.
+        straight_work = weight*v("rolling_base")*v("fresh_site_distance") + 0.5*v("dry_mass")*site_peak**2
+        turn_work = turn_drag*math.pi*half_track/2 + 0.5*turn_mass*turn_peak**2
+        straight_electrical = motor.evaluate(straight_work/4, site_force*site_peak/4)
+        turn_electrical = motor.evaluate(turn_work/4, turn_force*turn_peak/4)
         outputs["relocation_time"] = duration
-        outputs["relocation_energy"] = work/v("drive_efficiency") + idle*duration
-        outputs["relocation_peak_power"] = max(site_force*site_peak, turn_force*turn_peak)/v("drive_efficiency") + idle
+        outputs["relocation_energy"] = 4*(straight_electrical["energy"]+2*turn_electrical["energy"])+idle*duration
+        outputs["relocation_peak_power"] = 4*max(straight_electrical["peak"],turn_electrical["peak"])+idle
         outputs["fresh_site_margin"] = v("fresh_site_distance") - (2*v("drum_length") + v("drum_pair_gap"))
         outputs["site_drive_margin"] = min(margins)
         outputs["site_turn_time"] = 2*turn_time

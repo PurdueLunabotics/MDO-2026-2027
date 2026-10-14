@@ -1,5 +1,435 @@
 # Current simulator verification
 
+## Windows motor-CSV checkout fix, 2026-10-14
+
+The student supplied a Windows Actions log with one checksum-test failure and
+15 X44 initialization errors; Ubuntu passed. All errors came from the same
+source-data verification check before model evaluation.
+
+- Reproduced the exact Windows hash by converting the versioned 6038-byte LF
+  CSV to 6117-byte CRLF: expected
+  980381798705b95802333d2cb86e01b4099c805bb554c85f685a8e00937c6ceb,
+  Windows conversion
+  621fa3db95249600dde72ddbc33a6ad9597231c1ce6c63ad9495a5094b0340b2.
+  This matches the supplied failure, rather than assuming file corruption.
+- Added /data/motors/*.csv text eol=lf to .gitattributes. Other text-file
+  settings are retained. Git will preserve motor-CSV bytes on Windows checkout.
+  No CSV, manifest checksum, physics code, test assertion or verifier changed;
+  strict raw-byte source verification remains active.
+- Used Git cat-file --filters on the committed CSV with core.autocrlf=true and
+  core.eol=crlf, then with core.autocrlf=false and core.eol=lf. Before the fix,
+  the Windows filter reproduced the failing hash. After the fix, both outputs
+  are 6038 bytes, contain LF only and match the manifest exactly.
+- All 115 tests pass in 43.687 s. Required baseline CLI completed and the
+  required reference derivative check passed. Its subsequent generic-reference
+  cold-start SLSQP solve still failed and remains recorded as failed/infeasible
+  in reference_optimization.json; no optimizer fix is claimed by this change.
+- Verification outputs are under ignored results/line_endings_fix/. No
+  commit/push/merge was performed, and remote Actions have not rerun yet.
+
+## CI optimizer regressions repaired, 2026-10-14
+
+The student supplied GitHub logs confirming two failing optimizer assertions:
+plate-frame SLSQP did not report success, and the X44 COBYLA restart returned
+2282.78958 points versus 2288.16331 initially. This entry supersedes the
+unresolved-status notes below; the old raw results remain unchanged.
+
+Only numerical settings and their CLI/configuration documentation changed.
+No physics equation, input value, bound, safety factor, feasibility tolerance,
+constraint reserve or existing test assertion changed. Neither regression
+start nor its fixture was replaced.
+
+- Plate-frame defaults now select COBYLA, initial scaled radius 0.02,
+  up to 2000 evaluations, accuracy 1e-5. Explicit SLSQP remains available.
+  The min/max/contact envelopes make the gradient line search fragile;
+  merely tightening SLSQP to 1e-6 still failed with stress margin -306512 Pa.
+  That failed trial remains failed in results/optimizer_fix/plate_slsqp_tight.json.
+- X44 uses accuracy 1e-5 instead of 1e-3. Its saved restart retains the same
+  initial inputs, COBYLA, 1500-evaluation limit and 0.01 initial radius.
+  COBYLA tolerance sets its final trust-region accuracy, not a physical
+  acceptance limit. The tighter setting resolves the observed score regression.
+- Generic reference defaults remain SLSQP, 200 iterations and 1e-3 accuracy.
+  Arguments and CLI flags can override defaults; invalid numerical settings
+  fail clearly. Resolved choices are written into report metadata and the
+  top-level report optimizer field, including when CLI arguments were omitted.
+- All 17 plate-frame tests pass in 15.061 s, including the original unchanged
+  success/feasibility/score-improvement test from its original cold start.
+- Full suite: **115 tests passed in 41.416 s**. This includes both previously
+  failing regressions, four new numerical-default/override/domain checks,
+  derivatives, physics, interface composition, mass/energy and report tests.
+- Required generic baseline CLI completed. Required generic default derivative
+  CLI passed derivatives but still failed SLSQP; its failed/infeasible result
+  remains recorded. Width, battery power, actuator force, drum torque and
+  deflection margins fail. That generic cold start is not the CI solve.
+- Actual CI-fixture CLI passed derivatives and converged feasible:
+  score 529.22418 -> 920.12578 in 147 model evaluations.
+- Plate-frame default CLI passed derivatives and converged feasible from the
+  original cold start: score 343.16857 -> 996.33243 in 283 evaluations.
+- X44 fixture CLI passed derivatives and converged feasible:
+  score 2288.16331 -> 2291.30075 in 244 evaluations.
+- All three successful final iterates pass every enforced constraint.
+  JSON/HTML/N2, logs and failed comparison trials are under ignored
+  results/optimizer_fix/. These are numerical checks, not independent
+  experimental validation, guaranteed global optima or 30-degree climbing proof.
+  GitHub checks have not rerun on this fix yet; no commit/push/merge was made.
+
+## Simplified motor energy model, 2026-10-14
+
+The student approved a lower-fidelity motor model before reviewing any new
+30-degree climbing screen. This entry supersedes the electrical-model details
+in the historical entries below.
+
+- Removed ShaftPhase, ShaftDuty, IntegratedMotor, electrical quadrature,
+  equivalent-DC/PWM equations and the drive_motion module. No stator-current
+  time histories, RMS currents or required-voltage report outputs remain.
+- Existing disciplines retain mechanical loads and pass output-shaft work [J]
+  and peak power [W] to Gearmotor.evaluate(work, peak). Electrical estimates
+  divide by one provisional combined motor+gear efficiency: drive 0.72,
+  drums 0.70. These existing config inputs are now active in the X44 profile.
+  They are uncalibrated assumptions, not manufacturer efficiency ratings.
+- Preserved the standard 12 V torque-speed envelope, optional current torque
+  caps, fixed 100:1 drive gearing, mass inventory, startup torque/kinetic energy,
+  route, requirements and all margin signs. Gear mechanical efficiency affects
+  torque capability and is not divided into energy again. Zero current limit
+  still means undecided; continuous operation and climbing remain unverified.
+- Required ports remain; retired optional diagnostics and intentional X44
+  energy/peak/battery/score changes are documented in MOTOR_INTERFACE.md.
+  Metadata records energy model revision 2 and the actual combined efficiencies.
+  The source manifest is revision 2, with unchanged raw CSV and checksum.
+- The six saved cases retain all generic output/margin expectations and all X44
+  mechanical/mass/envelope expectations. Historical X44 electrical values are
+  deliberately not treated as new expected answers. Independent tests check
+  work and kinetic-energy limits, gear conversion, no double loss, invalid
+  inputs, current-limit failure, energy sums and shared-provider composition.
+  The actual excavation component's zero-resistance limit equals 1/2 I omega^2
+  divided by efficiency, including both drum pairs once.
+- Full suite: 109 tests in 199.074 s, 107 passed and two failed. The generic plate
+  cold-start optimization remains unreliable (this run failed final feasibility).
+  The X44 restart passes solver success/final feasibility but fails its existing
+  score-improvement assertion. Neither assertion was weakened or removed.
+  Final focused motor rerun: 13 tests in 6.705 s, 12 passed; the same optimizer-score
+  failure remains. All six interface tests pass. The newly separated HTML
+  report test and independent component startup-energy test pass.
+- Required reference baseline completed. Required reference derivative CLI
+  passed derivative comparison, but default SLSQP still exited unsuccessfully;
+  its final iterate stays failed in reference_optimization.json. Failed margins
+  include width -0.01486 m, battery peak-power reserve -6.292 W, actuator force
+  -38.982 N, drum torque -0.2549 N*m and structural deflection -0.001404 m.
+  This task does not claim to fix default optimization.
+- The X44 supported-start derivative CLI passes derivatives and finishes feasible.
+  Its score decreases from 2288.16331382745 to 2282.78957861425 (about 0.235%).
+  Starting/final cycle energy is 3.19534/3.18250 Wh and peak electrical power is
+  576.159/573.825 W. A feasible solver-success status is not evidence of score
+  improvement or a global optimum. Both iterates remain in the report.
+- CLI JSON/HTML/N2 and test logs are under ignored results/motor_simple/.
+  No raw runs are staged. No commit, push or merge was performed. The new
+  30-degree traction screen remains deferred for the student's motor review.
+
+## Shared motor interface cleanup, 2026-10-14
+
+The student requested this refactor for review before any 30-degree traction
+work. No physical requirement, geometry bound, soil/motor coefficient, safety
+factor or optimizer tolerance was changed. No new climbing screen was added.
+
+- Removed all five X44-specific discipline/mass component copies. Existing
+  Excavation, Mobility and SiteRelocation instances now consume a shared
+  motor-provider/Gearmotor interface. Existing DrumMass and GeometryMass use
+  a separate assembly-inventory option. X44 source verification and its
+  unchanged performance equations remain in `alternatives/x44_motor.py`.
+- Mechanical shaft duties are produced once: excavation owns soil/fill/spin
+  demands; `drive_motion.py` owns shared wheel-shaft acceleration/cruise/brake
+  demands. `motors.py` owns gear conversion and electrical evaluation. The
+  generic reference retains its original constant-efficiency work approximation;
+  X44 retains its original equivalent-DC phase integration. No reference
+  computation is run and overwritten by an X44 component anymore.
+- The hardware selector now configures the student's chosen components rather
+  than silently replacing them. A synthetic LowerLift excavation subclass
+  survives both motor selections, and an intentionally different electrical
+  backend reaches excavation, route and relocation without changing their loads.
+  Custom full replacements without the required option are rejected clearly.
+  Empirical example subclasses call the parent's option initialization.
+- Required output names/native units, global config names, mass boundaries,
+  margin signs and report fields are retained. Component input lists and
+  dependencies now reflect the selected provider; unused generic motor inputs
+  are no longer consumer ports in the X44 profile. Legacy global config/report
+  fields remain explicitly inactive. Motor/provider option provenance is saved.
+- Captured six synthetic software regression cases before edits: generic
+  reference, generic plate frame, default X44 plate, saved feasible X44 plate,
+  explicit 15/30 A limits and another generic speed/ratio/geometry case.
+  `tests/fixtures/motor_interface_before.json` contains selected expected values,
+  all enforced non-bound margins and old source hashes. It is not calibration.
+  Fresh evaluations match all saved outputs with maximum normalized error
+  3.73e-16; largest energy-value difference is 2.28e-13 (J/Wh as reported).
+  All six feasibility results are unchanged. Full comparisons are saved under
+  ignored `results/motor_refactor/comparison.json`.
+- Six interface tests pass in 1.614 s: before/after comparison, unchanged
+  component classes, shared-backend replacement, student-hook composition,
+  reference dependency omissions, and invalid/empty mechanical-duty domains.
+  All ten existing motor tests pass after API migration (7.277 s), retaining
+  manufacturer-curve, work/conservation, domain, mass/energy, dependency,
+  derivative, report and supported-start optimizer assertions.
+- The full suite ran 107 tests in 145.993 s: **106 passed, one failed**.
+  The failed test is the same unchanged generic plate cold-start SLSQP
+  regression already failing before this refactor. The newly added empty-duty
+  domain test was run afterward with the six-test interface group. No existing
+  assertion, constraint or tolerance was weakened. The full suite is not green.
+- Required reference baseline CLI completed. Required default reference
+  derivative/optimization CLI passed derivatives but failed SLSQP after 66
+  derivative evaluations/407 driver evaluations in 92.908 s. The final
+  deflection margin is -9.1293e-5 m. It remains marked failed/infeasible in
+  `results/motor_refactor/reference_optimization.json`; this refactor does not
+  claim to repair cold-start optimization.
+- The explicit X44 supported-start CLI passed derivatives and converged
+  feasible in 157 evaluations, saved in `results/motor_refactor/optimization.json`.
+  Estimated score is 2006.8319450481367 versus 2006.8319450482652 before:
+  difference 1.29e-10 points. This reproduces the previous candidate, not a
+  better/global optimum or hardware validation. N2/interface source checks and
+  unchanged mass/mission energy accounting pass. `git diff --check` passes.
+
+Review the file map/API in MOTOR_INTERFACE.md. Current limits, thermal/PWM,
+gearbox efficiency and hardware inventory uncertainties remain as documented in
+X44_MOTORS.md. Slope/rock constraints, travel height and wheel sizing were not
+reworked. The requested 30-degree traction screen awaits the student's review.
+All changes remain uncommitted; no push or merge was performed.
+
+## Expanded wheelbase and standard X44 hardware, 2026-10-14
+
+The student increased the exploratory wheelbase upper bound from 0.50 to 0.65 m
+and selected standard (trapezoidal, not FOC) X44 motors at 12 V. Drive gearing
+is fixed at 100:1; drum gearing remains exploratory. Current limits are explicitly
+undecided. No slope traction/climbing requirement is claimed verified.
+
+- Added the optional five-factory `--motors x44-standard` integration profile,
+  official 6 kB CSV and versioned manifest. Manufacturer endpoint equations
+  reproduce the held-out interior curve to the test tolerances (torque 1e-8 N m,
+  current/power/efficiency-percent 1e-6, voltage 1e-7 V). The separate rounded
+  41 A/393 W specification is reproduced within 1%; it is not an independent
+  hardware validation experiment. PWM remains an explicitly unvalidated
+  equivalent-DC model. No motor peak is treated as a continuous rating.
+- Replaced generic scalable motor/gear masses with published inventory: motor
+  0.34019428 kg, selected drive gearbox 0.697 kg including the listed shaft.
+  Drum gearbox uses a provisional 0.753 kg three-stage budget, pending stage,
+  adapter, shaft and weighed assembly selection. Gear efficiency remains
+  provisional. Four-wheel/two-drum-motor boundaries and mission energy balance
+  are preserved, with no regeneration credit.
+- Ten focused X44 tests pass, including source checksum/reproduction,
+  physical work/power limits, invalid speed/current/gearbox domains, PWM supply
+  versus stator current, mass/energy conservation, all optional dependency
+  omission checks, interface sources, generic-input inactivity, total
+  derivatives, HTML reporting and a feasible-start optimizer improvement.
+- The full suite at the first eight-test motor revision ran **100 tests in
+  459.412 s: 99 passed, one failed**. The failure is the unchanged
+  `test_new_profile_optimizer_retains_success_feasibility_and_score_improvement`
+  cold-start SLSQP test for the generic-motor plate profile after widening the
+  wheelbase bound. The remaining two motor tests were subsequently added and
+  all ten motor tests passed in 19.031 s. **The full suite is not all green.**
+  No existing assertion, physical constraint or tolerance was removed/loosened.
+- The wheelbase-only derivative-checked warm run converged feasible at
+  `results/wheelbase_expanded/optimization.json`, 1877.85 points and wheelbase
+  0.500025 m. This local solve does not prove that more length has no value.
+- The first derivative-checked X44 SLSQP solve is retained at
+  `results/x44_standard/optimization.json` as **failed_or_infeasible**. It stopped
+  after 102 derivative evaluations/1027 driver evaluations in 472.95 s. Its
+  score 2217.48 is not an acceptable design: aluminum stress exceeds its
+  allowable by 1.822 MPa, and the minimum rock wheel reaction is -3.678 N.
+- A separate feasible start reduced each drum to 0.300 m length, keeping the
+  other failed-iterate design values. This is a synthetic numerical start,
+  not calibration, stored in `tests/fixtures/x44_standard_feasible_start.json`.
+  Explicit supported COBYLA, scaled radius 0.01, all design variables free,
+  maxiter 1500 converged in 157 evaluations/12.82 s. Score improves from
+  2000.57 to 2006.83; every constraint passes. The separate result is
+  `results/x44_standard/restart.json`; its predecessor remains failed.
+  A fresh CLI run after final source/report edits also passed the derivative
+  check and converged to the same feasible design at
+  `results/x44_standard/verified.json` (HTML opened through the app; opening
+  request was queued, so actual visibility was not confirmed).
+  Final wheelbase 0.648409 m, drum length 0.3009995 m, diameter 0.359 m,
+  drum speed 119.972 rpm, exploratory ratio 39.5166, dry mass 36.8671 kg and
+  payload 48.4250 kg. Match the drum ratio to available cartridges and rerun.
+- That design requests drive peak/RMS stator current 7.753/5.143 A per motor,
+  drum peak 23.348 A, drive/drum voltage 9.527/8.254 V on the modeled level
+  mission. These do not verify 30-degree climbing, current settings or thermal
+  operation. The new HTML card prominently marks continuous operation
+  unverified. Generic reference motor coefficients are labeled inactive.
+- Fresh reanalysis reproduced feasibility and exactly balanced cycle energy
+  to displayed floating-point precision (0.0 J residual). An 801-height audit
+  (3204 raised-wheel poses) reproduced the 41-height sweep minima: hull reserve
+  0.153118 m and minimum wheel reaction 2.747785 N, both at 0.40 m. Reaction
+  balance residual is 2.27e-13 N. That tiny wheel load is not a robust hardware
+  allowance. Dense sampling is still not an actual obstacle crossing proof.
+- Baseline CLI runs for generic reference and X44 plate profiles completed and
+  saved their actual failed constraints; baseline mode does not assert
+  feasibility. Both relevant optimization starts passed total-derivative checks.
+  A separate generic plate cold-start scaling probe retaining the former
+  0.12 m numerical wheelbase span reached its 60-iteration limit and remains
+  failed in `results/wheelbase_scale_probe.json`: torque margin -0.07783 N m,
+  buckling margin -14.49 N. This numerical experiment was not adopted as a fix.
+
+At the old stability optimum, adding 10 mm per drum at otherwise fixed inputs
+increased payload 32.9935 to 34.4847 kg and estimated score 1877.61 to 1939.56,
+but failed sphere clearance (-5.034 mm after required clearance), wheel
+reaction (-0.221 N), and aluminum stress (3.353 MPa above allowable). Reducing
+diameter 10 mm reduced score to 1803.38. These are same-design perturbations,
+not reoptimized designs or proof of a global preference. Width is constrained
+by coupled interference/load checks, not just inspection mass or storage.
+
+Read X44_MOTORS.md for the equations, source domain, changed instantaneous-power
+margin interpretation and missing PWM/thermal/gearbox evidence. Generated
+`results/` records are ignored local artifacts; no commit/push/merge was made.
+
+## Loaded 30-degree slope and one-wheel articulation, 2026-10-14
+
+The student requested slope/rock stability next and explicitly kept the
+original one-wheel-raised rock case. Slope and rock are separate; no combined
+incline/rock, wheel-pair raises, traction law or selected-motor model was added.
+Equations, force balance, new ports and domains: TRAVERSAL_STABILITY.md.
+
+- Added `ModelSet.traversal_stability` with three enforced margins: planar
+  `slope_tip_margin` [m], sampled `rock_sweep_tip_margin` [m] and ideal
+  differential `rock_sweep_wheel_load_margin` [N]. `slope_angle=pi/6` is fixed,
+  not optimized. Reference and plate profiles retain their respective rocker
+  mass placement. Original endpoint obstacle, drum-wheel and uneven-dump
+  constraints retain their meanings.
+- **92 local .venv tests passed in 40.376 s**, including 11 independent slope/
+  articulation tests. These cover known moment limits and flat axle reactions,
+  every slope heading, global/differential force and moment balance, positive
+  hull with negative wheel reaction, mirrored raises, mass placement, dense
+  sampling, unreachable/singular/invalid domains, smooth derivatives and real
+  OpenMDAO sources. Existing mass, reference drum, energy, N2 and all omitted-
+  dependency audits pass. Optimizer tests retain success, final feasibility
+  and genuine score-improvement assertions.
+- Exact prior plate design re-evaluated at unchanged inputs in
+  results/stability/previous_design.json: score remains **2479.2303**, but new
+  slope reserve is **-40.1456 mm** and minimum platform reaction is
+  **-474.403 N** at the 0.40 m pose. The original endpoint hull still passes
+  narrowly. A negative wheel normal disproves equilibrium of that prescribed
+  four-contact pose; it is not proof that a full rollover must follow.
+- Required plate CLI baseline is saved in results/stability/baseline.json.
+  It still fails reach at the original 0.40 m wheelbase, plus slope support.
+  Invalid-height loads/CG are explicitly guarded diagnostics, not predictions
+  for a real 40 cm platform pose.
+- Required plate CLI derivative check and default SLSQP optimization pass in
+  results/stability/optimization.json: **1877.6091 points**, dry mass **32.6544
+  kg**, payload **32.9935 kg**, loaded CG height **299.840 mm**, travel drum
+  centers **389.351 mm**. Wheelbase **0.500 m**, track **0.649286 m**, pivot
+  offset **20 mm**, drum length **0.221245 m**. All remaining modeled constraints
+  pass; 22 iterations, 46 function calls / 47 recorded driver evaluations.
+  Aluminum stress envelope **119.898 MPa**, deflection **2.14268 mm**, plate
+  strip buckling reserve **762.751 N**. No structural limit was relaxed.
+- Final slope pitch/roll reserves are **76.8875 / 151.531 mm** at 30 degrees.
+  Limiting GLOBAL static support angle is **39.8206 degrees**. One-wheel hull
+  reserve is **108.760 mm**; minimum normal is **0.499643 N**, both worst at
+  0.40 m. The reaction condition controls and is near the existing 0.5 N
+  numerical reserve. That reserve is not a hardware uncertainty allowance.
+- Independent 801-height-per-wheel evaluation (3204 poses) in
+  results/stability/dense_audit.json reproduces both minima exactly at stored
+  precision. Maximum normalized reaction-balance residual is **1.71e-13 N**.
+  This is a finer numerical grid, not continuous-height or physical validation.
+- Required reference baseline/derivative-checked cold-start runs were completed.
+  The reference SLSQP final remains **failed_or_infeasible**, 1730.7701 points,
+  deflection reserve **-0.174709 mm**, in
+  results/stability/reference_optimization.json. Other reference starts also
+  stopped infeasible or stagnated despite optimizer success; their ignored
+  reports retain failures. Default-radius COBYLA requested an invalid physics
+  trial and raised an error rather than silently substituting valid geometry.
+- A new synthetic feasible reference regression fixture uses the already
+  supported COBYLA solver with a **0.02 initial scaled trust radius**, keeping
+  the existing tolerance and all physical constraints. Full geometry variables
+  remain free; no failure assertion was removed. The smaller steps avoid the
+  observed invalid trial. CLI `--cobyla-radius` and model metadata expose that
+  setting; SLSQP/default settings are unchanged. Exact CI-style run in
+  results/stability/reference_regression_cobyla.json passes derivatives,
+  succeeds and ends feasible, score **529.2242 -> 921.2846**. CI and regression
+  read tests/fixtures/traversal_stability_feasible_start.json; earlier fixtures
+  are retained. This is numerical regression evidence, not calibration or a
+  claim of a global optimum.
+- Mission energy residual run_energy-cycles*cycle_energy is **0.0 Wh** for the
+  plate result at stored precision. No mass group is counted twice. HTML/SVG
+  show slope reserves, support hull and wheel-reaction curves; final frame,
+  travel and stability SVGs were rendered and visually inspected. N2 files
+  include the actual additional CG/mass connections.
+
+These tests do not certify rock traversal or slope climbing. Slope wheel-load
+allocation, slip, traction/holding torque, real approach/contact profiles,
+post-unloading motion, joint strength/stops, impacts, payload motion and
+cross-slope frame loads remain unverified. The selected Kraken/MAXPlanetary
+hardware is still not represented by the generic motor model. Material and
+mass/CG uncertainty are especially significant near a 0.5 N contact load.
+No experimental calibration or simulator validation was introduced. Historical
+sections below describe their earlier revisions and constraint sets.
+
+## Requested screen removals and plate revision 2, 2026-10-14
+
+The student explicitly removed the open-frame filled-chassis collision screen
+and the uncalibrated Froude caps, and requested a plate connectivity that allows
+the suspension hub and lower mounts at the same elevation. No slope, traction,
+motor-hardware, ground-clearance requirement or material calibration was added.
+
+- Plate connectivity is now four radial plus three perimeter strips. The lower
+  boundary runs B+-S-B-, with three signed triangular openings; no direct
+  B+-B- strip or hub/lower-mount vertical ordering is used. Distance between real
+  mounting pads, cutout opening, section/buckling/stress, axle packaging and the
+  5 mm deflection envelope remain enforced. Flipped triangles and additional
+  mechanisms stay failed. Mass, self-weight, CG, yaw inertia, axial stiffness
+  and strip buckling all use the same new seven-member inventory.
+- `chassis_clearance_margin` is diagnostic only for plate-frame. It remains an
+  active constraint for the reference filled-envelope profile. Both profiles
+  exclude `dig_froude_margin`/`dump_froude_margin` from their actual constraints
+  and feasibility labels. Existing ports/units and legacy diagnostic references
+  remain, with explicit JSON metadata and HTML notices. No extra high-speed
+  capture/lift loss is assumed; empirical alternatives retain their own domains.
+- Full local .venv suite: **81 tests passed in 54.157 s**. New tests include
+  independently hand-solved forces for the coplanar lower boundary, moving the
+  hub through the lower-mount elevation, and actual driver/report constraint
+  membership. Existing equilibrium/elastic-work, failure-domain, mass/mission
+  energy, N2 dependency/source, derivative and optimization assertions pass.
+- `results/plate_revision2/baseline.json`: baseline remains infeasible for the
+  40 cm obstacle at 0.40 m wheelbase; reach -0.0066872 m, guarded tip -0.0230532 m,
+  drum-wheel margin -0.0067872 m. Baseline structural screens pass. Guarded
+  obstacle values do not establish the requested-height pose.
+- `results/plate_revision2/optimization.json`: required CLI total-derivative
+  step-size check passed; SLSQP converged, final remaining modeled constraints
+  all pass. **2479.2303 points**, dry mass **39.2634 kg**, payload **53.8938 kg**,
+  structural mass **3.9112 kg**, 122 recorded driver evaluations. Rocker offset
+  **39.506 mm**, lower mount height **146.538 mm**, upper mount **358.017 mm**.
+  Travel drum center height **593.908 mm**, loaded CG height **469.429 mm**.
+  Excavation **100.128 RPM**, dumping **60 RPM** (existing upper bound), Fr
+  **2.01239** as diagnostic only. These speeds follow constant capture/lift and
+  generic motor/gear models, not measured retention or the newly selected motors.
+  Deflection envelope **2.47879 mm**, plate buckling reserve **1436.105 N**;
+  nodal force-balance residual **2.86e-13 N**.
+- The previous four-cutout plate result is retained in results/plate_frame/.
+  Jointly changing topology and the requested screens increased the local score
+  from 2282.8164 and lowered travel centers from 704.761 mm. This is not an
+  isolated causal comparison or global-optimum claim.
+  At the exact prior design inputs, the new member inventory reduces structure
+  mass from 4.08356 to 4.04241 kg; the re-evaluated design remains feasible and
+  scores 2284.3875. Saved as results/plate_revision2/same_design.json.
+- Reference CLI baseline passes its existing non-obstacle screens and remains
+  obstacle-infeasible. Required reference cold-start derivative check passes,
+  but final optimization remains **failed_or_infeasible**: 2434.0603 points,
+  turn motor margin -0.05167 N, stress margin -22.0569 MPa and deflection margin
+  -1.61818 mm. Saved at results/plate_revision2/reference_optimization.json;
+  its failure was not converted to success.
+- Removing the caps also made the old reference CI start encounter a line-search
+  failure. Numerical fixture revision 2 changes ONLY initial dig/dump RPM to
+  25/20, preserving all success, feasibility and improvement assertions. This
+  is a numerical starting point, not hardware data. The exact existing CI CLI
+  command from that fixture passes derivative checks, succeeds and finishes
+  feasible at **2439.6207 points**; saved in
+  results/plate_revision2/reference_ci_optimization.json. No remaining physical
+  constraint, optimizer tolerance or assertion was loosened to recover it.
+
+Reports show the open member schematic and distinguish inactive diagnostics.
+After the last plot-label adjustment, all three report tests passed in 1.296 s;
+the frame and travel SVGs were rendered and visually inspected.
+Actual frame/equipment interference, RPM-dependent retention/dumping, 30-degree
+slope support/traction/structural loads, CF material allowables and selected
+motor/current/thermal behavior remain unverified. No physical data or simulator
+validation was introduced. The following sections retain historical verification
+for their stated revisions; their earlier enforced Froude caps and plate topology
+do not describe revision 2.
+
 ## Optional plate-frame profile, 2026-10-14
 
 Implemented `--structure plate-frame` after the student's frame/load discussion.

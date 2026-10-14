@@ -97,6 +97,33 @@ class PlateFrameTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "mechanism"):
             solve_plate(flat, np.zeros((5, 2)), .03, .00635, 69e9)
 
+    def test_level_lower_boundary_matches_hand_solved_member_forces(self):
+        # Two mirrored triangles, with the hub on the lower edge. Nodal
+        # equilibrium alone gives these seven member forces (tension positive).
+        a, b, h, weight = .2, .4, .3, 100.
+        nodes = np.array(((0., 0.), (a, h), (b, 0.), (-a, h), (-b, 0.)))
+        forces = np.zeros((5, 2))
+        forces[2, 1] = forces[4, 1] = -weight
+        axial, displacement, reaction = solve_plate(nodes, forces, .03, .00635, 69e9)
+        upper = -weight*math.hypot(a, h)/h
+        lower = weight*(a-b)/h
+        outer = weight*math.hypot(a-b, h)/h
+        np.testing.assert_allclose(axial, (upper, lower, upper, lower, outer, outer, weight*b/h), atol=1e-10)
+        np.testing.assert_allclose(reaction, (0., 2*weight), atol=1e-10)
+        self.assertTrue(np.isfinite(displacement).all())
+        self.assertNotIn((2, 4), PLATE_EDGES)
+
+    def test_hub_can_cross_lower_mount_height_without_topology_switch(self):
+        # Physical pad separation is longitudinal here; no vertical spacing
+        # requirement between S and B. No model fallback or spring is needed.
+        for height in (.16, .18, .20, .25):
+            values = inputs(rocker_pivot_offset=.03, bottom_pivot_height=height)
+            g = plate_geometry(values)
+            self.assertTrue(g["valid"], (height, g["geometry_margin"]))
+            loads = evaluate_frame_loads(values)
+            self.assertEqual(loads["frame_load_solution_valid"], 1.)
+            self.assertLess(loads["frame_force_balance_error"], 1e-8)
+
     def test_geometry_tracks_mounts_axle_and_width(self):
         first = geometry_inventory(inputs())
         shifted = geometry_inventory(inputs(actuator_pivot_x=.17, bottom_pivot_height=.17, rocker_pivot_offset=.12))
@@ -115,7 +142,8 @@ class PlateFrameTests(unittest.TestCase):
         bad = plate_geometry(inputs(cf_tube_span=.46))
         self.assertFalse(bad["valid"])
         self.assertLess(bad["packing_margin"], 0)
-        bad = plate_geometry(inputs(bottom_pivot_height=.30))
+        # Above the upper mounts the cutout flips; geometry must stay failed.
+        bad = plate_geometry(inputs(bottom_pivot_height=.50))
         self.assertFalse(bad["valid"])
         self.assertLess(bad["geometry_margin"], 0)
         p = self.problem(cf_tube_span=.46)
@@ -179,6 +207,26 @@ class PlateFrameTests(unittest.TestCase):
         self.assertEqual(conns["mass_properties.structure_cg_z"], "structure_geometry.structure_cg_z")
         self.assertEqual(conns["structure_geometry.plate_spoke_width"], "inputs.plate_spoke_width")
 
+    def test_removed_screens_are_diagnostics_not_feasibility_constraints(self):
+        p = self.problem(drum_rpm=60., dump_rpm=60.)
+        report = snapshot(p)
+        for name in ("chassis_clearance_margin", "dig_froude_margin", "dump_froude_margin"):
+            self.assertNotIn(name, p.model.get_constraints())
+            self.assertNotIn(name, report["constraints"])
+            self.assertIn(name, report["outputs"])
+            self.assertIn(name, p.model_metadata["diagnostic_only_screens"])
+        self.assertLess(p.get_val("dig_froude_margin").item(), 0.)
+        self.assertLess(p.get_val("dump_froude_margin").item(), 0.)
+        for name in ("wheel_clearance_margin", "obstacle_drum_wheel_margin",
+                     "drum_torque_margin", "dump_torque_margin", "drum_power_margin"):
+            self.assertIn(name, p.model.get_constraints())
+        reference = build_problem()
+        self.addCleanup(reference.cleanup)
+        reference.run_model()
+        self.assertIn("chassis_clearance_margin", reference.model.get_constraints())
+        self.assertNotIn("dig_froude_margin", reference.model.get_constraints())
+        self.assertNotIn("dump_froude_margin", reference.model.get_constraints())
+
     def test_total_derivatives_at_smooth_geometry(self):
         p = self.problem(wheelbase=.46, bottom_pivot_height=.16)
         checks = p.check_totals(of=["construction_points", *p.margin_specs], wrt=list(p.design_specs),
@@ -196,6 +244,7 @@ class PlateFrameTests(unittest.TestCase):
             self.assertIn("plate_spoke_width", html)
             self.assertIn("cf_bending_margin", html)
             self.assertIn("PROVISIONAL", html)
+            self.assertIn("Removed screens: diagnostics only", html)
             self.assertTrue((Path(folder)/"plate_frame.svg").exists())
 
     def test_new_profile_optimizer_retains_success_feasibility_and_score_improvement(self):
