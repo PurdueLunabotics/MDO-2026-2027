@@ -18,6 +18,10 @@ configuration ratings and the motor input adapter still require verification.
 The small official [CTR curve CSV](https://motors.ctr-electronics.com/assets/motor_data/data_Kraken%20X44.csv)
 is versioned in `data/motors/`, with source, date, units, checksum, domain and
 validation status in `manifest.json`. Its last-updated index is 2025-09-26.
+The CSV is hashed as raw bytes. `.gitattributes` pins motor CSV files to LF
+line endings on every platform so Windows checkout preserves the manifest hash.
+The checksum verification remains strict; it does not normalize or accept
+changed source bytes at runtime.
 The [WCP performance table](https://docs.wcproducts.com/welcome/electronics/kraken-x44/kraken-x44-motor/overview-and-features/motor-performance)
 distinguishes standard from FOC and explains that peak power is not a continuous
 robot operating rating. The standard CSV endpoints are 7757.60474 rpm free speed,

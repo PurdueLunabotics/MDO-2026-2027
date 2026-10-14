@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Versioned motor CSV bytes must match their SHA-256 manifests on every OS.
+/data/motors/*.csv text eol=lf

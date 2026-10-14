@@ -1,5 +1,32 @@
 # Current simulator verification
 
+## Windows motor-CSV checkout fix, 2026-10-14
+
+The student supplied a Windows Actions log with one checksum-test failure and
+15 X44 initialization errors; Ubuntu passed. All errors came from the same
+source-data verification check before model evaluation.
+
+- Reproduced the exact Windows hash by converting the versioned 6038-byte LF
+  CSV to 6117-byte CRLF: expected
+  980381798705b95802333d2cb86e01b4099c805bb554c85f685a8e00937c6ceb,
+  Windows conversion
+  621fa3db95249600dde72ddbc33a6ad9597231c1ce6c63ad9495a5094b0340b2.
+  This matches the supplied failure, rather than assuming file corruption.
+- Added /data/motors/*.csv text eol=lf to .gitattributes. Other text-file
+  settings are retained. Git will preserve motor-CSV bytes on Windows checkout.
+  No CSV, manifest checksum, physics code, test assertion or verifier changed;
+  strict raw-byte source verification remains active.
+- Used Git cat-file --filters on the committed CSV with core.autocrlf=true and
+  core.eol=crlf, then with core.autocrlf=false and core.eol=lf. Before the fix,
+  the Windows filter reproduced the failing hash. After the fix, both outputs
+  are 6038 bytes, contain LF only and match the manifest exactly.
+- All 115 tests pass in 43.687 s. Required baseline CLI completed and the
+  required reference derivative check passed. Its subsequent generic-reference
+  cold-start SLSQP solve still failed and remains recorded as failed/infeasible
+  in reference_optimization.json; no optimizer fix is claimed by this change.
+- Verification outputs are under ignored results/line_endings_fix/. No
+  commit/push/merge was performed, and remote Actions have not rerun yet.
+
 ## CI optimizer regressions repaired, 2026-10-14
 
 The student supplied GitHub logs confirming two failing optimizer assertions:
