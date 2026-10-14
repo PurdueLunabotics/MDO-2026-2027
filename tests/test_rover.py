@@ -73,9 +73,9 @@ class RoverTests(unittest.TestCase):
         self.assertFalse(report["feasible"])
         self.assertFalse(report["constraints"]["obstacle_pose_margin"]["passed"])
         self.assertFalse(report["constraints"]["obstacle_drum_wheel_margin"]["passed"])
-        self.assertTrue(all(c["passed"] for n,c in report["constraints"].items()
-                            if n not in {"obstacle_pose_margin","obstacle_tip_margin",
-                                         "obstacle_drum_wheel_margin"}))
+        expected_failures = {"obstacle_pose_margin", "obstacle_tip_margin", "obstacle_drum_wheel_margin",
+                             "slope_tip_margin", "rock_sweep_tip_margin", "rock_sweep_wheel_load_margin"}
+        self.assertEqual({n for n,c in report["constraints"].items() if not c["passed"]}, expected_failures)
         self.assertLessEqual(p.get_val("payload_mass").item(), p.get_val("fresh_volume").item()*1500)
         self.assertAlmostEqual(p.get_val("dump_time").item(), 2*(3*60/15+2))
         self.assertAlmostEqual(p.get_val("turn_time").item(), travel_profile(math.pi * p.get_val("track_width").item() / 2, .35, .2)[0])
@@ -228,8 +228,11 @@ class RoverTests(unittest.TestCase):
     def test_optimization_and_derivative_stability(self):
         # Verified feasible numerical start, with unchanged success/feasibility
         # assertions. The original cold-start failures remain documented.
-        fixture=json.loads((Path(__file__).parent/"fixtures"/"obstacle_clearance_feasible_start.json").read_text())
-        p = self.problem(**fixture["inputs"])
+        fixture=json.loads((Path(__file__).parent/"fixtures"/"traversal_stability_feasible_start.json").read_text())
+        p = build_problem(fixture["inputs"], optimizer=fixture["optimizer"],
+                          maxiter=fixture["maxiter"], cobyla_radius=fixture["cobyla_radius"])
+        self.addCleanup(p.cleanup)
+        p.run_model()
         self.assertTrue(snapshot(p)["feasible"])
         before = p.get_val("construction_points").item()
         checks = p.check_totals(of=["construction_points", *MARGINS], wrt=list(DESIGN),

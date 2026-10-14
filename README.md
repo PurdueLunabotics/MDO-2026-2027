@@ -4,6 +4,36 @@ A modular OpenMDAO sizing model for a four-wheel, side-rocker, skid-steer rover 
 
 ## Start here
 
+For the purchased standard Kraken X44 motors, add `--motors x44-standard` to
+your plate-frame command. This freezes drive gearing at 100:1 and both motor
+models at 12 V, uses catalog motor/gear inventory masses and the official curve,
+and leaves drum ratio exploratory. See [motor equations and limitations](docs/X44_MOTORS.md).
+The [motor interface/file map](docs/MOTOR_INTERFACE.md) explains the cleanup:
+the regular disciplines supply mechanical work and peak power to one shared
+motor/gearbox helper. Electrical estimates divide by provisional combined
+efficiencies (drive 0.72, drums 0.70); torque-speed limits are separate. There
+are no electrical time histories or X44-specific discipline copies.
+Current/thermal limits are undecided; a passing result does not verify continuous
+operation or 30° climbing. Omitting this option retains generic reference motors.
+
+To run the simplified motor profile from the saved feasible numerical start:
+
+```powershell
+$motorStart = Get-Content tests/fixtures/x44_standard_feasible_start.json | ConvertFrom-Json
+$motorOverrides = @()
+$motorStart.inputs.psobject.Properties | ForEach-Object {
+    $motorOverrides += '--set'
+    $motorOverrides += "$($_.Name)=$($_.Value)"
+}
+.\.venv\Scripts\python.exe main.py --structure plate-frame --motors x44-standard --optimizer COBYLA --cobyla-radius 0.01 --maxiter 1500 --check-derivatives @motorOverrides --output results/motor_simple/optimization.json
+```
+
+The widened-wheelbase generic plate cold-start SLSQP regression still fails;
+that test and the failed X44 SLSQP record remain intact. A successful numerical
+restart does not establish convergence from every start. With the simplified
+energy model, the saved X44 restart also finishes slightly below its starting
+score, so its score-improvement regression remains failing. See VERIFICATION.md.
+
 1. Read [MODEL.md](MODEL.md) for physics, units, assumptions and sources.
 2. Read [model cards](docs/MODEL_CARDS.md) to see what each component can and cannot predict.
 3. Follow [model development](docs/MODEL_DEVELOPMENT.md) for interfaces, a student-agent prompt and branch/PR workflow.
@@ -19,12 +49,18 @@ discover that nested workflow; a workflow in the parent repository root would
 be needed to test it there.
 
 The CI optimization uses the recorded feasible start in
-`tests/fixtures/obstacle_clearance_feasible_start.json`, matching the optimizer regression
+`tests/fixtures/traversal_stability_feasible_start.json`, matching the optimizer regression
 test. It still requires passing derivative checks, optimizer success and final
 feasibility. The baseline step evaluates the default design separately and can
 report infeasibility. Default-start optimization failures remain documented in
 `docs/VERIFICATION.md`; this workflow does not establish convergence from every
 starting design or experimentally validate the rover.
+
+The current reference CI fixture selects supported COBYLA with a 0.02 initial
+trust radius in scaled design coordinates. Default SLSQP reference failures
+remain reported; the plate-frame optimizer regression still uses SLSQP.
+The CLI exposes that numerical setting as `--cobyla-radius 0.02`; it is not a
+physical safety factor or a change to any constraint.
 
 ## Install and run
 
@@ -62,9 +98,16 @@ CF wall/span, box rocker and axle sections, and centered axle height can vary.
 CF material properties and the plate topology are provisional. See
 [the frame equations, load scope and limitations](docs/PLATE_FRAME.md).
 
+Plate revision 2 has seven strips and three cutouts, with a lower boundary
+through the suspension hub. Hub/lower mounts may share a height. The legacy
+filled-chassis collision screen is inactive in this profile; actual frame and
+equipment clearance needs separate verification. Both profiles now use Froude
+as a diagnostic only, with constant capture/lift and unverified speed response.
+Torque, power, startup energy and drum-wheel clearance constraints remain.
+
 ```powershell
 .\.venv\Scripts\python.exe main.py --baseline --set soil_density=1800 --output results/dense_soil.json
-.\.venv\Scripts\python.exe main.py --optimizer COBYLA --maxiter 5000 --output results/cobyla.json
+.\.venv\Scripts\python.exe main.py --optimizer COBYLA --cobyla-radius 0.02 --maxiter 5000 --output results/cobyla.json
 ```
 
 `rover/config.py` contains DESIGN `(initial, lower, upper, units)` and ASSUMPTIONS `(value, units)`. `--set` changes a design's starting value, not whether it is optimized. To freeze a design variable, move it into ASSUMPTIONS. Preserve the explicit competition/user dimension limits.
@@ -82,6 +125,12 @@ CF material properties and the plate topology are provisional. See
   now infeasible for this added requirement; a 0.46 m wheelbase baseline passes.
   See [obstacle geometry and limitations](docs/OBSTACLE_TRAVERSAL.md). The 0.50 m
   deep, circle-like ditch remains unverified until its width/radius is known.
+- Full-load travel-pose static support on a 30-degree planar slope across all
+  headings. An additional 41-height, one-wheel articulation screen checks both
+  the hull and ideal differential wheel reactions through the 40 cm raise.
+  Negative normals reject the prescribed four-contact pose. These checks do
+  not verify slipping or actual climbing; see
+  [TRAVERSAL_STABILITY.md](docs/TRAVERSAL_STABILITY.md).
 - Adjustable wheelbase and track width, both screened against the stowed envelope, structure, and mobility constraints.
 - Independent horizontal placement of the actuator and arm pivots.
 - Selectable actuator pin position along the arm: `actuator_attachment_fraction`
@@ -94,7 +143,7 @@ CF material properties and the plate topology are provisional. See
   that additional variable, so inspect final margins and use multiple starts.
   JSON reports include the fraction and `actuator_attachment_distance` in metres,
   and geometry drawings show the pin as D when it is inside the arm.
-- Separate dig/dump RPM, provisional granular-flow validity limits, independent gearing, torque-speed screens and startup energy.
+- Separate dig/dump RPM, diagnostic Froude numbers, independent gearing, torque-speed screens and startup energy; no calibrated high-speed granular-loss model.
 - Tube-frame/arm mass and elementary stress, stiffness and buckling constraints.
 - Explicit cutting/lowering overlap and power, with fresh-site relocation and finite excavation area.
 

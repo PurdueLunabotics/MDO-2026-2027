@@ -5,6 +5,8 @@ Bounds are exploratory modeling bounds, not requirements, except the 359 mm caps
 Power ratings are mechanical shaft power, per motor (four drive, two drum).
 """
 
+import math
+
 # name: (initial value, lower bound, upper bound, OpenMDAO units)
 DESIGN = {
     "wheel_diameter": (0.30, 0.18, 0.359, "m"),
@@ -32,7 +34,7 @@ DESIGN = {
     "bottom_pivot_height": (0.15, 0.09, 0.30, "m"),
     "arm_length": (0.60, 0.30, 0.70, "m"),
     "pivot_x": (0.13, 0.05, 0.30, "m"),  # front station from rover center; rear mirrored
-    "wheelbase": (0.40, 0.38, 0.50, "m"),  # intentionally short RASSOR-style design range
+    "wheelbase": (0.40, 0.38, 0.65, "m"),  # exploratory upper bound expanded by user; overall length cap still applies
     "track_width": (0.54, 0.50, 0.699, "m"),  # wheel center spacing; width envelope also applies
     "actuator_force_rating": (2000.0, 500.0, 6000.0, "N"),  # each of two
 }
@@ -62,7 +64,7 @@ ASSUMPTIONS = {
     "dump_revolutions": (3.0, None),  # each pair unloads sequentially
     "drum_efficiency": (0.70, None),  # combined motor + gearbox electrical efficiency
     "drum_gear_efficiency": (0.80, None),
-    "drive_efficiency": (0.72, None),
+    "drive_efficiency": (0.72, None),  # provisional combined motor + gearbox efficiency
     "drive_gear_efficiency": (0.80, None),
     "motor_rated_rpm": (3000.0, "rpm"),
     "traction_coefficient": (0.60, None),
@@ -106,8 +108,8 @@ ASSUMPTIONS = {
     "scoop_opening": (0.035, "m"),
     "scoop_depth_fraction": (0.50, None),  # empirical screen, not a universal law
     "scoops_per_revolution": (4.0, None),
-    "max_dig_froude": (0.30, None),  # provisional validity limit, NOT a measured cutoff
-    "max_dump_froude": (0.20, None),
+    "max_dig_froude": (0.30, None),  # legacy diagnostic reference only; NOT enforced
+    "max_dump_froude": (0.20, None),  # legacy diagnostic reference only; NOT enforced
     "drum_spinup_time": (2.0, "s"),
     "drum_torque_service_factor": (1.25, None),
     "minimum_dig_depth": (0.005, "m"),
@@ -124,6 +126,7 @@ ASSUMPTIONS = {
     "joint_mass": (2.0, "kg"),
     "differential_mass": (1.0, "kg"),
     "obstacle_height": (0.40, "m"),  # fully loaded, travel pose, one wheel raised
+    "slope_angle": (math.pi/6, "rad"),  # USER: fully loaded 30-degree slope, travel pose
     "rocker_pivot_offset": (0.10, "m"),  # estimated above wheel-center line; editable
 }
 
@@ -137,7 +140,7 @@ ROUTE = ((2.0, 90.0), (3.0, 45.0), (3.0, 45.0), (1.0, 0.0))
 PLATE_FRAME_DESIGN = {
     "cf_tube_span": (0.28, 0.16, 0.46, "m"),  # plate center-to-center spacing
     "cf_tube_wall": (0.002, 0.001, 0.006, "m"),  # OD = fixed ID + 2*wall
-    "plate_spoke_width": (0.035, 0.012, 0.070, "m"),  # in-plane; all eight strips share it
+    "plate_spoke_width": (0.035, 0.012, 0.070, "m"),  # in-plane; all seven strips share it
     "rocker_box_width": (0.035, 0.020, 0.065, "m"),  # transverse dimension
     "rocker_box_height": (0.055, 0.025, 0.090, "m"),
     "rocker_wall": (0.002, 0.001, 0.005, "m"),
@@ -159,8 +162,17 @@ PLATE_FRAME_ASSUMPTIONS = {
     "cf_flexural_strength": (350e6, "Pa"),  # PROVISIONAL screening value; not a certified allowable
 }
 
+X44_ASSUMPTIONS = {
+    "motor_bus_voltage": (12.0, "V"),  # user; this curve profile supports 12 V only
+    "x44_motor_mass": (0.75 * 0.45359237, "kg"),  # WCP-0941 incl. Talon FX, official specification
+    "drive_gearbox_mass": (0.261 + 0.133 + 2*0.138 + 0.027, "kg"),  # REV base + 4/5/5 + shaft
+    "drum_gearbox_mass": (0.261 + 3*0.155 + 0.027, "kg"),  # PROVISIONAL three-stage inventory budget, not selected BOM
+    "drive_stator_current_limit": (0.0, "A"),  # 0 = undecided; voltage envelope ONLY, no continuous rating
+    "drum_stator_current_limit": (0.0, "A"),
+}
 
-def configuration(structure="reference"):
+
+def configuration(structure="reference", motors="reference"):
     """Independent dictionaries per Problem; no mutation of reference config."""
     if structure not in ("reference", "plate-frame"):
         raise ValueError(f"Unknown structure profile {structure!r}")
@@ -173,13 +185,22 @@ def configuration(structure="reference"):
         assumptions.pop("rocker_pivot_offset", None)
         design.update(PLATE_FRAME_DESIGN)
         assumptions.update(PLATE_FRAME_ASSUMPTIONS)
+    if motors not in ("reference", "x44-standard"):
+        raise ValueError(f"Unknown motor profile {motors!r}")
+    if motors == "x44-standard":
+        for name in ("drive_motor_power", "drum_motor_power", "drive_gear_ratio"):
+            entry = design.pop(name)
+            assumptions[name] = ((100.0 if name == "drive_gear_ratio" else 835.4), entry[-1])
+        # Continuous exploratory ratio; select and recheck a real cartridge stack later.
+        design["drum_gear_ratio"] = (75.0, 9.0, 125.0, None)
+        assumptions.update(X44_ASSUMPTIONS)
     return design, assumptions
 
 
 def input_spec(name):
     """Unit/default lookup for adapters, including optional profile inputs."""
     return DESIGN.get(name, ASSUMPTIONS.get(name,
-           PLATE_FRAME_DESIGN.get(name, PLATE_FRAME_ASSUMPTIONS.get(name))))
+           PLATE_FRAME_DESIGN.get(name, PLATE_FRAME_ASSUMPTIONS.get(name, X44_ASSUMPTIONS.get(name)))))
 
 # name: (upper limit, units); guidebook section 13. These are stowed dimensions.
 REQUIREMENTS = {

@@ -16,6 +16,7 @@ from rover.problem import build_problem
 
 class TableExcavation(Excavation):
     def initialize(self):
+        super().initialize()
         self.options.declare("table_path", types=(str,Path))
         self.options.declare("allow_synthetic", default=False, types=bool)
 

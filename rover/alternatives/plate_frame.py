@@ -1,7 +1,8 @@
 """Preliminary loaded-gravity plate/CF/box-rocker frame, selected via ModelSet.
 
 Two monolithic plates are approximated by identical axial trusses: four radial
-strips plus four perimeter strips. This is an explicitly provisional topology,
+strips plus three perimeter strips. The lower boundary passes through the hub,
+allowing it to share the lower mounts' elevation. This is a provisional topology,
 not a reconstruction of CAD cutouts. Central pins release in-plane rotation;
 only balanced, mirrored fully loaded gravity cases are supported. Plate bending,
 whole-plate buckling, joints, CF local buckling and recovery/cutting are omitted.
@@ -18,9 +19,11 @@ from ..mass_properties import MassProperties, mass_properties
 from .obstacle_stability import ObstacleStability, raised_wheel_pose, posed_loaded_cg, projected_support_margin
 
 
-# S, front upper/lower, rear upper/lower. Connectivity survives moving mounts.
+# S, front upper/lower, rear upper/lower. No direct B+-B- member: that
+# member overlapped S-B+-/S-B- when all three points shared an elevation.
 PLATE_EDGES = ((0, 1), (0, 2), (0, 3), (0, 4),
-               (1, 2), (3, 4), (1, 3), (2, 4))
+               (1, 2), (3, 4), (1, 3))
+PLATE_TRIANGLES = ((1, 2), (4, 3), (3, 1))
 
 
 def box_section(width, height, wall):
@@ -58,17 +61,16 @@ def plate_geometry(values):
     w, t, hub = v("plate_spoke_width"), v("plate_thickness"), v("plate_hub_radius")
     od = v("cf_tube_inner_diameter")+2*v("cf_tube_wall")
     mount = od/2+v("frame_mount_clearance")
-    # Four triangular cutouts: each remaining ligament has common width w.
+    # Three triangular cutouts. Signed areas preserve this non-crossing
+    # topology; a flipped/collapsed triangle is rejected, not made valid by abs().
     inradii = []
-    for a, b in ((1, 2), (2, 4), (4, 3), (3, 1)):
+    for a, b in PLATE_TRIANGLES:
         u, q = nodes[a]-nodes[0], nodes[b]-nodes[0]
-        twice_area = abs(u[0]*q[1]-u[1]*q[0])
+        twice_area = -(u[0]*q[1]-u[1]*q[0])
         perimeter = np.linalg.norm(u)+np.linalg.norm(q)+np.linalg.norm(nodes[a]-nodes[b])
         inradii.append(twice_area/perimeter)
     rocker_span = v("track_width")-v("wheel_width")-2*v("wheel_rocker_gap")-v("rocker_box_width")
     reserves = [min(inradii)-w/2-v("plate_cutout_clearance"),
-                nodes[0, 1]-nodes[2, 1]-hub-w/2,
-                nodes[1, 1]-nodes[0, 1]-hub-w/2,
                 min(lengths[:4])-hub-mount-w/2,
                 min(lengths[4:])-2*mount-w,
                 min(nodes[2, 1], nodes[4, 1])-mount]
@@ -357,9 +359,9 @@ EXTRA_GEOMETRY_OUTPUTS = {"plate_mass_total": "kg", "cf_tube_mass_total": "kg", 
                           "suspension_bearing_span": "m", "cf_tube_outer_diameter": "m",
                           "plate_geometry_margin": "m", "frame_packing_margin": "m", "plate_geometry_valid": None,
                           "structure_cg_z": "m", "structure_sprung_cg_z": "m", "structure_yaw_inertia": "kg*m**2"}
-EVIDENCE = {"revision": 1, "status": "analytical preliminary frame; NOT hardware validated",
+EVIDENCE = {"revision": 2, "status": "analytical preliminary frame; NOT hardware validated",
             "hardware": "user: 6.35 mm 6061-T6 plates, 25.4 mm ID CF rods, aluminum box rockers; bonded inserts/bolts and rotating bushings",
-            "topology": "PROVISIONAL: four radial and four perimeter strips per plate; verify against parametric CAD",
+            "topology": "PROVISIONAL: four radial and three perimeter strips; lower boundary B+-S-B-, three triangular cutouts; no hub/lower-mount vertical ordering",
             "CF": "density/modulus/flexural strength are explicit provisional assumptions; no product/layup selected",
             "loading": "all four drums loaded, mirrored level-ground gravity, sampled compact/travel-to-dig poses; load factor retained",
             "plate_support": "central pin; exact free-rotation gauge, zero artificial reaction; reject unbalanced moments",

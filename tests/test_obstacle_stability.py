@@ -87,7 +87,9 @@ class ObstacleSupportTests(unittest.TestCase):
                     self.assertAlmostEqual(math.dist(*pivots),.57)
 
     def test_zero_height_cg_and_mass_boundary(self):
-        p=build_problem({"obstacle_height":0})
+        # This checks the zero-articulation LEVEL-ground limit independently
+        # of the separate, newly required 30-degree incline.
+        p=build_problem({"obstacle_height":0, "slope_angle":0})
         self.addCleanup(p.cleanup)
         p.run_model()
         v=lambda n:p.get_val(n).item()

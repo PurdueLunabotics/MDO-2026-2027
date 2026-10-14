@@ -1,0 +1,32 @@
+{
+  "revision": 2,
+  "retrieved_utc_date": "2026-10-14",
+  "motor": "Kraken X44 standard trapezoidal commutation, WCP-0941 with Talon FX",
+  "bus_voltage_V": 12,
+  "source_last_updated": "2025-09-26",
+  "source_curve_url": "https://motors.ctr-electronics.com/assets/motor_data/data_Kraken%20X44.csv",
+  "source_index_url": "https://motors.ctr-electronics.com/assets/motor_data/motors.json",
+  "source_description_url": "https://motors.ctr-electronics.com/dyno/dynometer-testing/",
+  "file": "kraken_x44_standard_12v.csv",
+  "sha256": "980381798705b95802333d2cb86e01b4099c805bb554c85f685a8e00937c6ceb",
+  "columns": {
+    "RPM": "rpm",
+    "Efficiency": "percent",
+    "Power": "mechanical W",
+    "Torque": "motor-shaft N*m",
+    "Current": "A at full 12 V duty"
+  },
+  "fit": "Endpoint-defined linear torque-speed and torque-current equations; interior CSV rows withheld from coefficient extraction and checked numerically. This published curve itself is linear, not raw individual test repetitions.",
+  "domain": "12 V full-voltage envelope, 0 to 7757.6047386285445 rpm, nonnegative motoring torque; optional specified stator-current cap. Outside-envelope margins fail. No partial-duty electrical predictions.",
+  "independent_validation": "Interior manufacturer-curve reproduction, rounded WCP 41 A/393 W/~80.4% cross-check, analytic work/kinetic-energy and domain checks. These are software/specification checks, not independent experimental validation of controller, mission efficiencies, gearbox or rover.",
+  "mass_sources": {
+    "motor": "https://docs.wcproducts.com/welcome/electronics/kraken-x44/kraken-x44-motor/overview-and-features/physical-specifications.md",
+    "motor_mass_kg": 0.3401942775,
+    "gearbox": "https://www.revrobotics.com/maxplanetary-system-kit/",
+    "drive": "base 261 g + 4:1 133 g + two 5:1 138 g each + 3-inch shaft 27 g = 697 g",
+    "drum": "PROVISIONAL 753 g three-stage inventory budget: base 261 g + three 155 g cartridges + 27 g shaft; ratio/stages not frozen",
+    "limitations": "Spline adapter substitutions, external mounting, hardware changes and exact installed shafts require a weighed BOM. Stage load ratings and X44 interface compatibility not verified. No fitted gearbox mass-versus-ratio function."
+  },
+  "hardware_validation_status": "Not experimentally validated. Current limits, thermal duty and continuous gearbox ratings undecided.",
+  "model_usage": "Torque-speed envelope and optional torque-current cap only. Mission energy uses separate provisional combined efficiencies (drive 0.72, drum 0.70); these are not fitted to this CSV."
+}

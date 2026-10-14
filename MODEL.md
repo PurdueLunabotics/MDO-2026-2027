@@ -12,6 +12,24 @@ The one-way route is 2/3/3/1 m with 90/45/45-degree turns, exactly 45 s each way
 
 ## Data flow and interfaces
 
+Optional standard X44 hardware is selected with `--motors x44-standard`.
+Both motor-power sizing variables become inactive reference diagnostics;
+drive ratio is fixed at 100:1 and drum ratio remains exploratory. The existing
+discipline components supply mechanical work and peak power to a shared Gearmotor and
+selected motor provider; mass components use a selected assembly inventory.
+There are no X44-specific copies of excavation, mobility or relocation.
+Electrical energy and peak power use provisional combined efficiencies (drive
+0.72, drums 0.70), applied once; no electrical time history or RMS current is
+predicted. Torque-speed/current capability is checked separately.
+See [the interface/file map](docs/MOTOR_INTERFACE.md). Power margins in this profile
+are instantaneous curve screens, not continuous ratings. Current limits are
+undecided (zero explicitly disables the current cap, not the voltage screen).
+Full equations, source manifest, domains and missing validation are in
+[X44_MOTORS.md](docs/X44_MOTORS.md). Slope climbing is still unverified.
+
+The student expanded the exploratory wheelbase upper bound from 0.50 to 0.65 m;
+the 1.50 m stowed-length requirement remains enforced.
+
 StructureGeometry -> LinkageGeometry, with WheelMass and DrumMass calculated independently -> GeometryMass -> Excavation. GeometryMass now sums the wheel/drum outputs with drive, battery, structure and linkage masses; its reference result is numerically unchanged. Excavation feeds LinkageLoads, MassProperties, TrenchTraversal and TipStability. StructureLoads follows linkage loads; SiteRelocation and Mobility follow mass properties; Mission combines their time, energy and constraints. Explicit tube dimensions, actuator/motor sizes and battery capacity avoid hidden mass-sizing loops. Automatic structural resizing would require a coupled solve.
 
 ModelSet factories replace individual components. New disciplines keep CONFIG_INPUTS, COUPLED_INPUTS, OUTPUT_UNITS and DEPENDENCIES beside the equations; older ones use dependencies.py. Named scalar ports use SI, except explicit rpm and W*h. Dependency declarations include both sides of every branch. Global axes are x forward, y left, z up; legacy linkage side-elevation y means global z.
@@ -75,7 +93,14 @@ lift=internal_lift_factor
 internal_torque_full=payload*g*R*lift
 ```
 
-These are UNCALIBRATED constants, not a high-speed loss law. Separate dig/dump RPM and Fr constraints define provisional validity envelopes. Motor power and spinup losses still change with speed. Empirical adapters can supply a speed response within a measured domain and must reject extrapolation. Fr=1 is an acceleration scale, not a universal centrifugation threshold.
+These are UNCALIBRATED constants, not a high-speed loss law. At the student's
+request, dig/dump Froude caps are no longer enforced. `drum_froude` and the legacy
+`dig_froude_margin`/`dump_froude_margin` against 0.30/0.20 are diagnostics only,
+excluded from feasibility and optimizer constraints. There is no extra assumed
+speed-dependent capture/lift loss; motor power, torque, spinup energy and RPM
+design bounds still constrain operation. High-speed retention/dumping remains
+unverified. Empirical adapters must still reject extrapolation outside their
+own measured domains. Fr=1 is an acceleration scale, not a universal threshold.
 
 Drum gear ratio is independent of operating RPM. Continuous output torque=P_rated/omega_motor_rated*ratio*gear_efficiency, also bounded by a linear motor torque-speed envelope with stall twice rated and no-load twice rated speed. Peak cutting/spinup torque, continuous mechanical power and a service factor constrain the drive. Replace this generic envelope with actual voltage/current/thermal/gearbox data.
 
@@ -92,6 +117,13 @@ Cutting/recovery and local/whole-plate instability require separate verification
 CF properties remain provisional. Its mass placement, output interpretations,
 geometry failure domains and unchanged 5 mm envelope are documented in
 [PLATE_FRAME.md](docs/PLATE_FRAME.md). `ModelSet()` retains the reference below.
+
+Plate revision 2 uses seven strips and three triangular openings; its lower
+boundary runs through the suspension hub, allowing the hub and lower mounts
+to share an elevation. The filled rectangular chassis collision screen remains
+active only in the reference profile, and is diagnostic only in plate-frame.
+Actual frame/equipment interference remains unverified; drum-wheel clearances,
+mount packaging and dimension limits are retained.
 
 Frame tubes are two longitudinal wheelbase members, one track-width crossmember and two pivot towers from axle height to the upper pivot, including its horizontal offset. Arms have a separate section family. For diameter d, wall t and di=d-2t:
 
@@ -148,6 +180,15 @@ port contract, domain guard and geometric limitations.
 Empty relocation translates to a neighboring fresh lane with two 90-degree turns; rest-to-rest time, kinetic/scrub/rolling energy, torque and level-ground traction are charged. Lane offset must exceed total drum width. Each cycle reserves the rectangle enclosing both drum stations, including the center gap; cumulative area must fit available_excavation_area. A real site planner must still check maneuver space and legal-zone topology. Trench traversal currently requires wheel_diameter >= trench_depth; this is a geometric placeholder, not a traction or exit simulation. These area/path values are planning assumptions, not asserted competition rules.
 
 ## Mission and numerical verification
+
+`ModelSet.traversal_stability` additionally enforces 30-degree full-load travel
+support using the gravity-line intersection with the planar support rectangle.
+It samples each single-wheel raise from zero to obstacle_height at 41 heights,
+retaining rocker kinematics. Both the global hull and nonnegative wheel normals
+under ideal differential pitch-torque balance are required. Three new margins
+are additive to the endpoint obstacle and uneven-dump contracts. Slope and rock
+are separate cases; failed four-contact poses are not replaced with invented
+three-wheel poses. See [TRAVERSAL_STABILITY.md](docs/TRAVERSAL_STABILITY.md).
 
 Cycle sums dig, dump, 90-second travel, deposition turn, nominal actuator strokes, relocation and alignment, minus lowering/cutting overlap. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
 

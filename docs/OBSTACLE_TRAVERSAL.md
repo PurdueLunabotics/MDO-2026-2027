@@ -7,6 +7,11 @@ capability. Ditch traversal remains unverified. The existing `trench_traverse_ma
 excavation trench, and `wheel_first_margin` is a wheel-diameter drum-clearance
 placeholder. Neither port is repurposed by this work.
 
+The additive traversal stability component now also checks 41 intermediate
+single-wheel heights and nonnegative ideal-differential wheel reactions, plus
+the separate 30-degree slope requirement. The endpoint screens below retain
+their original meanings. See [TRAVERSAL_STABILITY.md](TRAVERSAL_STABILITY.md).
+
 ## Gravity support calculation
 
 `rover/alternatives/obstacle_stability.py` contains the pure helper

@@ -16,9 +16,12 @@ def main():
     parser.add_argument("--baseline", action="store_true", help="Analyze without optimization")
     parser.add_argument("--structure", choices=["reference", "plate-frame"], default="reference",
                         help="Select reference tubes or the preliminary CF/plate/box-rocker frame")
+    parser.add_argument("--motors", choices=["reference", "x44-standard"], default="reference",
+                        help="Generic scalable motors or fixed standard X44s at 12 V, drive gearing 100:1")
     parser.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="Override a config value in its stated units")
     parser.add_argument("--optimizer", choices=["SLSQP", "COBYLA"], default="SLSQP")
     parser.add_argument("--maxiter", type=int, default=200)
+    parser.add_argument("--cobyla-radius", type=float, help="Initial COBYLA trust radius in scaled design coordinates")
     parser.add_argument("--check-derivatives", action="store_true", help="Compare total derivatives at two FD step sizes")
     parser.add_argument("--n2", action="store_true", help="Compatibility flag; N2 and HTML reports are now always saved")
     parser.add_argument("--output", type=Path, help="JSON path; defaults to results/baseline.json or results/optimization.json")
@@ -27,7 +30,7 @@ def main():
         parser.error("--maxiter must be positive")
     try:
         overrides = dict(item.split("=", 1) for item in args.set)
-        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=args.structure)
+        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=args.structure, cobyla_radius=args.cobyla_radius, motors=args.motors)
     except (ValueError, TypeError) as exc:
         parser.error(str(exc))
     output = args.output or Path("results") / ("baseline.json" if args.baseline else "optimization.json")

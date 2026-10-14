@@ -19,6 +19,7 @@ OUTPUTS = {
     "stowed_x": "m", "stowed_y": "m", "travel_x": "m", "travel_y": "m", "extended_x": "m", "extended_y": "m",
     "sweep_x_min": "m", "sweep_x_max": "m", "actuator_leverage_max": None,
     "actuator_attachment_distance": "m",
+    "chassis_clearance_margin": "m",  # legacy diagnostic; inactive in plate-frame
     "stowed_length": "m", "stowed_height": "m", "deployed_length": "m", "deployed_height": "m",
     "route_distance": "m", "route_turn_angle": "deg", "route_translation_time": "s",
     "route_turn_time": "s", "route_peak_acceleration": "m/s**2",
@@ -34,7 +35,8 @@ from .trench import TrenchTraversal
 from .tip_stability import TipStability
 from .alternatives.obstacle_stability import ObstacleStability
 from .alternatives.obstacle_clearance import ObstacleClearance
-for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, TrenchTraversal, TipStability, ObstacleStability, ObstacleClearance):
+from .alternatives.traversal_stability import TraversalStability
+for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, TrenchTraversal, TipStability, ObstacleStability, ObstacleClearance, TraversalStability):
     OUTPUTS.update(component.OUTPUT_UNITS)
 
 
@@ -51,6 +53,9 @@ def snapshot(problem, configuration=None):
         from .alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
         output_units.update(PlateStructureGeometry.OUTPUT_UNITS)
         output_units.update(PlateStructureLoads.OUTPUT_UNITS)
+    if "motor_bus_voltage" in assumptions:
+        from .mobility import Mobility
+        output_units.update(Mobility.OUTPUT_UNITS)
 
     constraints = {}
     for name, (upper, units) in REQUIREMENTS.items():

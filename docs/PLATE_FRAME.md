@@ -26,7 +26,7 @@ The following remain explicit assumptions, NOT measured or selected products:
 
 | Choice | Initial model |
 | --- | --- |
-| Plate topology | Two identical plates, each with four radial and four perimeter strips joining S, front/rear A and front/rear B |
+| Plate topology | Two identical plates, each with four radial and three perimeter strips joining S, front/rear A and front/rear B; three cutouts |
 | CF properties | Density 1600 kg/m3, effective bending modulus 70 GPa, flexural strength 350 MPa; all provisional |
 | Central pad | 30 mm radius; mass counted as a solid disk |
 | Mount material reserve | CF OD/2 plus 3 mm |
@@ -60,15 +60,33 @@ Side-elevation nodes (x forward, z up, metres above original level ground):
 S   = (0, wheel_diameter/2 + rocker_pivot_offset)
 A±  = (±actuator_pivot_x, top_pivot_height)
 B±  = (±pivot_x, bottom_pivot_height)
-edges = S-A±, S-B±, A+-B+, A--B-, A+-A-, B+-B-
+edges = S-A±, S-B±, A+-B+, A--B-, A+-A-
+lower boundary = B+-S-B- (no direct B+-B- member)
 ```
 
 Lengths and directions are recomputed from these coordinates on EVERY evaluation.
 The connection pattern is fixed; exact cutout dimensions are not fixed. There
 is one shared width for all strips. Minimum lengths, mount/pad clearances,
-triangular cutout inradii and axle-between-mount heights enter a signed
+three signed triangular cutout inradii enter a signed
 `plate_geometry_margin`. Invalid geometry stays invalid even if finite forces
 can be calculated for its schematic. `plate_geometry_valid` is diagnostic.
+
+Revision 2 removes the direct B+-B- strip and the fourth/lower cutout. The hub
+can now be at, below or above the lower mounts' elevation; its actual distance
+from each tube mounting pad still has to fit the provisional pad radii and
+ligament allowance. There is no hub/lower-mount vertical ordering requirement.
+Triangles S-A+-B+, S-B--A-, S-A--A+ retain their orientation and a finite opening;
+flipped/collapsed triangles remain infeasible. Connectivity is fixed across
+the coplanar lower boundary, so no abrupt model switch is introduced.
+
+The old filled rectangular chassis collision margin is diagnostic only for
+this profile, as requested by the student. It remains active for the reference
+tube-frame model. Removing it does not verify clearance to the actual plate
+strips, tubes, equipment, arms or actuator bodies; those need CAD or a subsequent
+member-envelope model. Both drum-wheel clearance screens remain enforced.
+Dig/dump Froude caps are also diagnostic only in both profiles: torque/power,
+startup energy and the existing RPM design bounds remain enforced. No additional
+speed-dependent granular loss is assumed; retention and dumping remain unverified.
 
 For transverse packaging:
 

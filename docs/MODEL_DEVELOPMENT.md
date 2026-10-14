@@ -1,5 +1,17 @@
 # Improve one discipline without rewriting the rover
 
+The coordinated `--motors x44-standard` integration profile composes with either
+frame profile using motor-provider and assembly-inventory component options.
+ModelSet still selects disciplines; hardware selection preserves their classes
+and custom response hooks. Shared mass/energy semantics are preserved; motor
+power becomes inactive and drive ratio is fixed. Combined efficiencies remain
+active, provisional inputs; energy uses mechanical work divided by efficiency. Read [MOTOR_INTERFACE.md](MOTOR_INTERFACE.md) for
+the file map and replacement API, and [X44_MOTORS.md](X44_MOTORS.md)
+and the versioned `data/motors/manifest.json` before changing the motor model.
+Its manufacturer curve is reproduced, while combined efficiency, thermal and gearbox behavior
+remain unvalidated. A zero current limit means undecided, never a continuous
+rating. Keep the generic motor profile available for comparisons.
+
 Start with the default model, run the tests, and open a generated HTML report.
 Choose ONE question, for example: "Does this drum retain less soil at high RPM?"
 Work on a branch (`codex/…` for agent-created branches). Keep the reference model
@@ -41,6 +53,15 @@ specifications. Keep `ModelSet()` reference factories and reference configuratio
 available for comparisons. See PLATE_FRAME.md for additive ports and the changed
 interpretation of structural stress/deflection/buckling in this profile; profile
 activation is deliberate, not an implicit factory fallback.
+
+The student's revision 2 changes the plate connectivity to seven strips/three
+openings and disables the filled-rectangle chassis collision constraint in that
+profile. Both profiles disable the uncalibrated dig/dump Froude caps. Existing
+output ports and units are retained as legacy diagnostics, not feasibility tests;
+`model_metadata.diagnostic_only_screens` records the reasons. `margin_specs` and
+`configuration.margins` list only enforced margins, including in recorded-case
+playback. Do not treat a negative inactive diagnostic as a failed active
+constraint, or treat its removal as validation of clearance or granular flow.
 
 Keep alternative implementations in separate files under `rover/alternatives/`.
 The default model stays available for an identical-design comparison. Teams can
@@ -137,6 +158,14 @@ See [OBSTACLE_TRAVERSAL.md](OBSTACLE_TRAVERSAL.md) for the new mass grouping,
 guarded-pose reporting and unverified ditch requirement.
 
 ## Your first replacement
+
+The traversal integration adds `ModelSet.traversal_stability` and fixed
+`slope_angle` [rad], with three active margins for planar slope support and
+sampled one-wheel gravity/differential reaction balance. Existing endpoint
+obstacle and dump-tip ports retain their meanings; new outputs report the
+height-grid minima and worst cases. Plate/reference models preserve their own
+rocker centroids. Reports use the selected problem's actual margin specs.
+See TRAVERSAL_STABILITY.md for the additive contract and failure domains.
 
 Run `python -m examples.empirical_excavation`. It injects an alternate excavation
 component and interpolates a tiny **synthetic** table. Default runs never use it.

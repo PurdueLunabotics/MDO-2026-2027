@@ -47,7 +47,6 @@ MARGINS = {
     "deployed_height_margin": (2.50, "m"),
     "actuator_force_margin": (4000.0, "N"),
     "drum_torque_margin": (50.0, "N*m"), "dump_torque_margin": (25.0, "N*m"),
-    "dig_froude_margin": (0.3, None), "dump_froude_margin": (0.2, None),
     "payload_margin": (5.0, "kg"), "trench_traverse_margin": (0.359, "m"),
     "fresh_site_margin": (0.5, "m"),
     "frame_section_margin": (0.02, "m"), "arm_section_margin": (0.02, "m"),
@@ -56,6 +55,8 @@ MARGINS = {
     "tip_stability_margin": (0.3, "m"),
     "obstacle_pose_margin": (0.4, "m"), "obstacle_tip_margin": (0.4, "m"),
     "obstacle_drum_wheel_margin": (0.4, "m"),
+    "slope_tip_margin": (0.3, "m"),
+    "rock_sweep_tip_margin": (0.4, "m"), "rock_sweep_wheel_load_margin": (500., "N"),
     "excavation_area_margin": (12.0, "m**2"),
     "site_drive_margin": (300.0, "N"),
 }
@@ -73,7 +74,8 @@ def validate(values, design=None, assumptions=None):
     zero_allowed = {"electronics_power", "actuator_idle_power", "rolling_base",
                     "scrub_coefficient", "internal_lift_factor", "vertical_cut_fraction",
                     "force_imbalance", "mass_score_weight", "energy_score_weight",
-                    "obstacle_height", "rocker_pivot_offset"}
+                    "obstacle_height", "rocker_pivot_offset", "slope_angle",
+                    "drive_stator_current_limit", "drum_stator_current_limit"}
     fractions = {name for name in assumptions if "fraction" in name or "efficiency" in name}
     fractions |= {"cut_engagement", "delivery_efficiency", "force_imbalance"}
     for name, value in values.items():
@@ -86,6 +88,8 @@ def validate(values, design=None, assumptions=None):
         raise ValueError("Absolute rocker_pivot_offset must be smaller than half the minimum wheelbase.")
     if not 0 < values["wheel_deflection_fraction"] < 0.5:
         raise ValueError("wheel_deflection_fraction must be between 0 and 0.5.")
+    if not 0 <= values["slope_angle"] < math.pi/2:
+        raise ValueError("slope_angle must be in [0, pi/2) radians.")
     if values["scoops_per_revolution"] != int(values["scoops_per_revolution"]):
         raise ValueError("scoops_per_revolution must be an integer.")
     if values["mass_score_weight"] + values["energy_score_weight"] == 0:
@@ -102,29 +106,76 @@ def validate(values, design=None, assumptions=None):
         raise ValueError("ROUTE needs finite nonnegative distances and nonzero total travel.")
 
 
-def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=False, models=None, structure="reference"):
-    design, assumptions = configuration(structure)
+def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference"):
+    if cobyla_radius is not None and (optimizer != "COBYLA" or not math.isfinite(cobyla_radius) or cobyla_radius <= 0):
+        raise ValueError("cobyla_radius needs a positive finite value and optimizer='COBYLA'.")
+    design, assumptions = configuration(structure, motors)
     margins = {**MARGINS, **(PLATE_FRAME_MARGINS if structure == "plate-frame" else {})}
+    diagnostic_screens = {
+        "dig_froude_margin": "User removed the uncalibrated speed cap; constant capture/lift response assumes no additional high-speed loss.",
+        "dump_froude_margin": "User removed the uncalibrated speed cap; actual dumping/retention speed response remains unverified.",
+    }
+    if structure == "plate-frame":
+        margins.pop("chassis_clearance_margin")
+        diagnostic_screens["chassis_clearance_margin"] = (
+            "Legacy filled rectangular envelope does not represent the open plate frame; actual frame/equipment interference remains unverified.")
     models = models or (plate_frame_models() if structure == "plate-frame" else ModelSet())
+    if motors == "x44-standard":
+        from .alternatives.x44_motor import X44MotorProvider, verify_source_data
+        from .motor_inventory import CatalogAssemblyMass
+        verify_source_data()
     values = {name: spec[0] for name, spec in {**design, **assumptions}.items()}
     for name, value in (overrides or {}).items():
         if name not in values:
             raise ValueError(f"Unknown input {name!r}. See rover/config.py.")
         values[name] = float(value)
     validate(values, design, assumptions)
+    if motors == "x44-standard" and (values["motor_bus_voltage"] != 12 or values["drive_gear_ratio"] != 100):
+        raise ValueError("The selected hardware profile requires 12 V and a fixed 100:1 drive ratio.")
     problem = om.Problem(reports=False)
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
-    problem.model_metadata = {"schema_version": 2, "structure_profile": structure,
+    problem.model_metadata = {"schema_version": 2, "structure_profile": structure, "motor_profile": motors,
                               "configuration": {"design": design, "assumptions": assumptions, "margins": margins},
+                              "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": 1e-3, "cobyla_radius": cobyla_radius},
+                              "diagnostic_only_screens": diagnostic_screens,
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
                               "source_files_sha256": {p.relative_to(Path(__file__).parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                                                        for p in sorted(Path(__file__).parent.rglob("*.py"))}}
+    if motors == "x44-standard":
+        problem.model_metadata["motor_performance"] = {
+            "curve": "data/motors/kraken_x44_standard_12v.csv",
+            "manifest": "data/motors/manifest.json",
+            "curve_sha256": hashlib.sha256((Path(__file__).parent.parent/"data/motors/kraken_x44_standard_12v.csv").read_bytes()).hexdigest(),
+            "mode": "standard trapezoidal, 12 V", "drive_ratio": 100,
+            "implementation": "shared Gearmotor; output work/peak divided by provisional combined efficiency",
+            "energy_model_revision": 2,
+            "combined_efficiencies": {role: values[role+"_efficiency"] for role in ("drive", "drum")},
+            "continuous_operation_verified": False,
+            "current_limits": {n: values[n] or "undecided; voltage envelope only" for n in ("drive_stator_current_limit", "drum_stator_current_limit")},
+            "limitations": "Constant combined efficiencies are uncalibrated; no current/RMS/partial-duty electrical predictions, battery sag or thermal limits. Drum ratio is continuous exploratory; cartridge availability/ratings and motor adapter require verification.",
+            "inactive_reference_inputs": ["drive_motor_power", "drum_motor_power", "motor_rated_rpm", "motor_mass_per_watt", "gear_mass_per_torque", "drive_fixed_mass", "drum_fixed_mass"],
+            "power_margin_semantics": "Necessary instantaneous manufacturer peak-curve screen, not a continuous rating; torque-speed/current envelope also enforced."}
     problem.model_metadata["traversal_requirements"] = {
         "obstacle_height_m": values["obstacle_height"],
         "obstacle_status": "posed gravity support, geometric reach and conservative drum/wheel envelope screens only",
+        "slope_angle_rad": values["slope_angle"],
+        "slope_status": "fully loaded static planar slope support only; traction/drive capability unverified",
+        "rock_path_status": "one wheel at a time, 41 sampled heights; ideal differential reaction balance; real crossing path unverified",
         "ditch_depth_m": 0.50, "ditch_profile": "user: circle-like",
         "ditch_status": "unverified: width/radius and crossing contact sequence unknown"}
     model = problem.model
+    def add_discipline(slot):
+        component = getattr(models,slot)()
+        # Preserve the selected discipline (including student replacements).
+        # Motor hardware changes only its declared provider/inventory options.
+        if motors == "x44-standard":
+            option = ("motor_model" if slot in ("excavation","mobility","relocation")
+                      else "assembly_mass_model" if slot in ("geometry","drum_mass") else None)
+            if option:
+                if option not in component.options:
+                    raise ValueError(f"{slot} must expose the {option!r} option to use the X44 hardware profile; the selected discipline was not replaced.")
+                component.options[option] = X44MotorProvider if option == "motor_model" else CatalogAssemblyMass
+        model.add_subsystem(slot,component,promotes=["*"])
     inputs = om.IndepVarComp()
     for name, value in values.items():
         spec = design.get(name, assumptions.get(name))
@@ -132,21 +183,11 @@ def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=Fal
     model.add_subsystem("inputs", inputs, promotes=["*"])
     # Kinematics/mass -> geometry -> excavation -> linkage loads and mobility -> mission.
     # Battery capacity is a design variable, avoiding a hidden mass/energy sizing loop.
-    model.add_subsystem("structure_geometry", models.structure_geometry(), promotes=["*"])
-    model.add_subsystem("linkage", models.linkage(), promotes=["*"])
-    model.add_subsystem("wheel_mass", models.wheel_mass(), promotes=["*"])
-    model.add_subsystem("drum_mass", models.drum_mass(), promotes=["*"])
-    model.add_subsystem("geometry", models.geometry(), promotes=["*"])
-    model.add_subsystem("excavation", models.excavation(), promotes=["*"])
-    model.add_subsystem("linkage_loads", models.linkage_loads(), promotes=["*"])
-    model.add_subsystem("mass_properties", models.mass_properties(), promotes=["*"])
-    model.add_subsystem("structure_loads", models.structure_loads(), promotes=["*"])
-    model.add_subsystem("relocation", models.relocation(), promotes=["*"])
-    model.add_subsystem("trench_traversal", models.trench_traversal(), promotes=["*"])
-    model.add_subsystem("tip_stability", models.tip_stability(), promotes=["*"])
-    model.add_subsystem("obstacle_stability", models.obstacle_stability(), promotes=["*"])
-    model.add_subsystem("obstacle_clearance", models.obstacle_clearance(), promotes=["*"])
-    model.add_subsystem("mobility", models.mobility(), promotes=["*"])
+    for slot in ("structure_geometry","linkage","wheel_mass","drum_mass","geometry",
+                 "excavation","linkage_loads","mass_properties","structure_loads",
+                 "relocation","trench_traversal","tip_stability","obstacle_stability",
+                 "obstacle_clearance","traversal_stability","mobility"):
+        add_discipline(slot)
     model.add_subsystem("mission", Mission(), promotes=["*"])
     for name, (_, lower, upper, _) in design.items():
         model.add_design_var(name, lower=lower, upper=upper, ref0=lower, ref=upper)
@@ -164,6 +205,8 @@ def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=Fal
     problem.driver = om.ScipyOptimizeDriver(optimizer=optimizer, tol=1e-3)
     problem.driver.options["maxiter"] = maxiter
     problem.driver.options["disp"] = display
+    if cobyla_radius is not None:
+        problem.driver.opt_settings["rhobeg"] = cobyla_radius
     try:
         problem.setup()
         validate_interfaces(problem)
@@ -174,4 +217,10 @@ def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=Fal
         slot: getattr(getattr(model, slot), "model_evidence", {"status": "uncalibrated reference model"})
         for slot in vars(models)
     }
+    problem.model_metadata["motor_options"] = {}
+    for slot in ("excavation","mobility","relocation","geometry","drum_mass"):
+        component = getattr(model,slot)
+        problem.model_metadata["motor_options"][slot] = {
+            name: f"{getattr(component.options[name], '__module__', type(component.options[name]).__module__)}.{getattr(component.options[name], '__qualname__', type(component.options[name]).__qualname__)}"
+            for name in ("motor_model","assembly_mass_model") if name in component.options}
     return problem
