@@ -19,18 +19,22 @@ def main():
     parser.add_argument("--motors", choices=["reference", "x44-standard"], default="reference",
                         help="Generic scalable motors or fixed standard X44s at 12 V, drive gearing 100:1")
     parser.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="Override a config value in its stated units")
-    parser.add_argument("--optimizer", choices=["SLSQP", "COBYLA"], default="SLSQP")
-    parser.add_argument("--maxiter", type=int, default=200)
+    parser.add_argument("--optimizer", choices=["SLSQP", "COBYLA"],
+                        help="Default: COBYLA for plate-frame, SLSQP for reference")
+    parser.add_argument("--maxiter", type=int,
+                        help="Default: 2000 evaluations for plate-frame COBYLA; 200 otherwise")
+    parser.add_argument("--solver-tol", type=float,
+                        help="Numerical stopping accuracy; default 1e-5 for plate-frame/X44, 1e-3 otherwise")
     parser.add_argument("--cobyla-radius", type=float, help="Initial COBYLA trust radius in scaled design coordinates")
     parser.add_argument("--check-derivatives", action="store_true", help="Compare total derivatives at two FD step sizes")
     parser.add_argument("--n2", action="store_true", help="Compatibility flag; N2 and HTML reports are now always saved")
     parser.add_argument("--output", type=Path, help="JSON path; defaults to results/baseline.json or results/optimization.json")
     args = parser.parse_args()
-    if args.maxiter < 1:
+    if args.maxiter is not None and args.maxiter < 1:
         parser.error("--maxiter must be positive")
     try:
         overrides = dict(item.split("=", 1) for item in args.set)
-        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=args.structure, cobyla_radius=args.cobyla_radius, motors=args.motors)
+        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=args.structure, cobyla_radius=args.cobyla_radius, motors=args.motors, solver_tol=args.solver_tol)
     except (ValueError, TypeError) as exc:
         parser.error(str(exc))
     output = args.output or Path("results") / ("baseline.json" if args.baseline else "optimization.json")
@@ -63,7 +67,7 @@ def main():
             print(f"Optimizer success: {success}")
         om.n2(problem, outfile=str(output.parent / f"{output.stem}_n2.html"), show_browser=False)
         record = {"schema_version": 2, "model_metadata": problem.model_metadata,
-                  "openmdao_version": openmdao.__version__, "optimizer": args.optimizer,
+                  "openmdao_version": openmdao.__version__, "optimizer": problem.model_metadata["optimizer_settings"]["optimizer"],
                   "optimizer_success": success, "optimizer_result": message,
                   "status": "baseline" if args.baseline else ("converged_feasible" if success and final["feasible"] else "failed_or_infeasible"),
                   "notice": "Uncalibrated conceptual estimates; points include only mass and energy productivity.",

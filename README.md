@@ -28,11 +28,15 @@ $motorStart.inputs.psobject.Properties | ForEach-Object {
 .\.venv\Scripts\python.exe main.py --structure plate-frame --motors x44-standard --optimizer COBYLA --cobyla-radius 0.01 --maxiter 1500 --check-derivatives @motorOverrides --output results/motor_simple/optimization.json
 ```
 
-The widened-wheelbase generic plate cold-start SLSQP regression still fails;
-that test and the failed X44 SLSQP record remain intact. A successful numerical
-restart does not establish convergence from every start. With the simplified
-energy model, the saved X44 restart also finishes slightly below its starting
-score, so its score-improvement regression remains failing. See VERIFICATION.md.
+The plate-frame profile now defaults to COBYLA with a 0.02 initial trust
+radius, up to 2000 evaluations and 1e-5 stopping accuracy. X44 profiles also use
+1e-5 accuracy. The unchanged plate-frame and X44 optimizer assertions pass with
+these numerical settings. All physical constraints and starting designs are
+retained. The historical failed solves remain documented in VERIFICATION.md;
+these results do not establish convergence from every start or a global optimum.
+
+Use `--solver-tol`, `--optimizer`, `--maxiter` and `--cobyla-radius` to
+override numerical settings explicitly. Reports record the resolved settings.
 
 1. Read [MODEL.md](MODEL.md) for physics, units, assumptions and sources.
 2. Read [model cards](docs/MODEL_CARDS.md) to see what each component can and cannot predict.
@@ -56,11 +60,12 @@ report infeasibility. Default-start optimization failures remain documented in
 `docs/VERIFICATION.md`; this workflow does not establish convergence from every
 starting design or experimentally validate the rover.
 
-The current reference CI fixture selects supported COBYLA with a 0.02 initial
-trust radius in scaled design coordinates. Default SLSQP reference failures
-remain reported; the plate-frame optimizer regression still uses SLSQP.
-The CLI exposes that numerical setting as `--cobyla-radius 0.02`; it is not a
-physical safety factor or a change to any constraint.
+The reference CI fixture selects COBYLA with a 0.02 initial trust radius in
+scaled design coordinates. The generic reference profile still defaults to
+SLSQP and its cold-start failure remains reported. The plate-frame regression
+uses its profile's COBYLA defaults from the same original starting design.
+These are numerical settings; they do not change physical safety factors or
+constraints.
 
 ## Install and run
 

@@ -106,7 +106,22 @@ def validate(values, design=None, assumptions=None):
         raise ValueError("ROUTE needs finite nonnegative distances and nonzero total travel.")
 
 
-def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference"):
+def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", solver_tol=None):
+    # Plate envelopes contain min/max/contact branches. Use a small-step
+    # derivative-free solve for that profile; keep explicit SLSQP available.
+    optimizer = optimizer or ("COBYLA" if structure == "plate-frame" else "SLSQP")
+    if optimizer not in ("SLSQP", "COBYLA"):
+        raise ValueError("optimizer must be SLSQP or COBYLA.")
+    if maxiter is None:
+        maxiter = 2000 if structure == "plate-frame" and optimizer == "COBYLA" else 200
+    if not isinstance(maxiter, int) or isinstance(maxiter, bool) or maxiter < 1:
+        raise ValueError("maxiter must be a positive integer.")
+    if solver_tol is None:
+        solver_tol = 1e-5 if structure == "plate-frame" or motors == "x44-standard" else 1e-3
+    if not math.isfinite(solver_tol) or solver_tol <= 0:
+        raise ValueError("solver_tol must be positive and finite.")
+    if cobyla_radius is None and structure == "plate-frame" and optimizer == "COBYLA":
+        cobyla_radius = .02
     if cobyla_radius is not None and (optimizer != "COBYLA" or not math.isfinite(cobyla_radius) or cobyla_radius <= 0):
         raise ValueError("cobyla_radius needs a positive finite value and optimizer='COBYLA'.")
     design, assumptions = configuration(structure, motors)
@@ -136,7 +151,7 @@ def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=Fal
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
     problem.model_metadata = {"schema_version": 2, "structure_profile": structure, "motor_profile": motors,
                               "configuration": {"design": design, "assumptions": assumptions, "margins": margins},
-                              "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": 1e-3, "cobyla_radius": cobyla_radius},
+                              "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": solver_tol, "cobyla_radius": cobyla_radius},
                               "diagnostic_only_screens": diagnostic_screens,
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
                               "source_files_sha256": {p.relative_to(Path(__file__).parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -202,7 +217,7 @@ def build_problem(overrides=None, *, optimizer="SLSQP", maxiter=200, display=Fal
     # Deliberately recompute the full model for perturbations: easy to replace models.
     # Avoid complex-step assumptions, derivative coloring, or hand-maintained Jacobians.
     model.approx_totals(method="fd", form="central", step=1e-5, step_calc="rel_avg")
-    problem.driver = om.ScipyOptimizeDriver(optimizer=optimizer, tol=1e-3)
+    problem.driver = om.ScipyOptimizeDriver(optimizer=optimizer, tol=solver_tol)
     problem.driver.options["maxiter"] = maxiter
     problem.driver.options["disp"] = display
     if cobyla_radius is not None:

@@ -1,5 +1,51 @@
 # Current simulator verification
 
+## CI optimizer regressions repaired, 2026-10-14
+
+The student supplied GitHub logs confirming two failing optimizer assertions:
+plate-frame SLSQP did not report success, and the X44 COBYLA restart returned
+2282.78958 points versus 2288.16331 initially. This entry supersedes the
+unresolved-status notes below; the old raw results remain unchanged.
+
+Only numerical settings and their CLI/configuration documentation changed.
+No physics equation, input value, bound, safety factor, feasibility tolerance,
+constraint reserve or existing test assertion changed. Neither regression
+start nor its fixture was replaced.
+
+- Plate-frame defaults now select COBYLA, initial scaled radius 0.02,
+  up to 2000 evaluations, accuracy 1e-5. Explicit SLSQP remains available.
+  The min/max/contact envelopes make the gradient line search fragile;
+  merely tightening SLSQP to 1e-6 still failed with stress margin -306512 Pa.
+  That failed trial remains failed in results/optimizer_fix/plate_slsqp_tight.json.
+- X44 uses accuracy 1e-5 instead of 1e-3. Its saved restart retains the same
+  initial inputs, COBYLA, 1500-evaluation limit and 0.01 initial radius.
+  COBYLA tolerance sets its final trust-region accuracy, not a physical
+  acceptance limit. The tighter setting resolves the observed score regression.
+- Generic reference defaults remain SLSQP, 200 iterations and 1e-3 accuracy.
+  Arguments and CLI flags can override defaults; invalid numerical settings
+  fail clearly. Resolved choices are written into report metadata and the
+  top-level report optimizer field, including when CLI arguments were omitted.
+- All 17 plate-frame tests pass in 15.061 s, including the original unchanged
+  success/feasibility/score-improvement test from its original cold start.
+- Full suite: **115 tests passed in 41.416 s**. This includes both previously
+  failing regressions, four new numerical-default/override/domain checks,
+  derivatives, physics, interface composition, mass/energy and report tests.
+- Required generic baseline CLI completed. Required generic default derivative
+  CLI passed derivatives but still failed SLSQP; its failed/infeasible result
+  remains recorded. Width, battery power, actuator force, drum torque and
+  deflection margins fail. That generic cold start is not the CI solve.
+- Actual CI-fixture CLI passed derivatives and converged feasible:
+  score 529.22418 -> 920.12578 in 147 model evaluations.
+- Plate-frame default CLI passed derivatives and converged feasible from the
+  original cold start: score 343.16857 -> 996.33243 in 283 evaluations.
+- X44 fixture CLI passed derivatives and converged feasible:
+  score 2288.16331 -> 2291.30075 in 244 evaluations.
+- All three successful final iterates pass every enforced constraint.
+  JSON/HTML/N2, logs and failed comparison trials are under ignored
+  results/optimizer_fix/. These are numerical checks, not independent
+  experimental validation, guaranteed global optima or 30-degree climbing proof.
+  GitHub checks have not rerun on this fix yet; no commit/push/merge was made.
+
 ## Simplified motor energy model, 2026-10-14
 
 The student approved a lower-fidelity motor model before reviewing any new

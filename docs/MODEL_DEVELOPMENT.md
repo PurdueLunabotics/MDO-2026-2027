@@ -17,6 +17,33 @@ Choose ONE question, for example: "Does this drum retain less soil at high RPM?"
 Work on a branch (`codex/…` for agent-created branches). Keep the reference model
 available so the club can compare your replacement against the same mission.
 
+## Numerical solver settings
+
+`build_problem()` and the CLI resolve the same profile defaults:
+
+| Profile | Solver | Stopping accuracy | Limit | Initial COBYLA radius |
+| --- | --- | --- | --- | --- |
+| Generic reference | SLSQP | 1e-3 | 200 iterations | n/a |
+| Plate frame | COBYLA | 1e-5 | 2000 evaluations | 0.02 |
+| X44 on either frame | As selected by frame | 1e-5 | As selected by frame | As selected by frame |
+
+Explicit `optimizer`, `maxiter`, `cobyla_radius` and `solver_tol` arguments
+override these choices. CLI equivalents are `--optimizer`, `--maxiter`,
+`--cobyla-radius` and `--solver-tol`. The X44 saved restart still specifies
+1500 evaluations and a 0.01 initial radius.
+
+Plate-frame minimum/maximum and contact branches can defeat a local SLSQP line
+search. COBYLA succeeded from the unchanged cold start. With the simplified
+motor energy, the old 1e-3 COBYLA stopping radius was too coarse to reproduce
+score improvement near the saved X44 design; 1e-5 succeeds. This is empirical
+numerical evidence, not a guarantee for every start.
+
+Stopping accuracy is separate from derivative step size, physical constraint
+limits and report feasibility tolerances. All remain separately enforced.
+Resolved choices are stored in `model_metadata.optimizer_settings`. Keep
+failed historical iterates failed and retain success, feasibility AND score
+improvement assertions in optimizer regressions.
+
 ## Component contracts
 
 `rover/models.py` is the replacement entry point. `build_problem(models=ModelSet(
