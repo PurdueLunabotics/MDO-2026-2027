@@ -2,6 +2,35 @@
 
 A modular OpenMDAO sizing model for a four-wheel, side-rocker, skid-steer rover with front/rear bucket-drum pairs. It is intended for students improving one discipline at a time, including with coding agents. The reference physics is **uncalibrated**; passing constraints is not hardware validation.
 
+## Design baseline reports
+
+For a fixed-design evaluation, use `--baseline`, or load a named SSOT case with
+`--inputs baseline.json`. Input-file runs hold values fixed unless `--optimize`
+is explicit. Failed constraints remain visible and do not prevent a baseline
+report from being generated.
+
+The PDF-ready report separates inputs, performance, loads, checks and geometry.
+See [the report guide and input format](docs/DESIGN_REPORT.md).
+
+`design_baseline.json` is the only baseline input file to edit.
+Edit its `inputs` and revision, then regenerate the fixed report:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/baseline/evaluation.json
+```
+
+Open `results/baseline/evaluation.html`. Reporting code lives in `reporting/`,
+outside the physics package. The guide also describes club-only PDF sharing
+through Drive; viewing a generated report does not require Python.
+
+There are two design JSON files: `design_baseline.json` (your chosen values) and
+`design_optimized.json` (the optimizer's candidate). Reports and geometry are kept
+in [docs/design_reports](docs/design_reports/README.md). Full calculated results
+are embedded in the HTML reports; intermediate run files stay under ignored `results/`.
+Ready-to-share PDFs are in [output/pdf](output/pdf). Printing includes all checks,
+the top-down view, all three side views and the effective input/output appendices.
+The edited baseline is preserved even when a modeled check fails.
+
 ## Start here
 
 For the purchased standard Kraken X44 motors, add `--motors x44-standard` to
@@ -83,7 +112,7 @@ python -m venv .venv
 
 The last command demonstrates a replaceable response using explicitly synthetic data. It is NOT calibration and is never selected by default. No EDEM/Chrono installation is needed to run the reference model. Those simulators should generate validated data offline, outside optimization evaluations.
 
-Outputs include self-contained HTML, JSON, three geometry SVGs, a sparse N2 diagram and optimizer SQLite history. Baseline mode has no optimizer recording. Default names are results/baseline.* or results/optimization.*; `--output results/my_design.json` sets a separate stem. The CLI returns nonzero if optimization fails or the final design is infeasible. Reports retain failed final iterates and show constraint margins. Derivative checks are numerical checks, not physical validation.
+Outputs include self-contained HTML, JSON, three side-view SVGs, a top-down SVG, optional frame/stability SVGs, a sparse N2 diagram and optimizer SQLite history. Baseline mode has no optimizer recording. Default names are results/baseline.* or results/optimization.*; `--output results/my_design.json` sets a separate stem. The CLI returns nonzero if optimization fails or the final design is infeasible. Reports retain failed final iterates and show constraint margins. Derivative checks are numerical checks, not physical validation.
 
 ## Change assumptions
 
@@ -184,7 +213,7 @@ Whole-cycle estimates are reported alongside continuous throughput. Other compet
 | rover/dependencies.py | Legacy component dependency declarations |
 | rover/calibration.py | Strict response-table validation; no extrapolation |
 | rover/problem.py | Assembly, signed constraints, optimizer |
-| rover/report.py / html_report.py | Result schema, reporting, geometry/replay |
+| reporting/report.py / html_report.py | Result schema, reporting, geometry/replay |
 | examples/ | Executable optional model and synthetic fixture |
 | tests/ | Independent physical limits, conservation, interfaces and regression |
 

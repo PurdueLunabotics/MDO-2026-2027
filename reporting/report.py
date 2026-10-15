@@ -1,8 +1,8 @@
 """Physical-unit results, feasibility checks, and a separate whole-cycle estimate."""
 
 import math
-from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS
-from .problem import MARGINS
+from rover.config import DESIGN, ASSUMPTIONS, REQUIREMENTS
+from rover.problem import MARGINS
 
 OUTPUTS = {
     "dry_mass": "kg", "payload_mass": "kg", "wheel_mass": "kg", "drum_mass": "kg",
@@ -27,16 +27,17 @@ OUTPUTS = {
 
 # Discipline contracts are also the report's source of units. Include diagnostics
 # as well as constraint values so students can explain WHY a design is infeasible.
-from .excavation import Excavation
-from .structure import StructureGeometry, StructureLoads
-from .mass_properties import MassProperties
-from .relocation import SiteRelocation
-from .trench import TrenchTraversal
-from .tip_stability import TipStability
-from .alternatives.obstacle_stability import ObstacleStability
-from .alternatives.obstacle_clearance import ObstacleClearance
-from .alternatives.traversal_stability import TraversalStability
-for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, TrenchTraversal, TipStability, ObstacleStability, ObstacleClearance, TraversalStability):
+from rover.excavation import Excavation
+from rover.structure import StructureGeometry, StructureLoads
+from rover.mass_properties import MassProperties
+from rover.relocation import SiteRelocation
+from rover.mobility import Mobility
+from rover.trench import TrenchTraversal
+from rover.tip_stability import TipStability
+from rover.alternatives.obstacle_stability import ObstacleStability
+from rover.alternatives.obstacle_clearance import ObstacleClearance
+from rover.alternatives.traversal_stability import TraversalStability
+for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, Mobility, TrenchTraversal, TipStability, ObstacleStability, ObstacleClearance, TraversalStability):
     OUTPUTS.update(component.OUTPUT_UNITS)
 
 
@@ -50,13 +51,9 @@ def snapshot(problem, configuration=None):
     margins = specs.get("margins", MARGINS)
     output_units = dict(OUTPUTS)
     if getattr(problem, "model_metadata", {}).get("structure_profile") == "plate-frame" or "plate_thickness" in assumptions:
-        from .alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
+        from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
         output_units.update(PlateStructureGeometry.OUTPUT_UNITS)
         output_units.update(PlateStructureLoads.OUTPUT_UNITS)
-    if "motor_bus_voltage" in assumptions:
-        from .mobility import Mobility
-        output_units.update(Mobility.OUTPUT_UNITS)
-
     constraints = {}
     for name, (upper, units) in REQUIREMENTS.items():
         margin = upper - get(name)

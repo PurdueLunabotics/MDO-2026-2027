@@ -13,8 +13,8 @@ from rover.alternatives.x44_motor import CURVE
 from rover.motors import Gearmotor
 from rover.config import DESIGN, ASSUMPTIONS, configuration
 from rover.problem import build_problem
-from rover.report import snapshot
-from rover.html_report import write_report
+from reporting.report import snapshot
+from reporting.html_report import write_report
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -12,10 +12,10 @@ from openmdao.utils.assert_utils import assert_check_totals
 from rover.components import Mission, travel_profile
 from rover.config import DESIGN, ASSUMPTIONS
 from rover.problem import build_problem, MARGINS
-from rover.report import snapshot
+from reporting.report import snapshot
 from rover.dependencies import dependencies
 from rover.mobility import route_profiles
-from rover.html_report import geometry_svg, values_from_snapshot, write_report
+from reporting.html_report import geometry_svg, values_from_snapshot, write_report
 from openmdao.visualization.n2_viewer.n2_viewer import _get_viewer_data
 
 

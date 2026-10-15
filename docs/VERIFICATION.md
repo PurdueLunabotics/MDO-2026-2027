@@ -1,5 +1,87 @@
 # Current simulator verification
 
+## Reporting package and imported baseline, 2026-10-14
+
+- Moved all reporting modules outside `rover/` into top-level `reporting/`:
+  snapshot/console reporting, HTML/geometry exports, layout and case-input I/O.
+  Updated CLI/test imports. No physics equations, ports, limits, optimizer
+  settings or test acceptance thresholds changed.
+- At the student's request, replaced `design_baseline.json` inputs with all 140
+  effective final inputs from `results/report_draft/mdo_example.json`, the latest
+  matching successful plate-frame / standard-X44 result. Preserved the previous
+  file under ignored `results/baseline_update/`. Source file/checksum and original
+  optimization status are recorded in notes and retained in report provenance.
+  This import is not experimental validation or a claim of global optimality.
+- Regenerated `results/baseline/evaluation.json/html` and the existing
+  `results/report_draft/baseline.json/html` preview. All imported effective inputs
+  match the source exactly; maximum absolute difference across common predicted
+  outputs is 0.0. Fixed evaluation is feasible, with optimizer_success null;
+  source optimization success remains separately recorded. Modeled score is
+  2291.3007460034587 points.
+- All 121 tests passed in 58.245 s, including existing optimizer and physical
+  checks and report/input tests. Required generic-reference baseline completed;
+  generic-reference derivative step-size check passed. Its default cold-start
+  SLSQP optimization still exited 1 and remains failed/infeasible, including
+  width, battery power, actuator force, drum torque and deflection failures.
+  Results/logs are under ignored `results/baseline/`.
+- Documented self-contained HTML viewing and a club-only Drive/PDF workflow.
+  Companion JSON/SVG/N2 links need companion files. No upload, publication,
+  commit, push or merge was performed. Browser visual review remains blocked by
+  the previously reported local-file URL policy; no workaround was attempted.
+
+## Design baseline report draft, 2026-10-14
+
+The student requested a readable SSOT-baseline evaluation report before further
+turning/traction work. The preview uses current plate-frame / standard-X44
+configured values, explicitly labeled as an example, not an approved baseline.
+No physics equations, constraints, coefficients, safety factors or numerical
+solver settings changed.
+
+- Replaced the optimizer-first HTML layout with overview, effective inputs,
+  performance/mass/energy, scoped loads, requirements, geometry and model notes.
+  Added readable units/labels, a failed/unknown-first filter, search and pose
+  controls. Full native ports, assumptions, signed margins and provenance remain.
+- A fixed evaluation has no optimizer playback or starting/final comparison.
+  MDO studies label the candidate separately and retain recorded-evaluation
+  playback, failed solver status and a starting/candidate comparison.
+- Requirements use saved pass/fail flags exactly. Six failed checks remain in
+  the configured example; unassessed capabilities are distinct. Guarded rock
+  diagnostics and invalid frame load cases are identified. Search bounds are
+  distinguished from physical checks, and failed bounds remain visible in
+  Needs attention.
+- Added --inputs JSON, --design-name and --revision. Input-file runs default to
+  fixed evaluation; --optimize is required to run MDO from a file. Existing
+  no-file CLI behavior is retained. Missing inputs inherit named model defaults;
+  numeric --set overrides file inputs and is recorded.
+- Cases record their revision, basename, input-file SHA-256, UTC generation time,
+  explicit/defaulted sources and the original model provenance. Effective input
+  exports include every design/assumption value, with MDO exports labeled as
+  candidates. Source case files are read only; output collisions are rejected.
+- Baseline evaluation completes even when constraints fail, preserving false
+  feasibility and every failure. Invalid input domains still fail validation.
+  See DESIGN_REPORT.md for native units, file format and limits.
+- Mobility diagnostics are now included for reference snapshots too, so the
+  report's route and energy values are actual saved outputs.
+- Compared every existing reference-baseline output against the previous saved
+  run: maximum change 0.0. Displayed mass balance error is 0.0 kg and cycle
+  energy sum error is 0.0 J. No fitted/calibrated relationship was introduced.
+- Full suite: 121 tests passed in 101.440 s. Six new tests cover input fidelity,
+  fixed-analysis default, immutable source/export collisions, pass/fail fidelity,
+  failed-optimizer labeling and HTML escaping without modifying snapshot data.
+  Existing physical, derivative, motor and optimizer assertions still pass.
+- Required reference baseline completed. Required default reference derivative
+  check passed; subsequent SLSQP still failed and its saved iterate remains
+  failed/infeasible. This reporting task does not repair that known cold start.
+- Explicit file-driven MDO CLI passed derivatives, converged feasible and
+  improved score 2288.16331 -> 2291.30075. Fixed example has optimizer_success
+  null and six failed checks; its predictions are marked conditional.
+- Node syntax-check passed for the report script. Browser visual/interaction QA
+  was blocked by the in-app URL policy for local file URLs. No alternate browser
+  or server workaround was attempted. HTML/data/semantics were audited directly;
+  visual feedback remains part of this first-draft review.
+- Drafts and logs are under ignored results/report_draft/. No commit, push,
+  merge or new traction physics was performed.
+
 ## Windows motor-CSV checkout fix, 2026-10-14
 
 The student supplied a Windows Actions log with one checksum-test failure and
@@ -673,3 +755,101 @@ optimum.
 
 Generated `results/` files are ignored local artifacts; earlier reports use
 different equations and are not directly comparable.
+
+## PDF-ready design reports (2026-10-15)
+
+Presentation and archival changes only. Physics, declared constraints, mass
+boundaries and optimizer settings are unchanged. The student's edited
+`design_baseline.json` was preserved byte for byte (SHA-256
+`bec0052ee625b9363033f29078a2463f36bab5d1f3ae2d376665c91aa751ddc6`).
+
+- Local `.venv` full suite: **123 tests passed**. The first sandboxed attempt
+  encountered Windows temporary-directory access errors; the approved rerun
+  outside that sandbox passed. Added tests check the four-wheel/four-drum plan
+  projection scale and preserve failed archive classifications while rejecting
+  unrelated baseline/optimization pairs.
+- Fixed edited baseline: `results/pdf_ready/baseline.json`, exit 0, with one
+  retained failure: `obstacle_drum_wheel_margin = -0.00987661675 m`.
+- Fresh optimization from the same edited inputs, with `--check-derivatives`:
+  `results/pdf_ready/optimized.json`, exit 0, optimizer success and all saved
+  constraints passing. Continuous objective: 2348.354585 points. Complete-cycle
+  score is separately reported as 2343.454646 points. The derivative step-size
+  check passed at the starting design; this is numerical verification only.
+- Required default-reference baseline: completed successfully as an evaluation.
+  Required default-reference `--check-derivatives` run: derivative check passed,
+  but the cold-start optimizer still returned exit 1, `failed_or_infeasible`.
+  Final failed checks are width, battery peak power, actuator force, drum torque
+  and structural deflection. That failure has not been relabeled or suppressed.
+  Local outputs use `results/pdf_ready_reference_*`.
+- Both curated snapshots in `docs/design_reports/` are byte-identical to their
+  source analysis JSONs. All effective input exports, source/analysis hashes and
+  local companion links were checked. N2 data has 343 explicit connections in
+  each case, without auto-IVC sources. No shared ports or connections changed.
+- Dry-mass assembly sums, electrical cycle-energy sums and complete-cycle plus
+  idle mission-energy sums match saved totals to 1e-12 relative tolerance.
+- Chrome PDF export was tested with every check hidden by a screen search:
+  printing still includes every check and all three side poses. Print details
+  restore their prior screen state. No JavaScript errors or overflowing table
+  cells were detected. Poppler page renders were visually reviewed; native
+  input, output and constraint port names were checked against extracted PDF
+  text. The top-down view is a footprint projection, not a collision test or CAD.
+
+Reviewed PDFs are kept in `output/pdf/`; HTML, input JSONs, analysis JSONs,
+geometry SVGs and an analysis manifest are kept in `docs/design_reports/`.
+The PDFs are prepared for manual Drive upload. Nothing was uploaded or published.
+Calibration status remains unchanged: conceptual soil/structure/efficiency
+assumptions and unverified hardware/terrain capabilities are labeled in both
+reports. Optimizer success does not constitute experimental validation.
+
+### Simplified design files (2026-10-15, supersedes the archive layout above)
+
+There is now one editable `design_baseline.json` and one generated
+`design_optimized.json`, both at the repository root. The duplicate input exports,
+analysis JSONs and manifest were removed from `docs/design_reports/`.
+The CLI no longer writes separate `*_inputs.json` copies. Numeric run records
+are retained in ignored `results/` and embedded verbatim as JSON data inside
+each HTML report. Publishing validates the baseline source, rejects stale or
+unrelated reports, preserves failed classifications and leaves the baseline
+file untouched. Reports link to the two canonical design files.
+
+The student's latest baseline was preserved byte for byte, SHA-256
+`d240bca2c1474879c65dc87e0284230eeb933d88bef51697b111eedfb76b036b`.
+Both reports/PDFs were refreshed to these latest edits. The current baseline
+retains stress and articulated wheel-load failures:
+`structure_stress_margin = -655854.8516 Pa` and
+`rock_sweep_wheel_load_margin = -0.8535612742 N`.
+The fresh optimized candidate passes all modeled checks. Its derivative
+step-size check passed. No physics or constraint changes were made.
+
+Full local `.venv` suite: **123 tests passed**. Tests cover source preservation,
+no duplicate published JSONs, equality of the embedded record to the original
+numeric run, stale-source rejection, failed-result truthfulness and the CLI's
+source overwrite guards. Independent checks verified all canonical input values,
+source hash, local links and mass/cycle-energy sums. PDF text contains all saved
+native input/output/constraint names; Poppler renders of all 30 baseline pages
+and 31 candidate pages were reviewed. The default reference baseline and
+derivative-checked optimization were rerun; the existing reference optimization
+failure remains a failure. Calibration limitations are unchanged.
+
+### Report reading order and first-page scores (2026-10-15)
+
+Presentation only: saved construction, mass and energy points now appear on
+page one as continuous-estimate score cards. Complete-cycle score stays
+separately labeled in performance. Rover views follow the overview, then
+performance and model checks. Loads, notes and any MDO comparison precede the
+final appendix: effective inputs/assumptions, design variables/bounds, then all
+output ports. The grouped "What was evaluated" section is removed.
+
+Both input JSON files and embedded numeric analysis records were verified
+unchanged. All native input, output and constraint port names remain present
+in extracted PDF text. PDF checks confirmed all three score values on page one,
+requested section/appendix ordering, all three side poses visible, all filtered
+checks printed, no overflowing table cells, no JavaScript errors and restoration
+of the pre-print details state. All pages were rendered and visually reviewed;
+the reports are 27 baseline pages and 28 candidate pages.
+
+The full local `.venv` suite passed all **123 tests**. The required default
+baseline evaluation completed, and the default optimization's derivative check
+passed; its existing failed/infeasible final result remains failed. No physics,
+score equations, constraints, calibration or input values changed. The baseline's
+stress/wheel-load failures and the saved candidate's passing checks are preserved.
