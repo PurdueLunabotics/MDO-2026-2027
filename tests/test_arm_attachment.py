@@ -11,8 +11,8 @@ from openmdao.visualization.n2_viewer.n2_viewer import _get_viewer_data
 from rover.linkage import attachment_point, drum_pose, sweep_poses
 from rover.config import DESIGN, ASSUMPTIONS
 from rover.problem import build_problem
-from rover.report import snapshot
-from rover.html_report import geometry_svg, values_from_snapshot
+from reporting.report import snapshot
+from reporting.html_report import geometry_svg, values_from_snapshot
 
 
 class ArmAttachmentTests(unittest.TestCase):

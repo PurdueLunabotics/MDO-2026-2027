@@ -12,7 +12,7 @@ from rover.alternatives.obstacle_clearance import (
 )
 from rover.alternatives.obstacle_stability import raised_wheel_pose
 from rover.problem import build_problem
-from rover.report import snapshot
+from reporting.report import snapshot
 
 
 def example_values():

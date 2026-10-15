@@ -8,8 +8,8 @@ from openmdao.utils.assert_utils import assert_check_totals
 
 from rover.config import configuration, DESIGN, ASSUMPTIONS
 from rover.problem import build_problem
-from rover.report import snapshot
-from rover.html_report import write_report
+from reporting.report import snapshot
+from reporting.html_report import write_report
 from rover.alternatives.plate_frame import (
     PLATE_EDGES, arm_mount_loads, box_section, plate_nodes, plate_geometry,
     geometry_inventory, solve_plate, evaluate_frame_loads, plate_frame_posed_cg,

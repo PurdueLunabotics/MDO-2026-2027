@@ -5,7 +5,7 @@ import numpy as np
 from openmdao.utils.assert_utils import assert_check_totals
 
 from rover.problem import build_problem
-from rover.report import snapshot
+from reporting.report import snapshot
 from rover.alternatives.obstacle_stability import raised_wheel_pose, projected_support_margin
 from rover.alternatives.plate_frame import plate_frame_posed_cg
 from rover.alternatives.traversal_stability import (

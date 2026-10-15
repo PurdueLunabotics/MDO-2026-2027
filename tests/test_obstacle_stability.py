@@ -4,7 +4,7 @@ import unittest
 
 from rover.alternatives.obstacle_stability import projected_support_margin, raised_wheel_pose, posed_loaded_cg
 from rover.problem import build_problem
-from rover.report import snapshot
+from reporting.report import snapshot
 from rover.config import DESIGN
 from openmdao.utils.assert_utils import assert_check_totals
 

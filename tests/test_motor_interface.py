@@ -7,7 +7,7 @@ import numpy as np
 from rover.alternatives.x44_motor import CURVE, X44MotorProvider
 from rover.motors import Gearmotor
 from rover.problem import build_problem
-from rover.report import snapshot
+from reporting.report import snapshot
 from rover.models import ModelSet
 from rover.excavation import Excavation
 from rover.mobility import Mobility
