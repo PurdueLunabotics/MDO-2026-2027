@@ -8,8 +8,10 @@ Select the coordinated optional profile with:
 ```
 
 The Python equivalent is `build_problem(structure="plate-frame")`. This selects
-four ModelSet factories: PlateStructureGeometry, PlateStructureLoads,
-PlateMassProperties and PlateObstacleStability. `ModelSet()` and CLI
+five ModelSet factories: PlateStructureGeometry, PlateStructureLoads,
+PlateMassProperties, PlateObstacleStability, and PlateTraversalStability.
+The last is defined in `rover/alternatives/traversal_stability.py`; the others
+are in `rover/alternatives/plate_frame.py`. `ModelSet()` and CLI
 `--structure reference` retain the previous tube-frame physics and inputs. The
 profile does not mutate the reference config dictionaries. No automatic section
 sizing or mass/load fixed-point solve is hidden inside a component.

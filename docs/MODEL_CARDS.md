@@ -22,8 +22,8 @@ needs a card with provenance, domain, held-out validation error and reproduction
 | ObstacleStability | Fully loaded travel pose, each wheel raised 0.40 m; centered rockers with average-angle differential; geometric reach and projected gravity support | Estimated +0.10 m pivot offset; point contacts, no joint stops/load equilibrium, climb path, traction, collisions, soil or dynamics; 0.50 m ditch unverified | CAD geometry/CG and loaded articulation/balance tests; full crossing trials |
 | ObstacleClearance (revision 1) | Lower bound on drum–wheel surface gap from spheres enclosing rigid cylindrical envelopes; all 16 pairs in each of four prescribed single-wheel-raised travel poses; subtracts mechanism_clearance | Conservative over-rejection is possible; negative bounds do not prove cylinder collision. No intermediate crossing path, deflection, terrain, hubs/shafts/arms/frame interference; invalid poses have flagged guarded diagnostics and failing margins | Analytic software tests with synthetic geometry; no fitted data or hardware validation. Check CAD envelopes and measured loaded articulation, then use detailed cylinder/CAD geometry if the bounds over-reject |
 | Mission | Repeated full cycles, explicit overlap and fresh lanes | Detailed site layout, partial delivery, battery voltage/thermal history | Timed full mission and electrical logs |
-| Standard X44 motor profile (optional, physics revision 2 / interface revision 3) | Fixed six standard X44s at 12 V; fixed 100:1 drive ratio; exploratory drum ratio; original disciplines supply mechanical work/peak to shared Gearmotor; catalog assembly mass | Combined drive/drum efficiencies 0.72/0.70 are provisional; current/thermal ratings undecided; gearbox behavior, adapters and drum stage budget unvalidated; climbing unverified | Versioned official curve/manifest, interior reproduction, independent work/kinetic-energy and one-time loss tests, mechanical-invariant regression and replacement composition; no independent hardware validation. See MOTOR_INTERFACE.md and X44_MOTORS.md |
-| TraversalStability (revision 1) | Full-load travel: planar 30-degree gravity support, every heading; four separate one-wheel lifts sampled from 0 to 40 cm; global hull and ideal differential reactions | Assumes slope friction/holding torque; finite grid, horizontal rock platforms and ideal differential. No approach profile, combined slope/rock, wheel-pair cases, post-lift contacts, joint limits, traction/climbing, impacts or validation | Independent slope, force/moment, negative-load, mirrored/dense grid and mass tests; measured CG and loaded tilt/articulation tests needed. See TRAVERSAL_STABILITY.md |
+| Standard X44 motor profile (optional, physics revision 2 / interface revision 3) | Fixed six standard X44s at 12 V; fixed 100:1 drive ratio; exploratory drum ratio; original disciplines supply mechanical work/peak to shared Gearmotor; catalog assembly mass | Combined drive/drum efficiencies 0.72/0.70 are provisional; current/thermal ratings undecided; gearbox behavior, adapters and drum stage budget unvalidated; climbing unverified | Versioned official curve/manifest, interior reproduction, independent work/kinetic-energy and one-time loss tests, mechanical-invariant regression and replacement composition; no independent hardware validation. See X44_MOTORS.md |
+| TraversalStability (revision 1) | Full-load travel: planar 30-degree gravity support, every heading; four separate one-wheel lifts sampled from 0 to 40 cm; global hull and ideal differential reactions | Assumes slope friction/holding torque; finite grid, horizontal rock platforms and ideal differential. No approach profile, combined slope/rock, wheel-pair cases, post-lift contacts, joint limits, traction/climbing, impacts or validation | Independent slope, force/moment, negative-load, mirrored/dense grid and mass tests; measured CG and loaded tilt/articulation tests needed. See OBSTACLE_TRAVERSAL.md |
 
 ## Assumptions requiring particular attention
 
@@ -60,13 +60,12 @@ needs a card with provenance, domain, held-out validation error and reproduction
 - Fresh-lane geometry and available excavation area are planning assumptions;
   confirm the actual legal zone and maneuver space.
 
-## Replacement card template
-
-### Plate-frame revision 2
+## Plate-frame evidence and scope
 
 Select with `--structure plate-frame` or `build_problem(structure="plate-frame")`.
-Four coordinated factories in `rover/alternatives/plate_frame.py` preserve scalar
-mass/output boundaries. Fixed 6.35 mm 6061-T6 sheet and 25.4 mm CF ID come from
+Five coordinated factories in `rover/alternatives/plate_frame.py` and
+`rover/alternatives/traversal_stability.py` preserve scalar mass/output boundaries.
+Fixed 6.35 mm 6061-T6 sheet and 25.4 mm CF ID come from
 the student. Spoke width, CF span/wall, box rocker/axle sections and centered axle
 height are adjustable. The four-radial/three-perimeter topology and CF properties
 are **provisional**, not calibrated CAD/material data. No fitted response or
@@ -90,6 +89,8 @@ and an average-angle differential; +0.10 m pivot offset is an editable estimate.
 Geometry/mass/support tests are analytical, without calibration data. A positive
 obstacle screen is not experimental validation or proof of climbing capability.
 The circular-like ditch still lacks a width/radius and is explicitly unverified.
+
+## Replacement card template
 
 ```text
 Name, revision, author:

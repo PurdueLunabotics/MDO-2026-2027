@@ -32,8 +32,8 @@ simulation was run when only a placeholder was written.
   experimental validation. Report quantitative errors and the data used to test.
 - Do not edit another student's uncommitted work, commit/push/merge automatically,
   or add simulator installers, secrets, large binaries or raw runs to Git.
-- Do not modify parent directories without checking their instructions and scope.
-  This project currently lives inside a larger Git repository.
+- This is a standalone repository. Do not modify parent directories without
+  checking their instructions and scope. Confirm the root with git rev-parse --show-toplevel.
 
 ## Verification before handing off
 

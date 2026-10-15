@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Traversal time and drum fill sensitivity</title>
+<style>
+:root{font:15px/1.5 system-ui,sans-serif;color:#19323e;background:#f3f6f6}*{box-sizing:border-box}body{margin:0}main{max-width:1500px;margin:auto;padding:32px}h1{font-size:32px;line-height:1.15;margin:0 0 12px}h2{font-size:20px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px}p{margin:8px 0}.muted{color:#596d76;font-size:13px}.eyebrow{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.15em;color:#176a67}.panel{background:white;border:1px solid #dce5e8;border-radius:10px;padding:22px;margin:22px 0}.hero{max-width:1000px}svg{display:block;width:100%;height:auto}svg text{font-family:system-ui,sans-serif;fill:#19323e}.chart-cell{cursor:pointer;outline-offset:2px}.chart-cell:focus{outline:3px solid #19323e}a{color:#176a67}a.button{display:inline-block;text-decoration:none;padding:9px 14px;background:#176a67;color:white;border-radius:5px;margin-right:8px}.selected-head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.badge{font-size:12px;font-weight:700;padding:5px 9px;border-radius:4px;background:#e7f3ee;color:#24694c}.badge.fail{background:#fbe9e4;color:#a13e25}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:22px 0}.metric span{display:block;font-size:12px;color:#596d76}.metric strong{display:block;font-size:24px}.views{display:grid;grid-template-columns:1fr 1fr;gap:16px}.view{border:1px solid #e4ebed;padding:12px;border-radius:6px;min-width:0}.controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px}button{font:inherit;font-size:12px;padding:6px 10px;background:white;border:1px solid #bed0d5;border-radius:4px;cursor:pointer}button[aria-pressed=true]{background:#176a67;color:white}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:7px 8px;border-bottom:1px solid #e4ebed;text-align:left;vertical-align:top}th{font-size:11px;color:#596d76}code{font-size:12px;overflow-wrap:anywhere}footer{border-top:1px solid #dce5e8;padding:20px 0;color:#596d76;font-size:12px}.status-line{font-size:13px;margin-top:18px}.scroll{overflow-x:auto}.failed-text{color:#a13e25}details{margin:12px 0}summary{cursor:pointer;font-weight:650}.mini-chart{min-width:300px}[hidden]{display:none!important}@media(max-width:850px){main{padding:20px 12px}.views,.two-col{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}h1{font-size:26px}.panel{padding:15px}#heatmap{min-width:780px}}@media print{body{background:white}main{padding:0}.panel{break-inside:avoid;border:0}.controls,a.button{display:none}.metrics{grid-template-columns:repeat(4,1fr)}}
+footer { overflow-wrap:anywhere; }
+</style></head><body><main>
+<header class="hero"><p class="eyebrow">Lunabotics / design sensitivity</p><h1>Traversal time × drum fill ceiling</h1>
+<p>Construction points are encoded by color. Select a cell to inspect its optimized geometry and detailed report.</p>
+<p class="muted">Each cell fixes one-way route time and fill ceiling, then reoptimizes the hardware design. The return route uses the same time. Fill is a storage ceiling; the model may collect less when reachable soil is limiting.</p>
+<p id="progress" class="status-line"></p></header>
+<section class="panel" aria-labelledby="map-title"><div class="selected-head"><h2 id="map-title">Construction points / continuous mission estimate</h2><div><a href="summary.csv">Download table (CSV)</a> · <a href="study.json">Study data</a></div></div>
+<div class="scroll"><svg id="heatmap" viewBox="0 0 1100 600" aria-label="Construction points by one-way traversal time and fill ceiling"></svg></div>
+<p class="muted">Gray × = no converged, modeled-feasible result from the tested starts. Blank = pending. These cells remain selectable; their scores are not treated as valid optima.</p><p id="speed-limit" class="muted"></p></section>
+<section id="selected" class="panel" aria-live="polite"><div class="selected-head"><h2 id="selected-title">Select a design</h2><span id="selected-status" class="badge"></span></div>
+<p id="selection-note" class="muted"></p><div id="selected-metrics" class="metrics"></div>
+<div class="views"><div class="view"><h3>Top-down / travel pose</h3><div id="top-view"></div></div><div class="view"><div class="controls"><h3>Side view</h3><button data-pose="travel" aria-pressed="true">Travel</button><button data-pose="retracted" aria-pressed="false">Compact</button><button data-pose="extended" aria-pressed="false">Digging</button></div><div id="side-view"></div></div></div>
+<p><a id="report-link" class="button" target="_blank" rel="noopener">Open detailed report</a><a id="analysis-link" target="_blank" rel="noopener">Numeric result JSON</a></p>
+<div class="two-col"><div><h3>Design dimensions</h3><table><thead><tr><th>Quantity</th><th>Value</th></tr></thead><tbody id="design-values"></tbody></table></div><div><h3>Solver starts</h3><table><thead><tr><th>Starting design</th><th>Status</th><th>Points</th></tr></thead><tbody id="attempt-values"></tbody></table><p id="fill-note" class="muted"></p><details><summary>Failed checks</summary><div id="failed-checks"></div></details></div></div></section>
+<section class="panel"><h2>Individual sensitivities through the baseline assumptions</h2><div class="two-col"><div><h3 id="time-slice-title"></h3><svg id="time-slice" class="mini-chart" viewBox="0 0 550 290"></svg></div><div><h3 id="fill-slice-title"></h3><svg id="fill-slice" class="mini-chart" viewBox="0 0 550 290"></svg></div></div><p class="muted">These are independently reoptimized grid points, not evaluations of one fixed rover. Click a marker to inspect that design.</p></section>
+<footer><p>Best local result among deterministic starting designs; global optimality is not established. Uncalibrated conceptual model: passing checks and solver convergence do not establish hardware performance.</p><p id="provenance"></p></footer>
+<script id="study-data" type="application/json">__STUDY_DATA__</script>
+<script>
+(()=>{
+'use strict';
+const study=JSON.parse(document.getElementById('study-data').textContent), rows=study.rows;
+const times=study.traversal_times_s,fills=study.fill_fractions;
+const accepted=r=>r&&r.status==='converged_feasible'&&r.optimizer_success&&r.feasible;
+const valid=rows.filter(accepted), scores=valid.map(r=>r.outputs.construction_points);
+const low=scores.length?Math.min(...scores):0, high=scores.length?Math.max(...scores):1;
+const fmt=(n,d=2)=>Number.isFinite(n)?n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
+const byId=new Map(rows.map(r=>[r.id,r]));let current=null,pose='travel';
+function el(tag,attrs={},text){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;return e;}
+function color(value){const f=Math.max(0,Math.min(1,(value-low)/(high-low||1)));return `hsl(${220-175*f} 64% ${89-48*f}%)`;}
+function label(svg,x,y,text,attrs={}){svg.append(el('text',{x,y,'font-size':13,...attrs},text));}
+const map=document.getElementById('heatmap'),left=88,top=28,cw=76,ch=56;
+const lookup=(t,f)=>rows.find(r=>r.traversal_time_s===t&&r.fill_fraction===f);
+function drawMap(){
+ map.replaceChildren();
+ for(let yi=0;yi<fills.length;yi++)for(let xi=0;xi<times.length;xi++){
+  const f=fills[fills.length-1-yi],t=times[xi],r=lookup(t,f),ok=accepted(r),x=left+xi*cw,y=top+yi*ch;
+  const g=el('g',{'class':'chart-cell','data-case':r?r.id:'pending',tabindex:r?0:-1,role:'button',
+    'aria-label':`${t} seconds one way, fill ${f}: ${r?(ok?fmt(r.outputs.construction_points)+' construction points':r.status):'pending'}`});
+  const rect=el('rect',{x:x+2,y:y+2,width:cw-4,height:ch-4,rx:3,fill:ok?color(r.outputs.construction_points):r?'#dce2e5':'#f1f4f5',stroke:r&&current&&r.id===current.id?'#17323e':'none','stroke-width':3});
+  g.append(rect); const txt=el('text',{x:x+cw/2,y:y+ch/2+4,'text-anchor':'middle','font-size':12,'font-weight':ok?650:400},r?(ok?fmt(r.outputs.construction_points,0):'×'):'·');
+  if(ok&&(r.outputs.construction_points-low)/(high-low||1)>.72)txt.style.fill='white';g.append(txt);
+  g.append(el('title',{},r?`${t} s / fill ${f}: ${r.status}${r.outputs?' / '+fmt(r.outputs.construction_points)+' diagnostic points':''}`:'Pending'));
+  if(r){g.addEventListener('click',()=>select(r.id));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(r.id);}});}map.append(g);
+ }
+ times.forEach((t,i)=>label(map,left+i*cw+cw/2,top+fills.length*ch+24,t,{'text-anchor':'middle'}));
+ [...fills].reverse().forEach((f,i)=>label(map,left-16,top+i*ch+ch/2+4,f.toFixed(1),{'text-anchor':'end'}));
+ label(map,left+times.length*cw/2,top+fills.length*ch+62,'Traversal time (s, one way)',{'text-anchor':'middle','font-size':15});
+ label(map,22,top+fills.length*ch/2,'Drum fill ceiling (fraction)',{transform:`rotate(-90 22 ${top+fills.length*ch/2})`,'text-anchor':'middle','font-size':15});
+ const bx=left+times.length*cw+18;for(let i=0;i<100;i++)map.append(el('rect',{x:bx,y:top+(99-i)*3,width:16,height:3.5,fill:color(low+(high-low)*i/99)}));
+ label(map,bx+23,top+8,fmt(high,0),{'font-size':11});label(map,bx+23,top+300,fmt(low,0),{'font-size':11});
+ label(map,bx+8,top+330,'Points',{'text-anchor':'middle','font-size':11});
+}
+function metric(title,value){const e=document.createElement('div');e.className='metric';const a=document.createElement('span'),b=document.createElement('strong');a.textContent=title;b.textContent=value;e.append(a,b);return e;}
+function tdrow(parent,values){const tr=document.createElement('tr');values.forEach(t=>{const td=document.createElement('td');td.textContent=t;tr.append(td);});parent.append(tr);}
+function showViews(){const unavailable='<p class="muted">No usable optimized geometry is available for this cell. Open the diagnostic report for the actual solver errors.</p>';document.getElementById('top-view').innerHTML=current&&current.views?current.views.top:unavailable;document.getElementById('side-view').innerHTML=current&&current.views?current.views[pose]:unavailable;}
+function select(id){
+ current=byId.get(id);if(!current)return;location.hash=id;
+ const r=current,o=r.outputs||{},ok=accepted(r),s=document.getElementById('selected-status');
+ document.getElementById('selected-title').textContent=`${r.traversal_time_s} seconds one way / ${Math.round(r.fill_fraction*100)}% fill ceiling`;
+ s.textContent=ok?'Converged / modeled feasible':'No converged feasible result';s.className='badge'+(ok?'':' fail');
+ document.getElementById('selection-note').textContent=ok?`Best local candidate from ${r.attempts.length} starts. Selected start: ${r.selected_start.replaceAll('_',' ')}.`:r.views?'The shown geometry and score are failed-trial diagnostics. This cell is excluded from the construction-point color scale.':'No usable final numeric state was saved. This cell is excluded from the color scale; no optimized geometry is claimed.';
+ const m=document.getElementById('selected-metrics');m.replaceChildren(metric(ok?'Construction points':'Trial points (failed)',fmt(o.construction_points)),metric('Dry mass',fmt(o.dry_mass)+' kg'),metric('Payload / cycle',fmt(o.payload_mass)+' kg'),metric('Complete-cycle points',fmt((r.whole_cycles||{}).construction_points)));
+ showViews();for(const[k,key]of [['report-link','report'],['analysis-link','analysis']]){const a=document.getElementById(k);a.hidden=!r[key];if(r[key])a.href=r[key];}
+ const values=document.getElementById('design-values');values.replaceChildren();
+ for(const[n,title,scale,u]of [['wheel_diameter','Wheel diameter',1000,'mm'],['wheel_width','Wheel width',1000,'mm'],['wheelbase','Wheelbase',1000,'mm'],['track_width','Wheel-center track',1000,'mm'],['drum_diameter','Drum outer diameter',1000,'mm'],['drum_length','Each drum axial length',1000,'mm'],['arm_length','Arm length',1000,'mm'],['battery_capacity','Battery capacity',1,'Wh'],['actuator_force_rating','Actuator force rating',1,'N']])if(r.design&&n in r.design)tdrow(values,[title,fmt(r.design[n]*scale)+' '+u]);
+ const a=document.getElementById('attempt-values');a.replaceChildren();r.attempts.forEach(v=>tdrow(a,[v.start.replaceAll('_',' '),v.status,fmt(v.construction_points)]));
+ document.getElementById('fill-note').textContent=r.storage_use_fraction!==undefined?`Payload uses ${fmt(r.storage_use_fraction*100,1)}% of the allowed storage ceiling. Target storage payload: ${fmt(o.target_payload_mass)} kg; reachable-soil limit: ${fmt(o.reachable_soil_mass)} kg. Actual modeled fill fraction: ${fmt(r.fill_fraction*r.storage_use_fraction,3)}.`:'';
+ const fail=document.getElementById('failed-checks');fail.replaceChildren();const failed=Object.entries(r.failed_checks||{});if(!failed.length)fail.textContent=ok?'All saved model checks pass.':'No numeric final state available.';else for(const[n,v]of failed){const p=document.createElement('p');p.className='failed-text';p.textContent=`${n}: ${fmt(v.margin,5)} ${v.units||''}`;fail.append(p);}
+ drawMap();
+}
+document.querySelectorAll('[data-pose]').forEach(button=>button.addEventListener('click',()=>{pose=button.dataset.pose;document.querySelectorAll('[data-pose]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));showViews();}));
+function slice(svgId,series,xname,xlabel){
+ const svg=document.getElementById(svgId);svg.replaceChildren();if(!series.length){label(svg,50,110,'No matching grid slice');return;}
+ const l=65,w=450,h=195,yt=15;const xs=series.map(r=>r[xname]),minX=Math.min(...xs),maxX=Math.max(...xs),mx=x=>l+(x-minX)/(maxX-minX||1)*w,my=y=>yt+h-(y-low)/(high-low||1)*h;
+ svg.append(el('line',{x1:l,y1:yt+h,x2:l+w,y2:yt+h,stroke:'#bccdd3'}));svg.append(el('line',{x1:l,y1:yt,x2:l,y2:yt+h,stroke:'#bccdd3'}));
+ label(svg,l-8,yt+8,fmt(high,0),{'text-anchor':'end','font-size':11});label(svg,l-8,yt+h,fmt(low,0),{'text-anchor':'end','font-size':11});
+ let last=null;for(const r of series){const x=mx(r[xname]);if(accepted(r)){const y=my(r.outputs.construction_points);if(last)svg.append(el('line',{x1:last[0],y1:last[1],x2:x,y2:y,stroke:'#176a67','stroke-width':2}));last=[x,y];const c=el('circle',{cx:x,cy:y,r:5,fill:'#176a67',tabindex:0,role:'button','aria-label':`${r[xname]}: ${fmt(r.outputs.construction_points)} points`});c.append(el('title',{},`${r[xname]}: ${fmt(r.outputs.construction_points)} points`));c.addEventListener('click',()=>select(r.id));c.addEventListener('keydown',e=>{if(e.key==='Enter')select(r.id);});svg.append(c);}else{last=null;label(svg,x,yt+h-4,'×',{'text-anchor':'middle'});}label(svg,x,yt+h+22,r[xname],{'text-anchor':'middle','font-size':11});}
+ label(svg,l+w/2,yt+h+55,xlabel,{'text-anchor':'middle'});label(svg,15,yt+h/2,'Construction points',{transform:`rotate(-90 15 ${yt+h/2})`,'text-anchor':'middle','font-size':12});
+}
+document.getElementById('progress').textContent=`${rows.length} / ${times.length*fills.length} combinations complete; ${valid.length} with a converged, modeled-feasible design. ${study.starts.length} deterministic starts per combination.`;
+if(study.independent_speed_limit){const b=study.independent_speed_limit;document.getElementById('speed-limit').textContent=`Independent speed check: the 15 s profile needs at least ${fmt(b.required_peak_at_15s_m_s)} m/s, above the hardware's ${fmt(b.maximum_no_load_speed_m_s)} m/s maximum no-load speed. The optimistic minimum one-way time is ${fmt(b.minimum_one_way_time_s_no_load,1)} s; loads can increase it.`;}
+document.getElementById('time-slice-title').textContent=`Traversal time at fill ceiling ${study.baseline_fill.toFixed(2)}`;
+document.getElementById('fill-slice-title').textContent=`Fill ceiling at ${study.baseline_time_s} seconds one way`;
+slice('time-slice',rows.filter(r=>r.fill_fraction===study.baseline_fill).sort((a,b)=>a.traversal_time_s-b.traversal_time_s),'traversal_time_s','Traversal time (s, one way)');
+slice('fill-slice',rows.filter(r=>r.traversal_time_s===study.baseline_time_s).sort((a,b)=>a.fill_fraction-b.fill_fraction),'fill_fraction','Drum fill ceiling (fraction)');
+document.getElementById('provenance').textContent=`Source: ${study.source}. SHA-256: ${study.source_sha256}. Solver limit: ${study.maxiter_per_start} evaluations per start. Hardware: ${study.structure} / ${study.motors}.`;
+drawMap();const preferred=byId.get(location.hash.slice(1))||lookup(study.baseline_time_s,study.baseline_fill)||valid[0]||rows[0];if(preferred)select(preferred.id);
+})();
+</script></main></body></html>

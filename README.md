@@ -1,221 +1,150 @@
-# Lunabotics rover MDO starter
+# Lunabotics rover design model
 
-A modular OpenMDAO sizing model for a four-wheel, side-rocker, skid-steer rover with front/rear bucket-drum pairs. It is intended for students improving one discipline at a time, including with coding agents. The reference physics is **uncalibrated**; passing constraints is not hardware validation.
+Compare rover designs, estimate mass and mission performance, and find promising
+dimensions with multidisciplinary design optimization (MDO). The model connects
+drums, arms, frame, wheels, motors, battery, stability, and mission timing using
+[OpenMDAO](https://openmdao.org/).
 
-## Design baseline reports
+**A passing result means the modeled checks pass. It does not prove the rover
+will work in soil or meet every competition requirement.** Soil response,
+efficiencies, and several structural and mobility assumptions need testing.
 
-For a fixed-design evaluation, use `--baseline`, or load a named SSOT case with
-`--inputs baseline.json`. Input-file runs hold values fixed unless `--optimize`
-is explicit. Failed constraints remain visible and do not prevent a baseline
-report from being generated.
+## Just want to see the design?
 
-The PDF-ready report separates inputs, performance, loads, checks and geometry.
-See [the report guide and input format](docs/DESIGN_REPORT.md).
+No Python is needed to read the saved reports. Download or clone the repository,
+then open an HTML report in Chrome or Edge. GitHub shows HTML source rather than
+the interactive report; PDFs can be read directly on GitHub.
 
-`design_baseline.json` is the only baseline input file to edit.
-Edit its `inputs` and revision, then regenerate the fixed report:
+| Design | Printable PDF | Interactive report |
+| --- | --- | --- |
+| Student-selected baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
+| Optimizer candidate | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
 
-```powershell
-.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/baseline/evaluation.json
-```
+Reports include scores, mass and energy, top and side views, failed checks, and
+complete input/output tables. The saved baseline currently has structural-stress
+and articulated-wheel-load failures; the candidate passes the current modeled
+checks. These are saved snapshots: changing inputs does not refresh them.
 
-Open `results/baseline/evaluation.html`. Reporting code lives in `reporting/`,
-outside the physics package. The guide also describes club-only PDF sharing
-through Drive; viewing a generated report does not require Python.
+## First run
 
-There are two design JSON files: `design_baseline.json` (your chosen values) and
-`design_optimized.json` (the optimizer's candidate). Reports and geometry are kept
-in [docs/design_reports](docs/design_reports/README.md). Full calculated results
-are embedded in the HTML reports; intermediate run files stay under ignored `results/`.
-Ready-to-share PDFs are in [output/pdf](output/pdf). Printing includes all checks,
-the top-down view, all three side views and the effective input/output appendices.
-The edited baseline is preserved even when a modeled check fails.
-
-## Start here
-
-For the purchased standard Kraken X44 motors, add `--motors x44-standard` to
-your plate-frame command. This freezes drive gearing at 100:1 and both motor
-models at 12 V, uses catalog motor/gear inventory masses and the official curve,
-and leaves drum ratio exploratory. See [motor equations and limitations](docs/X44_MOTORS.md).
-The [motor interface/file map](docs/MOTOR_INTERFACE.md) explains the cleanup:
-the regular disciplines supply mechanical work and peak power to one shared
-motor/gearbox helper. Electrical estimates divide by provisional combined
-efficiencies (drive 0.72, drums 0.70); torque-speed limits are separate. There
-are no electrical time histories or X44-specific discipline copies.
-Current/thermal limits are undecided; a passing result does not verify continuous
-operation or 30° climbing. Omitting this option retains generic reference motors.
-
-To run the simplified motor profile from the saved feasible numerical start:
+Install **Python 3.12 or newer** and [Git](https://git-scm.com/), then open a
+terminal in the repository folder. Windows PowerShell commands:
 
 ```powershell
-$motorStart = Get-Content tests/fixtures/x44_standard_feasible_start.json | ConvertFrom-Json
-$motorOverrides = @()
-$motorStart.inputs.psobject.Properties | ForEach-Object {
-    $motorOverrides += '--set'
-    $motorOverrides += "$($_.Name)=$($_.Value)"
-}
-.\.venv\Scripts\python.exe main.py --structure plate-frame --motors x44-standard --optimizer COBYLA --cobyla-radius 0.01 --maxiter 1500 --check-derivatives @motorOverrides --output results/motor_simple/optimization.json
-```
-
-The plate-frame profile now defaults to COBYLA with a 0.02 initial trust
-radius, up to 2000 evaluations and 1e-5 stopping accuracy. X44 profiles also use
-1e-5 accuracy. The unchanged plate-frame and X44 optimizer assertions pass with
-these numerical settings. All physical constraints and starting designs are
-retained. The historical failed solves remain documented in VERIFICATION.md;
-these results do not establish convergence from every start or a global optimum.
-
-Use `--solver-tol`, `--optimizer`, `--maxiter` and `--cobyla-radius` to
-override numerical settings explicitly. Reports record the resolved settings.
-
-1. Read [MODEL.md](MODEL.md) for physics, units, assumptions and sources.
-2. Read [model cards](docs/MODEL_CARDS.md) to see what each component can and cannot predict.
-3. Follow [model development](docs/MODEL_DEVELOPMENT.md) for interfaces, a student-agent prompt and branch/PR workflow.
-4. Use [experiment plans](docs/EXPERIMENTS.md) for bench tests, Altair EDEM and Project Chrono.
-5. Coding agents should read [AGENTS.md](AGENTS.md) before edits.
-6. Read [implementation verification](docs/VERIFICATION.md) for the latest checks.
-
-This folder can be the root of a standalone GitHub repository. Its
-`.github/workflows/ci.yml` runs the tests, baseline, and derivative-checked
-optimization on pushes and pull requests once the folder is published as a repo.
-While it remains a subdirectory of the all-years repository, GitHub will not
-discover that nested workflow; a workflow in the parent repository root would
-be needed to test it there.
-
-The CI optimization uses the recorded feasible start in
-`tests/fixtures/traversal_stability_feasible_start.json`, matching the optimizer regression
-test. It still requires passing derivative checks, optimizer success and final
-feasibility. The baseline step evaluates the default design separately and can
-report infeasibility. Default-start optimization failures remain documented in
-`docs/VERIFICATION.md`; this workflow does not establish convergence from every
-starting design or experimentally validate the rover.
-
-The reference CI fixture selects COBYLA with a 0.02 initial trust radius in
-scaled design coordinates. The generic reference profile still defaults to
-SLSQP and its cold-start failure remains reported. The plate-frame regression
-uses its profile's COBYLA defaults from the same original starting design.
-These are numerical settings; they do not change physical safety factors or
-constraints.
-
-## Install and run
-
-Python 3.12+; Windows commands below (on macOS/Linux use `.venv/bin/python`). The existing local .venv can be reused.
-
-```powershell
+git clone https://github.com/PurdueLunabotics/MDO-2026-2027.git
+cd MDO-2026-2027
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe main.py --baseline
-.\.venv\Scripts\python.exe main.py
-.\.venv\Scripts\python.exe main.py --check-derivatives
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -m examples.empirical_excavation
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/my_baseline.json
 ```
 
-The last command demonstrates a replaceable response using explicitly synthetic data. It is NOT calibration and is never selected by default. No EDEM/Chrono installation is needed to run the reference model. Those simulators should generate validated data offline, outside optimization evaluations.
+If you already have this repository, skip `git clone` and `cd` into your existing
+copy. Reuse its `.venv` if installed. On macOS/Linux, replace
+`.\.venv\Scripts\python.exe` with `.venv/bin/python`.
+An editor such as VS Code is useful for editing JSON and Python. No EDEM, Chrono,
+or other external simulator is required.
 
-Outputs include self-contained HTML, JSON, three side-view SVGs, a top-down SVG, optional frame/stability SVGs, a sparse N2 diagram and optimizer SQLite history. Baseline mode has no optimizer recording. Default names are results/baseline.* or results/optimization.*; `--output results/my_design.json` sets a separate stem. The CLI returns nonzero if optimization fails or the final design is infeasible. Reports retain failed final iterates and show constraint margins. Derivative checks are numerical checks, not physical validation.
+Open **`results/my_baseline.html`** in your browser. The command evaluates the
+saved design without changing it. A fixed evaluation can finish successfully
+while reporting failed checks: inspect the report's feasibility status.
 
-## Change assumptions
+## Edit, evaluate, optimize
 
-For the proposed CF-tube / aluminum-plate / box-rocker frame, use
-`--structure plate-frame`. The reference model remains the default for comparisons.
-For example:
+There are **two maintained design JSON files**, both in the repository root:
 
-```powershell
-.\.venv\Scripts\python.exe main.py --structure plate-frame --baseline --output results/plate_frame/baseline.json
-.\.venv\Scripts\python.exe main.py --structure plate-frame --check-derivatives --output results/plate_frame/optimization.json
-```
-
-The fixed sheet thickness is 6.35 mm and CF tube ID is 25.4 mm. Profile inputs
-live in `PLATE_FRAME_DESIGN` and `PLATE_FRAME_ASSUMPTIONS` in `rover/config.py`;
-the reported design/assumption lists reflect the selected profile. Spoke width,
-CF wall/span, box rocker and axle sections, and centered axle height can vary.
-CF material properties and the plate topology are provisional. See
-[the frame equations, load scope and limitations](docs/PLATE_FRAME.md).
-
-Plate revision 2 has seven strips and three cutouts, with a lower boundary
-through the suspension hub. Hub/lower mounts may share a height. The legacy
-filled-chassis collision screen is inactive in this profile; actual frame and
-equipment clearance needs separate verification. Both profiles now use Froude
-as a diagnostic only, with constant capture/lift and unverified speed response.
-Torque, power, startup energy and drum-wheel clearance constraints remain.
-
-```powershell
-.\.venv\Scripts\python.exe main.py --baseline --set soil_density=1800 --output results/dense_soil.json
-.\.venv\Scripts\python.exe main.py --optimizer COBYLA --cobyla-radius 0.02 --maxiter 5000 --output results/cobyla.json
-```
-
-`rover/config.py` contains DESIGN `(initial, lower, upper, units)` and ASSUMPTIONS `(value, units)`. `--set` changes a design's starting value, not whether it is optimized. To freeze a design variable, move it into ASSUMPTIONS. Preserve the explicit competition/user dimension limits.
-
-## What version 2 models
-
-- Stationary excavation is limited by reachable fresh soil and drum storage; partial fill is allowed. Optimized scoop cut depth is distinct from trench depth.
-- A provisional traverse screen requires wheel diameter at least as large as trench depth.
-- Travel drums clear a wheel-diameter step while loaded-route stability screens excessive height; both are provisional.
-- Full, empty and one-pair-loaded CG/yaw inertia using actual drum positions.
-- Static tip margin with one drum pair full, the other empty, and both arms fully extended; other half-loaded poses require a software interlock.
-- Fully loaded travel-pose gravity support and suspension reach with each wheel
-  raised 0.40 m. The average-angle differential and centered pivots use an editable
-  `rocker_pivot_offset=0.10 m` estimate. The original 0.40 m wheelbase baseline is
-  now infeasible for this added requirement; a 0.46 m wheelbase baseline passes.
-  See [obstacle geometry and limitations](docs/OBSTACLE_TRAVERSAL.md). The 0.50 m
-  deep, circle-like ditch remains unverified until its width/radius is known.
-- Full-load travel-pose static support on a 30-degree planar slope across all
-  headings. An additional 41-height, one-wheel articulation screen checks both
-  the hull and ideal differential wheel reactions through the 40 cm raise.
-  Negative normals reject the prescribed four-contact pose. These checks do
-  not verify slipping or actual climbing; see
-  [TRAVERSAL_STABILITY.md](docs/TRAVERSAL_STABILITY.md).
-- Adjustable wheelbase and track width, both screened against the stowed envelope, structure, and mobility constraints.
-- Independent horizontal placement of the actuator and arm pivots.
-- Selectable actuator pin position along the arm: `actuator_attachment_fraction`
-  is measured from the chassis pivot; 1.0 retains the drum-tip connection and 0.5
-  connects halfway along the arm. Its domain is 0 < fraction <= 1; the drum stays
-  at full arm length. Use `--set actuator_attachment_fraction=0.8` to select a fixed
-  pin position; actuator lengths may need to change for closure. It is fixed in
-  ASSUMPTIONS by default to preserve the reference optimizer. To optimize the pin
-  position too, move it to DESIGN as `(1.0, 0.001, 1.0, None)`; SLSQP can fail with
-  that additional variable, so inspect final margins and use multiple starts.
-  JSON reports include the fraction and `actuator_attachment_distance` in metres,
-  and geometry drawings show the pin as D when it is inside the arm.
-- Separate dig/dump RPM, diagnostic Froude numbers, independent gearing, torque-speed screens and startup energy; no calibrated high-speed granular-loss model.
-- Tube-frame/arm mass and elementary stress, stiffness and buckling constraints.
-- Explicit cutting/lowering overlap and power, with fresh-site relocation and finite excavation area.
-
-The route remains 2/3/3/1 m with 90/45/45-degree turns in exactly 45 s each way. The separate 180-degree deposition turn carries one loaded pair. Electronics, actuator motion, excavation, dumping and fresh-site relocation are included in mission energy and time. Score uses berm volume, dry inspection mass and consumed Wh:
-
-```text
-mass_points   = 4.4*V_cm3/(t_min*dry_mass_kg)
-energy_points = 1.5*V_cm3/(t_min*consumed_energy_Wh)
-objective     = mass_score_weight*mass_points + energy_score_weight*energy_points
-```
-
-Whole-cycle estimates are reported alongside continuous throughput. Other competition points and detailed inspection remain outside this objective. Old result files were generated under different physics; regenerate them before drawing conclusions. Do not compare the old unlimited-soil optimum against a v2 result as if only the optimizer changed.
-
-## Files and ownership
-
-| File | Responsibility |
+| File | Purpose |
 | --- | --- |
-| rover/config.py | Design bounds, fixed assumptions, route/limits |
-| rover/models.py | ModelSet component factory injection |
-| rover/discipline.py / contracts.py | Explicit interfaces and checks for missing ports, sources and wrong units |
-| rover/linkage.py | Kinematics, swept clearance, actuator loads |
-| rover/wheels.py | Four-wheel reference mass; independent replacement slot |
-| rover/drums.py | Four-drum reference assembly mass; independent replacement slot |
-| rover/excavation.py | Reachable soil, storage, cutting, granular response, drum drive |
-| rover/structure.py | Tube mass and structural load screens |
-| rover/mass_properties.py | Three loading states, CG and yaw inertia |
-| rover/tip_stability.py | Static uneven-load tip screen at full arm extension |
-| rover/relocation.py | Fresh-site relocation |
-| rover/trench.py | Provisional trench traversal screen, replaceable by an SCM surrogate |
-| rover/mobility.py | Fixed-time route force, power and energy |
-| rover/components.py | Shared adapter, drive/battery/fixed mass accounting and mission |
-| rover/alternatives/ | Replaceable team models; obstacle stability and drum–wheel clearance selected by default |
-| rover/dependencies.py | Legacy component dependency declarations |
-| rover/calibration.py | Strict response-table validation; no extrapolation |
-| rover/problem.py | Assembly, signed constraints, optimizer |
-| reporting/report.py / html_report.py | Result schema, reporting, geometry/replay |
-| examples/ | Executable optional model and synthetic fixture |
-| tests/ | Independent physical limits, conservation, interfaces and regression |
+| `design_baseline.json` | Your chosen design and assumptions. Edit `inputs` and update its revision. |
+| `design_optimized.json` | A saved optimizer candidate, updated when publishing the report pair. |
 
-Use ModelSet to replace one discipline instead of modifying the mission to fit a simulator. Update dependencies, model cards, data provenance, meaningful tests and docs together. Keep simulator launch/training/file writes out of compute(). Report failed-domain evaluations rather than silently falling back. A single locally converged design is not a global optimum or an experimentally validated design.
+Inputs use the units in the report appendix: lengths in **metres**, mass in kg,
+force in N, speed in rpm, battery capacity in Wh, and angles in their stated
+units. The saved cases select the plate frame and standard X44 motors.
 
+```powershell
+# Evaluate an edit while keeping every input fixed
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/my_baseline.json
+
+# Optimize design variables, starting from that same baseline
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --optimize --output results/my_optimization.json
+
+# Try an assumption without editing the saved baseline
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --set fill_fraction=0.6 --output results/fill_check.json
+```
+
+Optimization varies the selected profile's **design variables** within their
+bounds; **assumptions** remain fixed. `--set` changes an input or starting value,
+not whether it is optimized. These runs leave both maintained design files unchanged.
+The report-publishing command deliberately updates only the candidate JSON.
+
+With `--inputs`, evaluation is the default and optimization requires `--optimize`.
+Without `--inputs`, `--baseline` evaluates the generic reference defaults, while
+plain `main.py` optimizes those defaults. That reference cold start is known to
+fail; use the saved baseline for the current rover. See `main.py --help` for all
+options and [verification](docs/VERIFICATION.md) for known failures.
+
+Positive constraint margins generally mean a check passes; negative margins
+identify failures. An optimizer candidate is accepted only when the solver
+succeeds **and** all final modeled checks pass. Scores are mass and energy
+productivity points, with continuous and complete-cycle estimates labeled
+separately. A high score alone is insufficient.
+
+## Reports and PDF export
+
+For a quick PDF, open your generated HTML, press **Ctrl+P**, and choose
+**Save as PDF → Letter → Portrait**, with background graphics enabled.
+Printing includes every check and all rover poses, even if the screen is filtered.
+
+To refresh both reports in the repository and the saved candidate, follow
+[the report guide](docs/DESIGN_REPORT.md). Re-export the PDFs after refreshing
+the HTML. Drive upload is a separate manual step.
+
+## Traversal-time and fill study
+
+The study independently optimizes 96 combinations: one-way traversal times
+15–180 s in 15 s steps, crossed with fill ceilings 0.2–0.9 in 0.1 steps.
+
+```powershell
+.\.venv\Scripts\python.exe -m studies.traversal_fill --workers 6
+```
+
+Open **`results/sensitivity/traversal_fill/index.html`**. Click a heat-map cell
+for its top/side geometry, dimensions, solver outcomes, and detailed report.
+The study takes longer than a single optimization; reduce `--workers` on a
+smaller computer. Repeating the command resumes matching completed cells.
+
+The completed study found 88 converged feasible cells; the 15 s row is beyond
+the current drive profile's speed capability. Fill fraction affects component
+sizing as well as score; similar drawings do not establish hardware robustness.
+See [method, findings, and limitations](docs/SENSITIVITY_STUDY.md).
+
+## For contributors and advanced users
+
+| Need | Read or edit |
+| --- | --- |
+| Equations, route, score, units | [MODEL.md](MODEL.md) |
+| What each model can predict and what evidence is missing | [Model cards](docs/MODEL_CARDS.md) |
+| Add a model, understand interfaces, solver settings, or submit a PR | [Development guide](docs/MODEL_DEVELOPMENT.md) |
+| Plate-frame geometry and structural load scope | [Plate frame](docs/PLATE_FRAME.md) |
+| X44 curve, gearing, energy accounting, replacement API | [Motors](docs/X44_MOTORS.md) |
+| Obstacle, slope, wheel unloading, clearance, and unverified ditch | [Traversal](docs/OBSTACLE_TRAVERSAL.md) |
+| Plan physical tests or offline simulation | [Experiments](docs/EXPERIMENTS.md) |
+| Latest checks and reproducible commands | [Verification](docs/VERIFICATION.md) |
+
+`rover/config.py` defines defaults and bounds; `rover/problem.py` assembles the
+model. `rover/models.py` selects replaceable disciplines. Keep optional models
+under `rover/alternatives/`; `reporting/` handles reports and `studies/` handles
+sweeps. Coding agents must follow [AGENTS.md](AGENTS.md).
+
+Run the checks before submitting changes:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+The development guide includes baseline and derivative checks and the Git
+workflow. GitHub Actions runs the repository's checks on Windows and Linux.
+Keep `.venv`, temporary results, raw simulator runs, and credentials out of Git.
+`results/` is ignored: a fresh clone must regenerate study outputs. The two
+curated reports and PDFs above are versioned; hundreds of individual study
+reports are kept locally or shared separately as a complete folder.

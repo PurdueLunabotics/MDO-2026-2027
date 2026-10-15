@@ -54,8 +54,8 @@ preparation may differ.
   drum Froude numbers about 1.45–1.89; deposition averages imply about
   1.06–2.58. The reference model's provisional `max_dig_froude=0.30` and
   `max_dump_froude=0.20` correspond to about 41 and 33 rpm at this diameter.
-  UVA therefore operated outside the **reference model's assumed validity
-  range**, which is not a universal physical cutoff. The available observations
+  These historical reference levels are now diagnostics only; neither is an
+  enforced RPM cap or a validated operating-domain boundary. The observations
   do not give a speed-dependent retained-mass or torque curve for our drum.
 - UVA's estimated 0.034 m protrusion exceeds the current design bound of
   0.025 m. The reference scoop-opening assumption also limits its admissible

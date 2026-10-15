@@ -1,4 +1,4 @@
-# Standard X44 motor profile — physics revision 2, simplified interface revision 3
+# Motor models, X44 hardware, and replacement API
 
 Select `--motors x44-standard` alongside `--structure plate-frame`, or
 `build_problem(structure="plate-frame", motors="x44-standard")`.
@@ -78,7 +78,7 @@ The same Excavation, Mobility, SiteRelocation, DrumMass and GeometryMass classes
 are used for both motor profiles. Motor-provider and assembly-inventory options
 preserve required scalar output names, native units, mass boundaries and
 positive-margin conventions. No X44-specific discipline copies remain.
-See [MOTOR_INTERFACE.md](MOTOR_INTERFACE.md) for the file map and Python API.
+See [the shared helper and replacement API](#shared-helper-and-replacement-api) below.
 The hardware profile removes both motor-power design variables and freezes
 drive ratio. Legacy generic power/rated-rpm/mass coefficients remain
 in config/reports as inactive legacy fields; they are not consumer input ports
@@ -89,7 +89,7 @@ Drive mass is **four** actual motor/gear inventories; GeometryMass adds them
 once. Drum shell physics remains uncalibrated. No fitting changes wheel mass.
 
 Drive work sums resistance times distance and startup kinetic energy for
-each existing segment of the fixed 45 s route, deposition turn and relocation.
+each segment of the prescribed route (45 s one way by default), deposition turn and relocation.
 Turning uses equivalent mass Izz/(track/2)^2. No regenerative braking is credited.
 Wheel/rotor inertia and braking hardware are not verified. Electrical energy
 is mechanical work / combined efficiency; peaks use the same conversion.
@@ -121,3 +121,69 @@ experiment. Manufacturer curve reproduction and optimizer success do not
 validate constant-efficiency energy estimates, thermal operation, gearbox
 efficiency, soil or actual rover loads.
 Current limits and a loaded test duty cycle are the next required hardware data.
+
+## Shared helper and replacement API
+
+Physics revision 2 / interface revision 3 uses scalar mechanical work and peak
+power, with no electrical time history or RMS-current prediction.
+
+| File | What to change here |
+| --- | --- |
+| `rover/alternatives/x44_motor.py` | Standard X44 torque-speed curve and optional current cap |
+| `rover/motors.py` | Shared gear conversion and work / efficiency accounting |
+| `rover/excavation.py` | Soil loads, drum torque, startup work and excavation time |
+| `rover/mobility.py` | Route, resistance, acceleration, turning and traction |
+| `rover/relocation.py` | Movement to fresh ground |
+| `rover/motor_inventory.py` | Motor and gearbox assembly mass |
+| `rover/config.py` | Ratios, provisional efficiencies, current limits and catalog masses |
+
+### Example
+
+
+```python
+from rover.alternatives.x44_motor import CURVE
+from rover.motors import Gearmotor
+
+drive = Gearmotor(CURVE, ratio=100, efficiency=0.80,
+                  electrical_efficiency=0.72)
+available = drive.available_torque(rpm=50)  # output-shaft N*m
+result = drive.evaluate(work=72, peak=36)   # output-shaft J and W, ONE motor
+print(result)  # {"energy": 100.0, "peak": 50.0}, electrical J and W
+```
+
+The two efficiencies have different jobs:
+
+- `efficiency` is mechanical gearbox efficiency, used for available torque.
+- `electrical_efficiency` includes motor AND gearbox losses, used for energy
+  and peak electrical power. It is applied once.
+
+In config, `drive_efficiency=0.72` and `drum_efficiency=0.70` are provisional
+combined efficiencies, active in both motor profiles. They are not measured X44
+efficiencies. No current, temperature or continuous rating is predicted.
+
+The discipline accounts for motor count and adds auxiliary loads separately:
+four wheel motors, two digging motors, one dumping pair/motor at a time.
+Work includes resistance work and startup kinetic energy, with no regeneration.
+
+### Selecting or replacing a motor
+
+The CLI remains `--motors x44-standard`. Existing Excavation, Mobility and
+SiteRelocation components receive a `motor_model` option. DrumMass and
+GeometryMass receive an `assembly_mass_model` option. ModelSet still selects
+the discipline classes, including a student's custom excavation model.
+
+A provider implements `input_names(role)` and
+`create(get, role, rated_torque_limit=...)`. It returns a Gearmotor.
+The motor curve only needs `free_rpm`, `available_torque(rpm)`,
+`peak_power()` and `speed_limit(torque)`. Pure helpers do no file or network IO.
+
+For a new curve, change its module/provider; do not copy excavation or mobility.
+For changed soil or route loads, change that discipline; do not edit the curve.
+Subclasses overriding `initialize()` must call `super().initialize()`.
+
+
+The old ShaftDuty/ShaftPhase, IntegratedMotor, and drive_motion APIs are retired.
+`Gearmotor.evaluate(work, peak)` takes two scalars. Required OpenMDAO ports,
+units, mass boundaries, and margin signs are retained. Generic reference results
+are preserved; the revised X44 electrical estimates intentionally differ from
+older history. Compare old mechanical fixtures only as documented by their tests.

@@ -1,89 +1,76 @@
-# Design inputs, reports and PDF export
+# Design inputs, reports, and PDF export
 
-There are two design JSON files in the repository root:
+Edit **`design_baseline.json`** in the repository root. It contains your chosen
+design and assumptions under `inputs`; update `revision` when values change.
+**`design_optimized.json`** is a separate saved optimizer candidate. Intermediate
+analysis files in ignored `results/` are generated data, not extra baselines.
 
-| File | Purpose |
-| --- | --- |
-| `design_baseline.json` | Your chosen design. Edit the values under `inputs`. |
-| `design_optimized.json` | The optimizer's candidate. Regenerated when publishing reports. |
+| Saved design | HTML | PDF |
+| --- | --- | --- |
+| Baseline | [Browser report](design_reports/baseline.html) | [PDF](../output/pdf/baseline.pdf) |
+| Candidate | [Browser report](design_reports/optimized.html) | [PDF](../output/pdf/optimized.pdf) |
 
-There are no separate input copies or analysis JSONs in `docs/design_reports/`.
-The calculated outputs, checks, units and provenance are stored inside each
-self-contained HTML report. Temporary run data under ignored `results/` is
-generated automatically; it is not another baseline to maintain.
+Download/clone the files before opening HTML in a browser. GitHub displays its
+source rather than the interactive report. Every HTML embeds its full numeric
+run and provenance; the curated folder needs no duplicate analysis JSON.
 
-## Report order
+## Evaluate and refresh
 
-The first page shows mass, payload, deliveries and the saved construction, mass
-and energy points. These score cards use the continuous mission estimate and
-the model's configured score weights; the complete-cycle score remains clearly
-labeled in Performance & mass.
-
-Rover views follow the overview, then Performance & mass, Requirements & model
-checks, loads, model notes and (for the candidate) the optimization comparison.
-The final engineering appendix contains, in order:
-
-1. All effective inputs & model assumptions.
-2. Design variables and bounds.
-3. All output ports.
-
-The earlier grouped "What was evaluated" section is removed. All native-unit
-input and output values remain available in the appendix and embedded record.
-
-## Update both reports
-
-From the repository root, run:
+Run these commands from the repository root, in order:
 
 ```powershell
+# Fixed evaluation: preserves all supplied values
 .\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/report_pair/baseline.json
+
+# Separate optimization, starting from the same baseline
 .\.venv\Scripts\python.exe main.py --inputs design_baseline.json --optimize --check-derivatives --design-name "Optimized design candidate" --output results/report_pair/optimized.json
+
+# Publish the pair and update design_optimized.json
 .\.venv\Scripts\python.exe -m reporting.archive results/report_pair/baseline.json results/report_pair/optimized.json
 ```
 
-The first command evaluates your baseline with its values fixed. The second
-optimizes from that baseline. The third updates `design_optimized.json` and
-both reports in `docs/design_reports/`. It never changes `design_baseline.json`.
-It rejects stale reports if the source baseline has changed since evaluation.
-No extra input JSONs or report manifest are generated.
+For a preview, stop after the first command and open
+`results/report_pair/baseline.html`. The second command changes design variables
+within their bounds while keeping assumptions fixed. Neither run edits the
+baseline. The third command updates both curated HTML reports/SVGs and the root
+candidate JSON; it rejects stale sources or unrelated report pairs. It does
+**not** export PDFs. Editing HTML does not change physics or model inputs.
 
-A failed optimization still writes its result and returns a nonzero exit code.
-It can be published with the failure visible. Passing checks or convergence
-does not establish hardware validation. Physics and constraints are unchanged.
+An optimization failure returns a nonzero exit code and still saves its final
+result when evaluation completes. Inspect that result before publishing; the
+archive retains its failed status. A fixed evaluation may report failures while
+returning 0 because the evaluation itself completed.
 
-To update only a working baseline preview, run the first command and open
-`results/report_pair/baseline.html`. Editing HTML does not change model inputs.
+## Export and share a PDF
 
-## Make the PDFs yourself
+1. Open the refreshed HTML in Chrome or Edge.
+2. Press **Ctrl+P**, or select **Print / save PDF** in the report.
+3. Choose **Save as PDF**, **Letter**, **Portrait**, with background graphics on.
+4. Check the preview and save to `output/pdf/baseline.pdf` or `optimized.pdf`.
+5. Upload the PDF to the club Drive folder. Use a new version of an existing
+   Drive file if you want to preserve its sharing link.
 
-1. Open `docs/design_reports/baseline.html` or `optimized.html` in Chrome or Edge.
-2. Press **Ctrl+P**, or click **Print / save PDF** near the bottom of the report.
-3. Choose **Save as PDF**, **Letter**, **Portrait**, and enable background graphics.
-4. Check the preview and save over the corresponding file in `output/pdf/`.
-5. Upload that PDF to the club Drive folder. Replace its existing Drive version
-   if you want to preserve its sharing link.
+Printing includes all checks regardless of screen filters, all three side poses,
+top view, and input/output appendices. It restores the screen's expanded state
+afterward. Upload, commit, and push are manual; regenerate and re-export after
+changing inputs. To share the interactive curated reports, keep their companion
+SVGs and relative file links together or share the repository.
 
-Printing includes all checks regardless of screen filters, all effective inputs
-and output ports, the top-down travel projection, all three side poses, and the
-frame/stability figures. Table headers repeat across pages. Print closes with
-the reader's expanded/collapsed state restored. Full provenance remains in the
-interactive HTML; bulky provenance JSON and playback controls are omitted from
-print. No upload, commit or push happens automatically.
+## Read the report correctly
 
-## Input and result conventions
+Page one shows the design overview and continuous construction, mass, and energy
+points. Rover views follow, then performance/mass, requirements/checks, loads,
+model notes, and any optimization comparison. The final appendix lists effective
+inputs/assumptions, design variables/bounds, and all output ports, in that order.
+Complete-cycle results are labeled separately from continuous estimates.
 
-- Inputs use native model units: metres, kilograms, newtons, rpm, Wh, etc.
-  Display conversions to mm, MPa, degrees or litres do not change saved values.
-- Priority is model defaults, then input JSON, then explicit CLI `--set` values.
-  Missing inputs use identified defaults. Source inputs are never overwritten.
-- With `--inputs`, fixed evaluation is the default; `--optimize` must be explicit.
-- Failed checks remain failed. Unassessed capabilities remain labeled unassessed.
-- Dry mass counts four bare wheels and four drums plus two drum drive assemblies
-  once. Complete-cycle energy includes idle electronics for remaining mission time;
-  continuous mission energy and score are labeled separately.
-- Soil, material and efficiency assumptions remain uncalibrated. Actual obstacle
-  traversal, motor continuous operation, connections and soil response still
-  require independent validation. Top-view overlap is not a collision test.
+Input precedence is **model defaults → input JSON → CLI `--set`**. Native units
+are retained in JSON and appendix tables; display conversions to mm, MPa, degrees,
+or litres do not change saved inputs. With `--inputs`, fixed evaluation is the
+default; optimization needs `--optimize`.
 
-The HTML contains the exact numeric run record in the `analysis-data` JSON
-script element for reproducibility. Intermediate N2 and optimizer recordings
-stay in `results/`. Reporting code is in `reporting/`, outside the physics model.
+Failed checks stay failed and unassessed capabilities stay unassessed. A top
+projection is not a collision check. Calibration and physical validation remain
+open; see [model cards](MODEL_CARDS.md) and [current verification](VERIFICATION.md).
+For advanced extraction, the exact run record is in the HTML's `analysis-data`
+JSON element. Working N2 diagrams and optimizer histories remain in `results/`.
