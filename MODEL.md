@@ -27,9 +27,6 @@ undecided (zero explicitly disables the current cap, not the voltage screen).
 Full equations, source manifest, domains and missing validation are in
 [X44_MOTORS.md](docs/X44_MOTORS.md). Slope climbing is still unverified.
 
-The student expanded the exploratory wheelbase upper bound from 0.50 to 0.65 m;
-the 1.50 m stowed-length requirement remains enforced.
-
 StructureGeometry -> LinkageGeometry, with WheelMass and DrumMass calculated independently -> GeometryMass -> Excavation. GeometryMass now sums the wheel/drum outputs with drive, battery, structure and linkage masses; its reference result is numerically unchanged. Excavation feeds LinkageLoads, MassProperties, TrenchTraversal and TipStability. StructureLoads follows linkage loads; SiteRelocation and Mobility follow mass properties; Mission combines their time, energy and constraints. Explicit tube dimensions, actuator/motor sizes and battery capacity avoid hidden mass-sizing loops. Automatic structural resizing would require a coupled solve.
 
 ModelSet factories replace individual components. New disciplines keep CONFIG_INPUTS, COUPLED_INPUTS, OUTPUT_UNITS and DEPENDENCIES beside the equations; older ones use dependencies.py. Named scalar ports use SI, except explicit rpm and W*h. Dependency declarations include both sides of every branch. Global axes are x forward, y left, z up; legacy linkage side-elevation y means global z.
@@ -193,6 +190,10 @@ three-wheel poses. See [traversal equations](docs/OBSTACLE_TRAVERSAL.md#slope-an
 Cycle sums dig, dump, 2*traversal_time_one_way travel, deposition turn, nominal actuator strokes, relocation and alignment, minus lowering/cutting overlap. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
 
 Central whole-model FD supports deterministic replacement components. Tests audit omitted dependencies, geometry/conservation limits, mass properties, drive limits, invalid domains and complete optimization. Nonsmooth branches still exist; SLSQP is local and COBYLA is available. Failed final iterates remain labeled failed; numerical consistency/convergence is not empirical validation. Reports identify component factories. Old outputs must be rerun before comparison. Manual inspection still covers 3D packaging, E-stop, radio, materials, autonomy, dust, berm placement and legal zones.
+
+
+## TrainingTubeLoads, revision 1
+This outputs structure_stress, structure_stress_margin, structure_deflection, structure_deflection_margin, and buckling_margin. It has compression loads as negative, and does not model joints, fatigue, local buckling (only global), or assembeled load sharing. This model is useful for preliminary sizing, it is not for verification of the component. It assumes the member under these load is a hollow, isotropic tube. The selected material has a stress of 240MPa, something not frozen and subject to change.
 
 ## Evidence and interpretation
 
