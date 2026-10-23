@@ -20,7 +20,7 @@ needs a card with provenance, domain, held-out validation error and reproduction
 | TrenchTraversal | Wheel diameter >= stationary trench depth | Slip, sinkage, edge collapse and vehicle dynamics | SCM/Chrono runs and held-out physical exit tests |
 | TipStability | Level-ground center of gravity within wheel-center rectangle for one full pair and one empty pair, both fully extended | Other half-loaded arm poses need a software interlock; soil motion, dumping reaction, slopes, individual wheel lift/contact and compliance omitted | Asymmetric-load balance tests; validated multibody and terrain simulations |
 | ObstacleStability | Fully loaded travel pose, each wheel raised 0.40 m; centered rockers with average-angle differential; geometric reach and projected gravity support | Estimated +0.10 m pivot offset; point contacts, no joint stops/load equilibrium, climb path, traction, collisions, soil or dynamics; 0.50 m ditch unverified | CAD geometry/CG and loaded articulation/balance tests; full crossing trials |
-| ObstacleClearance (revision 1) | Lower bound on drum–wheel surface gap from spheres enclosing rigid cylindrical envelopes; all 16 pairs in each of four prescribed single-wheel-raised travel poses; subtracts mechanism_clearance | Conservative over-rejection is possible; negative bounds do not prove cylinder collision. No intermediate crossing path, deflection, terrain, hubs/shafts/arms/frame interference; invalid poses have flagged guarded diagnostics and failing margins | Analytic software tests with synthetic geometry; no fitted data or hardware validation. Check CAD envelopes and measured loaded articulation, then use detailed cylinder/CAD geometry if the bounds over-reject |
+| ParallelCylinderClearance (default revision 2) | Exact signed gap of parallel finite wheel/drum cylinders; circular-plane and axial-width separation, all 64 pairs in four raised-wheel endpoint poses; subtracts mechanism_clearance | Rigid parallel axes required. No independent camber/steering, intermediate crossing path, deflection, terrain or other hardware; unreachable poses have guarded diagnostics and failing margins | Independent radial/axial/corner and overlap limits, shared-rotation invariance, mirrored pairs, invalid-domain, dependency and derivative tests; no hardware calibration |
 | Mission | Repeated full cycles, explicit overlap and fresh lanes | Detailed site layout, partial delivery, battery voltage/thermal history | Timed full mission and electrical logs |
 | Standard X44 motor profile (optional, physics revision 2 / interface revision 3) | Fixed six standard X44s at 12 V; fixed 100:1 drive ratio; exploratory drum ratio; original disciplines supply mechanical work/peak to shared Gearmotor; catalog assembly mass | Combined drive/drum efficiencies 0.72/0.70 are provisional; current/thermal ratings undecided; gearbox behavior, adapters and drum stage budget unvalidated; climbing unverified | Versioned official curve/manifest, interior reproduction, independent work/kinetic-energy and one-time loss tests, mechanical-invariant regression and replacement composition; no independent hardware validation. See X44_MOTORS.md |
 | TraversalStability (revision 1) | Full-load travel: planar 30-degree gravity support, every heading; four separate one-wheel lifts sampled from 0 to 40 cm; global hull and ideal differential reactions | Assumes slope friction/holding torque; finite grid, horizontal rock platforms and ideal differential. No approach profile, combined slope/rock, wheel-pair cases, post-lift contacts, joint limits, traction/climbing, impacts or validation | Independent slope, force/moment, negative-load, mirrored/dense grid and mass tests; measured CG and loaded tilt/articulation tests needed. See OBSTACLE_TRAVERSAL.md |
@@ -89,6 +89,35 @@ and an average-angle differential; +0.10 m pivot offset is an editable estimate.
 Geometry/mass/support tests are analytical, without calibration data. A positive
 obstacle screen is not experimental validation or proof of climbing capability.
 The circular-like ditch still lacks a width/radius and is explicitly unverified.
+
+## ParallelCylinderClearance (default revision 2)
+
+- File: `rover/alternatives/parallel_cylinder_clearance.py`; selected through
+  `ModelSet.obstacle_clearance` by default for all frame/motor profiles.
+  The former clearance implementation is removed at the user's request.
+- Purpose: signed Euclidean separation of four ideal drum and four wheel
+  cylinders at each of four prescribed single-wheel-raised travel endpoints.
+- Inputs/units: same configuration and coupled travel-center inputs as
+  the prior clearance contract; all lengths in metres. Outputs preserve the four existing
+  names/native units, positive feasible margin, required mechanism clearance,
+  and guarded invalid-pose rejection. The legacy gap_bound equals the exact
+  ideal-cylinder signed gap.
+- Domain: rigid finite right circular cylinders with parallel transverse axes
+  and common roll. Shared roll cancels from relative distance; the original
+  pose solver still resolves coupled roll and rocker pitch. Axial intervals
+  must be checked alongside the 2-D circle section.
+- Evidence: analytic geometry, no fitted data or calibration dataset. Independent
+  radial/axial/corner distances, overlap/translation limits, rotation/translation
+  invariance, finite-width separation, all-pair/mirror checks,
+  invalid domains, guarded poses, scalar connections, smooth derivatives,
+  default selection across all profiles and report tests.
+- Limitations: independent camber/steering, noncylindrical features outside the
+  declared envelopes, flexible hardware, other components and intermediate
+  crossing poses are excluded. No measured collision/clearance error or hardware
+  validation is available. The point-contact model omits camber contact correction.
+- Reproduction: `python -m examples.parallel_cylinder_clearance`; source hashes
+  and factory metadata are saved in each report/JSON. The command evaluates the
+  selected input design with the default model. See OBSTACLE_TRAVERSAL.md.
 
 ## Replacement card template
 

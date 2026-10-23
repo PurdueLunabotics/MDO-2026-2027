@@ -89,6 +89,47 @@ its payload stayed reach-limited at 53.66 kg. This supports modeled feasibility
 robustness, not equal performance or physical validation. See
 [the study guide](SENSITIVITY_STUDY.md) for findings and reproduction.
 
+## Default parallel-cylinder clearance: 2026-10-23
+
+The user requested parallel finite cylinders as the default for every frame
+and motor profile and removal of the former clearance implementation. The
+component now derives directly from Discipline, owns its complete dependencies,
+and is selected by ModelSet without an override. The removed implementation,
+imports and comparison/selection paths are absent from current source.
+
+All 127 current unit tests passed. Retired-algorithm tests were replaced with
+independent radial/axial/corner and overlap limits, finite-width separation,
+common roll/translation/pitch invariance, all pairs/mirrors, invalid/guarded
+poses, scalar connections, smooth derivatives, default selection for all four
+frame/motor combinations, and report checks. The motor-interface fixture was
+versioned to revision 2: only its three changed clearance margins were updated,
+with explicit provenance and source hashes. Its other expected values and all
+regression tolerances were retained.
+
+At unchanged design_optimized.json inputs, the cylinder gap is
+0.10288576678 m and the margin after the 0.015 m mechanism clearance is
+0.08788576678 m. The level-pose gap is 0.21101059004 m; the 0.40 m raised-wheel
+endpoint reduces it through relative articulation, despite shared-roll
+invariance. Mass, payload, mission energy and construction points at identical
+geometry are unchanged by this clearance-only replacement.
+
+Required verification ran the reference baseline and derivative-checked
+generic cold-start optimization with cylinders selected by default. Derivatives
+passed; the generic cold start remains unsuccessful/infeasible, with failed
+structural stress/deflection and rock-path wheel reaction at the saved final
+iterate. This failure remains labeled failed. A plate-frame/X44 optimization
+from design_optimized.json passed derivative checks, converged and passed all
+modeled constraints. Reports and N2 diagrams are in ignored
+results/default_cylinder_*.json/.html and the reproducible example writes
+results/default_cylinder_example/cylinders.html when selected as its output.
+Numerical mass and energy accounting and explicit sources were inspected.
+
+This is ideal rigid-cylinder geometry, without fitted data or hardware
+calibration. Independent camber/steering, deformation, other hardware,
+contact corrections and the actual climbing path remain outside its scope.
+Saved historical reports/PDFs retain their original provenance; rerun them
+before using them to assess the new default.
+
 ## CI and remaining uncertainty
 
 [GitHub Actions](../.github/workflows/ci.yml) runs on Windows and Linux with

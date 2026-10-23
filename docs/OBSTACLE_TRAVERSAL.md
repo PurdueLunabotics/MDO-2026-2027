@@ -2,7 +2,7 @@
 
 The user requires traversal of a 0.40 m obstacle and a 0.50 m deep ditch while
 fully loaded in the travel pose. The optimizer now enforces geometric reach,
-gravity-support and conservative drum–wheel clearance screens for the obstacle. These do not establish climbing
+gravity-support and parallel-cylinder drum–wheel clearance screens for the obstacle. These do not establish climbing
 capability. Ditch traversal remains unverified. The existing `trench_traverse_margin` concerns the stationary
 excavation trench, and `wheel_first_margin` is a wheel-diameter drum-clearance
 placeholder. Neither port is repurposed by this work.
@@ -121,52 +121,73 @@ Passing this static screen still leaves internal joint/load equilibrium,
 climbing torque, traction, contact loss, other hardware interference and terrain failure
 unverified. A rock's height alone also does not specify its approach shape.
 
-## Conservative drum–wheel clearance (revision 1)
+## Parallel-cylinder clearance (default revision 2)
 
-`ModelSet.obstacle_clearance` selects `ObstacleClearance` from
-`rover/alternatives/obstacle_clearance.py`, active by default. All existing model
-factories, design bounds, masses, route and score equations retain their meanings.
-This additive integration introduces four scalar outputs and one enforced margin;
-reports retain schema version 2 and include the new fields and model evidence.
+The current mechanism shares one roll rotation between the chassis-mounted
+drums and both wheel/rocker assemblies. Wheel and drum axes remain parallel:
+rocker/chassis pitch rotates about their transverse axes and does not change
+the direction of those axes. Removing the shared roll leaves wheel centers at
+`y=±track/2` and drums at `y=±(drum_length+drum_pair_gap)/2`.
 
-The linkage supplies `travel_x` and `travel_y` (its legacy vertical coordinate).
-Level-ground drum centers are `(±travel_x, ±(drum_length+drum_pair_gap)/2, travel_y)`.
-Subtract the original shaft height `wheel_diameter/2+rocker_pivot_offset`, apply
-pitch then roll, and add the posed shaft origin. The same posed wheel centers
-used in the suspension geometry are used for clearance.
+For any common rigid rotation R and translation t,
+`|(R*d+t)-(R*w+t)|=|d-w|`. Common roll therefore cancels from relative clearance. The contact-pose solver must still solve roll and rocker pitch together.
+Changing track or requested rock height changes that articulation and can change
+clearance even though a common rotation at a fixed articulated configuration cannot.
 
-Each cylinder is enclosed by a sphere of radius `sqrt(R^2+(length/2)^2)`.
-For wheels, axial length is wheel_width; for drums it is drum_length and R is the
-outer cutting radius. The gap lower bound is the minimum center distance minus
-the two sphere radii, across 16 pairs in each of four raised-wheel cases (64 pairs).
-It is a sufficient conservative screen, not an exact cylinder-intersection test.
-Positive bounds guarantee separation of the modeled envelopes. Negative bounds
-are inconclusive about actual cylinder collision and are conservatively rejected.
-
-At reachable poses:
+`rover/alternatives/parallel_cylinder_clearance.py` provides the default
+`ParallelCylinderClearance` ModelSet factory for every frame/motor profile. In the common unrolled frame:
 
 ```text
-obstacle_drum_wheel_margin = obstacle_drum_wheel_gap_bound - mechanism_clearance
+radial_gap = hypot(delta_x, delta_z) - drum_radius - wheel_radius
+axial_gap = abs(delta_y) - (drum_length + wheel_width)/2
+signed_gap = hypot(max(radial_gap,0), max(axial_gap,0))
+             + min(max(radial_gap,axial_gap),0)
 ```
 
-The existing mechanism_clearance is used without a new hardware assumption
-(default 0.015 m). The margin uses the existing 0.4 m constraint scale and
-0.0004 m optimizer inward reserve. No earlier constraint is relaxed.
+Positive signed_gap is exact Euclidean surface separation for the ideal finite
+parallel cylinders. Negative is minus the smallest relative translation needed
+to separate overlapping solids. Overlapping side-view circles are insufficient
+to establish collision when the axial intervals do not overlap. Evaluate all
+16 pairs in each of the four endpoint poses. The existing 15 mm mechanism
+clearance is subtracted once, with the same numerical reserve and unreachable
+pose rejection as the reference. The legacy `obstacle_drum_wheel_gap_bound`
+port is retained; its lower bound is now equal to the exact ideal-cylinder gap.
+No other port, constraint, mass, energy or score convention changes.
 
-The strict pure helper rejects unreachable poses. The adapter instead explicitly
-evaluates the existing guarded height, sets `obstacle_clearance_pose_valid=0`,
-reports `obstacle_clearance_evaluated_height`, and limits its margin to at most
-`requested_reach_margin-0.0001 m`. This offset is a numerical invalid-domain
-failure marker, not a calibrated clearance or obstacle-height requirement. It
-also prevents a guarded boundary pose from appearing feasible within reporting
-tolerance. Guarded gap bounds are not predictions at the requested height.
+No selection flag or replacement factory is needed:
 
-This checks the prescribed static endpoints only. No intermediate crossing path,
-wheel/frame deformation, terrain contact, or hub/shaft/arm/frame interference is
-modeled. The reference dimensions and travel linkage must be replaced or checked
-against CAD and actual fully loaded articulation before hardware conclusions.
-Tests use analytic limits and explicitly synthetic geometry; there is no fitted
-relationship or experimental calibration dataset.
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_optimized.json --output results/cylinder_evaluation.json
+```
+
+`python -m examples.parallel_cylinder_clearance` also evaluates the default
+model and writes `results/parallel_cylinder_clearance/cylinders.html`, JSON,
+SVGs and an N2 diagram. Neither evaluation edits the saved design inputs.
+The former enclosing-envelope implementation and its selection path are removed.
+
+Unreachable requests set `obstacle_clearance_pose_valid=0`, report the guarded
+`obstacle_clearance_evaluated_height`, and limit the margin to at most
+`requested_reach_margin - 0.0001 m`. This is a numerical invalid-domain marker,
+not a physical allowance. Guarded gap values are not predictions at the
+requested height and cannot make a failed pose feasible.
+
+This analytical model has no fitted data or calibration. It assumes
+parallel right circular envelopes, rigid shared roll and travel-position arms.
+Independent wheel camber/steering, grousers outside the specified envelope,
+deflection, other hardware and intermediate crossing poses are outside its
+domain. A future suspension with independently tilted wheel axes needs a
+general 3-D cylinder/CAD check. Tests cover independently calculated radial,
+axial and corner distances, penetration, common-rotation invariance, mirrored
+cases, invalid domains, guarded poses, native connections and smooth derivatives.
+
+New reports include one front-left wheel-on-rock image using the same pose
+helper, alongside a roll-free circular section and axial gap. The support
+block's width/shape are illustrative; only the raised contact height is modeled.
+The contact model still omits wheel-camber contact corrections. Unreachable
+examples are explicitly marked as guarded. The check table records the default
+model; this drawing shows the closest pair in its front-left example pose,
+while the enforced check still covers all four raised-wheel cases.
+
 
 ## Ditch research and missing terrain definition
 

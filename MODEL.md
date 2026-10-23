@@ -166,16 +166,20 @@ loads/stops, collision, traction or dynamics. The 0.50 m deep, circle-like ditch
 remains unverified because width/radius is unknown. Existing wheel-diameter
 screens are not repurposed to claim compliance with that requirement.
 
-`ModelSet.obstacle_clearance` additionally enforces a conservative drum–wheel
-gap bound at those four travel poses. Spheres enclose each rigid wheel/drum
-cylinder with radius `sqrt(R^2+(axial_length/2)^2)`. Transform the four drum centers
-with chassis pitch then roll about the suspension shaft and compare all 64 pairs.
-The margin is minimum sphere gap minus mechanism_clearance (default 0.015 m).
-Positive bounds prove envelope separation; negative bounds are inconclusive
-about cylinder collision and are conservatively rejected. Unreachable poses
-have flagged guarded diagnostics and a failing margin. Other hardware and the
-actual crossing trajectory remain unverified. See OBSTACLE_TRAVERSAL.md for the
-port contract, domain guard and geometric limitations.
+`ModelSet.obstacle_clearance` defaults to `ParallelCylinderClearance` for every
+frame and motor profile. It checks the signed separation of the ideal finite
+wheel/drum cylinders across all 64 pairs in four raised-wheel endpoint poses.
+Common roll cancels from relative clearance; rocker pitch relative to chassis
+pitch still matters. Combine the circular x/z separation with finite axial
+y-interval separation in the common unrolled frame. The pose solver retains
+roll to satisfy prescribed contact heights. The margin is the minimum signed
+cylinder gap minus mechanism_clearance (default 0.015 m). Negative gaps indicate
+overlap of the ideal solids. Unreachable poses retain flagged guarded geometry
+and failing margins. The previous enclosing-envelope implementation is removed.
+Port names, units, margin sign and numerical reserves are unchanged; the legacy
+`obstacle_drum_wheel_gap_bound` now equals the ideal-cylinder signed gap.
+Independent camber/steering, deflection, other hardware and the actual crossing
+trajectory remain unverified. See [equations and domain](docs/OBSTACLE_TRAVERSAL.md#parallel-cylinder-clearance-default-revision-2).
 
 Empty relocation translates to a neighboring fresh lane with two 90-degree turns; rest-to-rest time, kinetic/scrub/rolling energy, torque and level-ground traction are charged. Lane offset must exceed total drum width. Each cycle reserves the rectangle enclosing both drum stations, including the center gap; cumulative area must fit available_excavation_area. A real site planner must still check maneuver space and legal-zone topology. Trench traversal currently requires wheel_diameter >= trench_depth; this is a geometric placeholder, not a traction or exit simulation. These area/path values are planning assumptions, not asserted competition rules.
 

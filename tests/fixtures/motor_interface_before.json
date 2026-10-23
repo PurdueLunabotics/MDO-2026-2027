@@ -1,5 +1,5 @@
 {
-  "revision": 1,
+  "revision": 2,
   "provenance": "Synthetic software regression values captured before the motor-interface refactor. Not measured data or calibration. Covers reference/X44, both frame profiles and explicit current limits.",
   "source_files_sha256": {
     "alternatives/x44_motor.py": "f08c070fba2b4ac63750190623cea9383423068466a3a82aa35d2270cad93d60",
@@ -450,7 +450,7 @@
         "tip_stability_margin": 0.0744461638946626,
         "obstacle_pose_margin": 0.1713174700254919,
         "obstacle_tip_margin": 0.15311792255541692,
-        "obstacle_drum_wheel_margin": 0.02350797657962582,
+        "obstacle_drum_wheel_margin": 0.08998987421302355,
         "slope_tip_margin": 0.030310374002041562,
         "rock_sweep_tip_margin": 0.15311792255541692,
         "rock_sweep_wheel_load_margin": 2.7477847736287453,
@@ -598,7 +598,7 @@
         "tip_stability_margin": 0.07556808577114776,
         "obstacle_pose_margin": 0.1719203555289106,
         "obstacle_tip_margin": 0.15083035587073879,
-        "obstacle_drum_wheel_margin": 0.026647079610750524,
+        "obstacle_drum_wheel_margin": 0.0930876292101476,
         "slope_tip_margin": 0.027701877505970696,
         "rock_sweep_tip_margin": 0.15083035587073879,
         "rock_sweep_wheel_load_margin": 1.0151250524288238,
@@ -706,7 +706,7 @@
         "tip_stability_margin": 0.15697201096170252,
         "obstacle_pose_margin": 0.04722287309257778,
         "obstacle_tip_margin": 0.05809416739637429,
-        "obstacle_drum_wheel_margin": 0.036360732054888475,
+        "obstacle_drum_wheel_margin": 0.11420924894971322,
         "slope_tip_margin": -0.011631227605421457,
         "rock_sweep_tip_margin": 0.05809416739637429,
         "rock_sweep_wheel_load_margin": -94.57408107601697,
@@ -714,5 +714,15 @@
         "site_drive_margin": 172.48000013104235
       }
     }
-  ]
+  ],
+  "clearance_update": {
+    "date": "2026-10-23",
+    "model": "ParallelCylinderClearance revision 2",
+    "scope": "Only constraint_margins.obstacle_drum_wheel_margin was re-evaluated after the user requested the default geometry change. All original motor, mass, energy and other margin expectations remain unchanged.",
+    "validation": "Independent analytic cylinder tests; original motor regression tolerances retained.",
+    "source_files_sha256": {
+      "rover/alternatives/parallel_cylinder_clearance.py": "83787d9067ce39a48aff5bbd9d1491e271d285759465e2483f40d9274893f157",
+      "rover/alternatives/obstacle_stability.py": "54388a849b863ce7b4248026192a1dbfe6fd54dab3b1be0976e32a1e5dfa4ea3"
+    }
+  }
 }

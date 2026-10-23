@@ -281,7 +281,9 @@ def write_report(record, output, iterations=(), *, download_links=None):
     frame = plate_frame_svg(values) if "plate_spoke_width" in values else ""
     stability = stability_svg(values) if "slope_tip_margin" in values else ""
     top = top_view_svg(values)
-    for name, svg in (("frame", frame), ("stability", stability), ("top", top)):
+    from .obstacle_drawing import obstacle_pose_svg
+    obstacle = obstacle_pose_svg(values) if "obstacle_height" in values else ""
+    for name, svg in (("frame", frame), ("stability", stability), ("top", top), ("obstacle", obstacle)):
         if svg:
             (output.parent/f"{output.stem}_{name}.svg").write_text(svg, encoding="utf-8")
     frames = []
@@ -296,5 +298,5 @@ def write_report(record, output, iterations=(), *, download_links=None):
                            "retracted": geometry_svg(vals), "extended": geometry_svg(vals, True)})
     html = render_report(record, output, drawings, frame, stability,
                          route_svg(values["traversal_time_one_way"]), frames, top_drawing=top,
-                         download_links=download_links)
+                         download_links=download_links, obstacle_drawing=obstacle)
     output.with_suffix(".html").write_text(html, encoding="utf-8")

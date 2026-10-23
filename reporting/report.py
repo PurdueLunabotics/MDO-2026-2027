@@ -35,9 +35,9 @@ from rover.mobility import Mobility
 from rover.trench import TrenchTraversal
 from rover.tip_stability import TipStability
 from rover.alternatives.obstacle_stability import ObstacleStability
-from rover.alternatives.obstacle_clearance import ObstacleClearance
+from rover.alternatives.parallel_cylinder_clearance import ParallelCylinderClearance
 from rover.alternatives.traversal_stability import TraversalStability
-for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, Mobility, TrenchTraversal, TipStability, ObstacleStability, ObstacleClearance, TraversalStability):
+for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, Mobility, TrenchTraversal, TipStability, ObstacleStability, ParallelCylinderClearance, TraversalStability):
     OUTPUTS.update(component.OUTPUT_UNITS)
 
 
