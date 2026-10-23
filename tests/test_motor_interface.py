@@ -56,6 +56,8 @@ class MotorInterfaceTests(unittest.TestCase):
                     p.run_model();result=snapshot(p)
                     # This fixture predates the intentional X44 energy simplification.
                     # Keep all generic expectations; X44 mass/loads/envelope stay fixed.
+                    # Fixture revision 2 updates only the user-replaced clearance
+                    # margin; original mechanical expectations/tolerances remain.
                     changed_outputs = {
                         "construction_points", "cycle_energy", "run_energy", "peak_power",
                         "dig_energy", "dump_energy", "relocation_energy",

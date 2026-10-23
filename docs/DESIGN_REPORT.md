@@ -51,7 +51,8 @@ returning 0 because the evaluation itself completed.
    Drive file if you want to preserve its sharing link.
 
 Printing includes all checks regardless of screen filters, all three side poses,
-top view, and input/output appendices. It restores the screen's expanded state
+top view, one wheel-on-rock illustration with a roll-free clearance section,
+and input/output appendices. It restores the screen's expanded state
 afterward. Upload, commit, and push are manual; regenerate and re-export after
 changing inputs. To share the interactive curated reports, keep their companion
 SVGs and relative file links together or share the repository.
@@ -72,5 +73,11 @@ default; optimization needs `--optimize`.
 Failed checks stay failed and unassessed capabilities stay unassessed. A top
 projection is not a collision check. Calibration and physical validation remain
 open; see [model cards](MODEL_CARDS.md) and [current verification](VERIFICATION.md).
+The wheel-on-rock illustration uses the actual front-left raised endpoint pose,
+with explicitly illustrative support-block width/shape and the existing ideal
+point contacts. It is flagged when the requested height is unreachable. Its
+cylinder gap uses the default ParallelCylinderClearance model. The saved check
+table and provenance identify the method used when that report was generated.
+Reports are snapshots; regenerate older HTML/PDF files after a model change.
 For advanced extraction, the exact run record is in the HTML's `analysis-data`
 JSON element. Working N2 diagrams and optimizer histories remain in `results/`.

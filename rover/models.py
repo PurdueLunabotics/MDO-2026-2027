@@ -15,7 +15,7 @@ from .relocation import SiteRelocation
 from .trench import TrenchTraversal
 from .tip_stability import TipStability
 from .alternatives.obstacle_stability import ObstacleStability
-from .alternatives.obstacle_clearance import ObstacleClearance
+from .alternatives.parallel_cylinder_clearance import ParallelCylinderClearance
 from .alternatives.traversal_stability import TraversalStability
 from .mobility import Mobility
 from .wheels import WheelMass
@@ -39,7 +39,7 @@ class ModelSet:
     trench_traversal: Callable = TrenchTraversal
     tip_stability: Callable = TipStability
     obstacle_stability: Callable = ObstacleStability
-    obstacle_clearance: Callable = ObstacleClearance
+    obstacle_clearance: Callable = ParallelCylinderClearance
     traversal_stability: Callable = TraversalStability
     mobility: Callable = Mobility
 

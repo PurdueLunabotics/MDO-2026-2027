@@ -60,6 +60,9 @@ class DesignReportTests(unittest.TestCase):
             self.assertNotIn('id="iteration"', html)
             self.assertNotIn("<th>Final iterate</th>", html)
             self.assertIn('id="analysis-data"', html)
+            self.assertIn('Front-left wheel on rock', html)
+            self.assertIn('Common roll removed', html)
+            self.assertTrue(output.with_name('baseline_obstacle.svg').exists())
             self.assertNotIn('_inputs.json', html)
 
     def test_failed_optimizer_is_not_labeled_as_a_released_baseline(self):
@@ -156,7 +159,7 @@ class DesignReportTests(unittest.TestCase):
     def test_cli_rejects_outputs_that_would_overwrite_source_inputs(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder)/"evaluation.json"
-            for path in (output, Path(folder)/"evaluation_top.svg"):
+            for path in (output, Path(folder)/"evaluation_top.svg", Path(folder)/"evaluation_obstacle.svg"):
                 path.write_text('{"inputs": {"wheelbase": 0.48}}', encoding="utf-8")
                 before = path.read_bytes()
                 result = subprocess.run([sys.executable, "main.py", "--inputs", str(path),

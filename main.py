@@ -51,7 +51,7 @@ def main():
         artifacts = [output, output.with_suffix(".html"), output.with_suffix(".sql"),
                      output.with_name(output.stem+"_n2.html")]
         artifacts += [output.with_name(output.stem+"_"+part+".svg")
-                      for part in ("retracted", "travel", "extended", "frame", "stability", "top")]
+                      for part in ("retracted", "travel", "extended", "frame", "stability", "top", "obstacle")]
         if args.inputs and args.inputs.resolve() in {path.resolve() for path in artifacts}:
             raise ValueError("Output artifacts would overwrite the source baseline. Choose --output with a different filename.")
         problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=structure, cobyla_radius=args.cobyla_radius, motors=motors, solver_tol=args.solver_tol)
