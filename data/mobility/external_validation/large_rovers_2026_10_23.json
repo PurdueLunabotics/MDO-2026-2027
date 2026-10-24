@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "revision": "large-rover-transfer-check-v1",
+  "retrieved": "2026-10-23",
+  "purpose": "Independent measured larger-rover points for model comparison; no calibration. Four-wheel Husky and six-wheel SSTB-Lite are reported separately.",
+  "sources": {
+    "demishkevich": {
+      "title": "Experimental Evaluation of Rover Mobility Prediction Methods using Single Wheel Experiments",
+      "author": "Alexander Demishkevich",
+      "year": 2025,
+      "url": "https://spectrum.library.concordia.ca/id/eprint/995136/1/Demishkevich_MA_S2025.pdf",
+      "pdf_sha256": "76c469125989994bb0373d80f7e1a08b881027ccb91cfd710f75ec6d41a3f433"
+    },
+    "fiset": {
+      "title": "Effects of Turning Radius on Skid-Steered Wheeled Robot Power Consumption on Loose Soil",
+      "author": "Jean-Sebastien Fiset",
+      "year": 2019,
+      "url": "https://spectrum.library.concordia.ca/985917/1/Fiset_MASc_F2019.pdf",
+      "pdf_sha256": "3ca9f1311ab4d0436456f31342df0d15eef437f7f79140952f5167a010df2c5a",
+      "use": "Table 3.2 stock Husky geometry: radius 165 mm, width 125 mm. Assumed stock-wheel match to Demishkevich; not an additional slope/slip campaign."
+    },
+    "zhou": {
+      "title": "Simulations of Mars Rover Traverses",
+      "authors": "Zhou et al.",
+      "year": 2014,
+      "url": "https://doi.org/10.1002/rob.21483",
+      "pdf_url": "https://www.kiss.caltech.edu/papers/xterramechanics/papers/simulations.pdf",
+      "pdf_sha256": "dc62c71771912d2beca6da72df40da896d4e89a0b99683acf6712a3f3ff6a868",
+      "use": "Only actual measured diamond markers from Figure 13; none of the Artemis simulation curves."
+    }
+  },
+  "cases": [
+    {
+      "id": "husky_stock",
+      "label": "Husky, stock rubber tires",
+      "campaign": "Demishkevich 2025, Concordia GRC-1 tilt bed",
+      "source": "demishkevich",
+      "wheel_count": 4,
+      "mass_kg": 63,
+      "diameter_m": 0.330,
+      "width_m": 0.125,
+      "geometry_status": "Stock dimensions from Fiset Table 3.2 assumed applicable; Demishkevich does not explicitly give absolute stock tire dimensions. Its reported D/W=2.63 is consistent with these dimensions within rounding.",
+      "soil": "GRC-1 simulant, 28-31% relative density, cone-index gradient 3.9-4.3",
+      "measurement": "Table 4.10, Full Rover Results row, printed page 53 / PDF page 65. Total-station actual motion versus commanded motion. Two trials per slope in section 4.4.3; no raw repeats or standard deviations recovered.",
+      "slip_reference_diameter_m": 0.330,
+      "observations": [
+        {"slope_deg": 5, "measured_slip": 0.200},
+        {"slope_deg": 10, "measured_slip": 0.650},
+        {"slope_deg": 12.5, "measured_slip": 0.780}
+      ]
+    },
+    {
+      "id": "husky_grouser",
+      "label": "Husky, rigid grouser wheels",
+      "campaign": "Demishkevich 2025, Concordia GRC-1 tilt bed",
+      "source": "demishkevich",
+      "wheel_count": 4,
+      "mass_kg": 63,
+      "diameter_m": 0.384,
+      "width_m": 0.064,
+      "nominal_diameter_m": 0.34304,
+      "geometry_status": "Outer diameter including grousers; Figure 3.5 and section 3.2. 300 mm outer / 268 mm nominal wheel scaled by 1.28.",
+      "soil": "GRC-1 simulant, 28-31% relative density, cone-index gradient 3.9-4.3",
+      "measurement": "Table 4.8, Full Rover Results row, printed page 51 / PDF page 63. Two trials per slope, steady-state average. Table 3.2 lists 0.8116 rad/s and 0.1392 m/s, consistent with nominal radius 171.5 mm rather than grouser-tip radius 192 mm.",
+      "slip_reference_diameter_m": 0.34304,
+      "slip_reference_status": "Nominal-radius interpretation of commanded speed; also retain unconverted published slip. It cannot change the finding that the extrapolated model is physically invalid.",
+      "observations": [
+        {"slope_deg": 10, "measured_slip": 0.396},
+        {"slope_deg": 12.5, "measured_slip": 0.600},
+        {"slope_deg": 15, "measured_slip": 0.806}
+      ]
+    },
+    {
+      "id": "sstb_lite",
+      "label": "SSTB-Lite, Dumont Dunes",
+      "campaign": "Zhou et al. 2014, field measurements made May 2012",
+      "source": "zhou",
+      "wheel_count": 6,
+      "mass_kg": 65.5,
+      "diameter_m": 0.262,
+      "width_m": 0.160,
+      "geometry_status": "MER spare wheel radius 13.1 cm and width 16 cm, section 4.1; section 4.2 uses the MER-derived SSTB-Lite. Grouser height 6 mm, 31 grousers. A +12 mm diameter sensitivity covers the nominal-versus-tip interpretation.",
+      "soil": "Dumont Dunes, well-sorted, well-rounded natural sand",
+      "measurement": "Figure 13, printed page 153 / PDF page 13, measured slip diamonds only. Rear LEFT wheel uphill, not whole-rover average. Cleat-imprint spacing gives slip, electronic level on rover deck gives slope. Source estimates slip measurement error about 0.6 percentage points; our plot-reading error is additional.",
+      "slip_reference_diameter_m": 0.262,
+      "digitization": {
+        "render": "PDF page 13 rendered using pdftoppm -scale-to 2100, original image 1575 x 2100 pixels",
+        "crop_xyxy_px": [825, 1160, 1460, 1595],
+        "slope_axis_px": [75, 563],
+        "slope_axis_deg": [2, 12],
+        "slip_axis_px": [376, 69],
+        "slip_axis_values": [0.2, 1.0],
+        "estimated_reading_uncertainty_slip": 0.015,
+        "estimated_reading_uncertainty_slope_deg": 0.1,
+        "selection": "Ten resolved measured diamond markers spanning the displayed slope range. Illustrative point picks, not a complete raw dataset, trial count, or reconstructed population mean. Dense overlapping high-slope markers are not all recovered.",
+        "marker_xy_px": [[75,362],[118,356],[143,344],[207,289],[257,307],[314,284],[372,209],[431,143],[497,113],[551,99]]
+      }
+    }
+  ],
+  "additional_larger_rover_sources": [
+    {
+      "title": "Terrain traversability prediction for off-road vehicles based on multi-source transfer learning",
+      "authors": "Inotsume and Kubota, 2022",
+      "url": "https://doi.org/10.1186/s40648-021-00215-3",
+      "mass_kg": 50,
+      "wheel_count": 4,
+      "usefulness": "Measured straight uphill slip at 0.055 m/s across nine surfaces, including loose and compacted sand; Figures 5 and 6. Slope accuracy about 1 degree.",
+      "not_scored_reason": "Wheel diameter and width not specified in the inspected article. Do not infer them from a photograph. Figure 6 red curves are fitted GP predictions, not measured observations."
+    },
+    {
+      "title": "Vibration-based wheel-terrain slip detection for skid-steer rovers",
+      "authors": "Aubin-Fournier, 2023",
+      "url": "https://spectrum.library.concordia.ca/id/eprint/992150/1/Aubin-Fournier_MA_S2023.pdf",
+      "usefulness": "Separate stock-Husky CSA Mars Yard campaign at 0.2 m/s; 27 slope runs in Table 4.3; total-station motion ground truth.",
+      "not_scored_reason": "Table 4.3 labels low/high slip but does not report numerical slope angles, loaded mass, or wheel dimensions. Induced-slip tables prescribe slip by tethering; they do not validate free-climbing slip."
+    },
+    {
+      "title": "The Canadian Planetary Emulation Terrain Energy-Aware Rover Navigation Dataset",
+      "authors": "Lamarre et al., 2020",
+      "url": "https://starslab.ca/enav-planetary-dataset/",
+      "usefulness": "Independent instrumented Husky, over 1.2 km of field driving, encoder motion and GPS/visual/IMU trajectory estimates plus terrain maps.",
+      "not_scored_reason": "Raw data access requires IEEE DataPort login; smallest human-readable base run is 11.2 GB. Exact loaded mass and wheel geometry also need verification. No data or error statistics fabricated."
+    }
+  ],
+  "excluded_from_experimental_validation": [
+    "Hu et al. 2024, DOI 10.1002/rob.22276: the 108 kg case is a simulated SINGLE WHEEL load, not a measured 108 kg rover.",
+    "Nishishita and Ishigami 2025 cargo rover paper: 20-100 kg sweep is simulated, not physical test data.",
+    "NASA LROP prove-out paper: slope tests at 31.7 kg total, with qualitative pass/half-pass/fail rather than numerical slip; not part of the requested mass comparison.",
+    "Watanabe 1.5 kg and Moonraker 8 kg: excluded from larger-rover assessment as requested."
+  ]
+}

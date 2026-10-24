@@ -10,7 +10,11 @@ from .models import ModelSet, plate_frame_models
 from .contracts import validate_interfaces
 
 # Every margin must be >= 0. Values below are scales, not additional limits.
+# Climb acceptance is strict: a zero reserve or failed solution does not pass.
+STRICT_SLOPE_MARGINS = {"empty_slope_traversal_margin": "empty", "loaded_slope_traversal_margin": "loaded"}
 MARGINS = {
+    "empty_slope_traversal_margin": (1.0, None),
+    "loaded_slope_traversal_margin": (1.0, None),
     "drum_power_margin": (200.0, "W"),
     "penetration_margin": (500.0, "N"),
     "dig_traction_margin": (300.0, "N"),
@@ -75,7 +79,8 @@ def validate(values, design=None, assumptions=None):
                     "scrub_coefficient", "internal_lift_factor", "vertical_cut_fraction",
                     "force_imbalance", "mass_score_weight", "energy_score_weight",
                     "obstacle_height", "rocker_pivot_offset", "slope_angle",
-                    "drive_stator_current_limit", "drum_stator_current_limit"}
+                    "drive_stator_current_limit", "drum_stator_current_limit",
+                    "empty_slope_degrees", "loaded_slope_degrees"}
     fractions = {name for name in assumptions if "fraction" in name or "efficiency" in name}
     fractions |= {"cut_engagement", "delivery_efficiency", "force_imbalance"}
     for name, value in values.items():
@@ -90,6 +95,9 @@ def validate(values, design=None, assumptions=None):
         raise ValueError("wheel_deflection_fraction must be between 0 and 0.5.")
     if not 0 <= values["slope_angle"] < math.pi/2:
         raise ValueError("slope_angle must be in [0, pi/2) radians.")
+    for name in ("empty_slope_degrees", "loaded_slope_degrees"):
+        if not 0 <= values[name] < 90:
+            raise ValueError(f"{name} must be in [0, 90) degrees.")
     if values["scoops_per_revolution"] != int(values["scoops_per_revolution"]):
         raise ValueError("scoops_per_revolution must be an integer.")
     if values["mass_score_weight"] + values["energy_score_weight"] == 0:
@@ -174,7 +182,10 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         "obstacle_height_m": values["obstacle_height"],
         "obstacle_status": "posed gravity support, geometric reach and conservative drum/wheel envelope screens only",
         "slope_angle_rad": values["slope_angle"],
-        "slope_status": "fully loaded static planar slope support only; traction/drive capability unverified",
+        "slope_status": "fully loaded static planar slope support; separate from BWR climbing requirements",
+        "empty_climb_degrees": values["empty_slope_degrees"],
+        "loaded_climb_degrees": values["loaded_slope_degrees"],
+        "climb_acceptance": "BWR driving solution with slip strictly less than 1, empty=dry and full=dry+payload; equal mean wheel loads, no motor/speed acceptance test",
         "rock_path_status": "one wheel at a time, 41 sampled heights; ideal differential reaction balance; real crossing path unverified",
         "ditch_depth_m": 0.50, "ditch_profile": "user: circle-like",
         "ditch_status": "unverified: width/radius and crossing contact sequence unknown"}
@@ -201,7 +212,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     for slot in ("structure_geometry","linkage","wheel_mass","drum_mass","geometry",
                  "excavation","linkage_loads","mass_properties","structure_loads",
                  "relocation","trench_traversal","tip_stability","obstacle_stability",
-                 "obstacle_clearance","traversal_stability","mobility"):
+                 "obstacle_clearance","traversal_stability","mobility","slope_traversal"):
         add_discipline(slot)
     model.add_subsystem("mission", Mission(), promotes=["*"])
     for name, (_, lower, upper, _) in design.items():
@@ -211,7 +222,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     for name, (upper, _) in REQUIREMENTS.items():
         model.add_constraint(name, upper=upper*(1-1e-3), ref=upper)
     for name, (scale, _) in margins.items():
-        model.add_constraint(name, lower=1e-3*scale, ref=scale)
+        model.add_constraint(name, lower=0. if name in STRICT_SLOPE_MARGINS else 1e-3*scale, ref=scale)
     # V2 finite-soil scores are typically tens to hundreds, not the old thousands.
     model.add_objective("construction_points", scaler=-1 / 100.0)  # maximize
     # Deliberately recompute the full model for perturbations: easy to replace models.

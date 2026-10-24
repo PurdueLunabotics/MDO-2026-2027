@@ -39,5 +39,6 @@
     "axle_outer_diameter": 0.032415296849683015,
     "axle_wall": 0.0010000003812846426,
     "rocker_pivot_offset": 0.020000000103651716
-  }
+  },
+  "requirement_scope": "Historical numerical start before BWR empty/full climb constraints. Not a feasible start under the current 25/20-degree default requirements; inputs retained unchanged for regression."
 }

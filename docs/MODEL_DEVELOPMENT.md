@@ -37,7 +37,10 @@ problem.cleanup()
 
 Other slots cover structure geometry/loads, linkage geometry/loads, wheel and
 drum mass, total geometry/mass, mass properties, relocation, trench traversal,
-tip stability, obstacle stability/clearance, traversal stability, and mobility.
+tip stability, obstacle stability/clearance, traversal stability, mobility, and
+`slope_traversal`. BWR straight driving and separate empty/full BWR climbs are
+the defaults. The climb degree settings are fixed assumptions in `rover/config.py`;
+changing them does not change the separate static tipping angle.
 See the actual fields in `rover/models.py` before selecting one.
 
 1. Put the optional implementation in its own module under `rover/alternatives/`.

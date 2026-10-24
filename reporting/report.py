@@ -2,7 +2,7 @@
 
 import math
 from rover.config import DESIGN, ASSUMPTIONS, REQUIREMENTS
-from rover.problem import MARGINS
+from rover.problem import MARGINS, STRICT_SLOPE_MARGINS
 
 OUTPUTS = {
     "dry_mass": "kg", "payload_mass": "kg", "wheel_mass": "kg", "drum_mass": "kg",
@@ -37,7 +37,8 @@ from rover.tip_stability import TipStability
 from rover.alternatives.obstacle_stability import ObstacleStability
 from rover.alternatives.parallel_cylinder_clearance import ParallelCylinderClearance
 from rover.alternatives.traversal_stability import TraversalStability
-for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, Mobility, TrenchTraversal, TipStability, ObstacleStability, ParallelCylinderClearance, TraversalStability):
+from rover.alternatives.slope_traversal import SlopeTraversal
+for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, Mobility, TrenchTraversal, TipStability, ObstacleStability, ParallelCylinderClearance, TraversalStability, SlopeTraversal):
     OUTPUTS.update(component.OUTPUT_UNITS)
 
 
@@ -60,6 +61,11 @@ def snapshot(problem, configuration=None):
         constraints[name] = {"margin": margin, "units": units, "passed": margin >= -1e-6 * upper}
     for name, (scale, units) in margins.items():
         constraints[name] = {"margin": get(name), "units": units, "passed": get(name) >= -1e-6 * scale}
+        if name in STRICT_SLOPE_MARGINS:
+            state = STRICT_SLOPE_MARGINS[name]
+            constraints[name].update(passed=bool(get(state+"_slope_solution_valid") == 1
+                and 0 <= get(state+"_slope_slip") < 1 and get(name) > 0),
+                criterion="Solved BWR driving slip < 1 (strict; failed-solution sentinel is not a prediction)")
     for name, (_, low, high, units) in design.items():
         margin = min(get(name) - low, high - get(name))
         constraints[name + "_bounds"] = {"margin": margin, "units": units,

@@ -74,6 +74,7 @@ class RoverTests(unittest.TestCase):
         self.assertFalse(report["constraints"]["obstacle_pose_margin"]["passed"])
         self.assertFalse(report["constraints"]["obstacle_drum_wheel_margin"]["passed"])
         expected_failures = {"obstacle_pose_margin", "obstacle_tip_margin", "obstacle_drum_wheel_margin",
+                             "empty_slope_traversal_margin", "loaded_slope_traversal_margin",
                              "slope_tip_margin", "rock_sweep_tip_margin", "rock_sweep_wheel_load_margin"}
         self.assertEqual({n for n,c in report["constraints"].items() if not c["passed"]}, expected_failures)
         self.assertLessEqual(p.get_val("payload_mass").item(), p.get_val("fresh_volume").item()*1500)
@@ -225,15 +226,17 @@ class RoverTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build_problem({"wheel_diameter": .36})
 
-    def test_optimization_and_derivative_stability(self):
-        # Verified feasible numerical start, with unchanged success/feasibility
-        # assertions. The original cold-start failures remain documented.
+    def test_derivative_stability_and_old_fixture_rejected_by_new_climbs(self):
+        # This historical start passed the old static-only requirements. It
+        # must fail the new BWR climbs; it is no longer a feasible-start fixture.
         fixture=json.loads((Path(__file__).parent/"fixtures"/"traversal_stability_feasible_start.json").read_text())
         p = build_problem(fixture["inputs"], optimizer=fixture["optimizer"],
-                          maxiter=fixture["maxiter"], cobyla_radius=fixture["cobyla_radius"])
+                          maxiter=len(DESIGN)+2, cobyla_radius=fixture["cobyla_radius"])
         self.addCleanup(p.cleanup)
         p.run_model()
-        self.assertTrue(snapshot(p)["feasible"])
+        self.assertFalse(snapshot(p)["feasible"])
+        for state in ("empty", "loaded"):
+            self.assertFalse(snapshot(p)["constraints"][state+"_slope_traversal_margin"]["passed"])
         before = p.get_val("construction_points").item()
         checks = p.check_totals(of=["construction_points", *MARGINS], wrt=list(DESIGN),
                                method="fd", form="central", step=3e-5, step_calc="rel_avg", out_stream=None)
@@ -242,9 +245,8 @@ class RoverTests(unittest.TestCase):
         result = p.run_driver()
         p.run_model()
         report = snapshot(p)
-        self.assertTrue(result.success)
-        self.assertTrue(report["feasible"])
-        self.assertGreater(p.get_val("construction_points").item(), before)
+        self.assertFalse(result.success)
+        self.assertFalse(report["feasible"])
         for name in ("wheel_diameter", "wheel_width", "drum_diameter", "drum_length"):
             self.assertLess(p.get_val(name).item(), .36)
         self.assertLessEqual(report["whole_cycles"]["berm_volume_m3"], p.get_val("berm_volume").item())

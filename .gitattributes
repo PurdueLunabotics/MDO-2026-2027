@@ -3,3 +3,7 @@
 
 # Versioned motor CSV bytes must match their SHA-256 manifests on every OS.
 /data/motors/*.csv text eol=lf
+
+# Processed mobility measurements/pixel picks have strict provenance hashes.
+/data/mobility/**/*.csv text eol=lf
+/data/mobility/**/*.json text eol=lf

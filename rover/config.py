@@ -1,4 +1,4 @@
-"""Edit this file first. SI units except explicitly marked rpm and W*h.
+"""Edit this file first. SI units except explicitly marked deg, rpm and W*h.
 
 Every numerical physics coefficient below is an UNCALIBRATED estimate.
 Bounds are exploratory modeling bounds, not requirements, except the 359 mm caps.
@@ -24,7 +24,7 @@ DESIGN = {
     "frame_wall": (0.002, 0.001, 0.005, "m"),
     "arm_tube_diameter": (0.050, 0.025, 0.10, "m"),
     "arm_wall": (0.002, 0.001, 0.005, "m"),
-    "battery_capacity": (50.0, 10.0, 200.0, "W*h"),
+    "battery_capacity": (50.0, 10.0, 300.0, "W*h"),
     "actuator_speed": (0.025, 0.005, 0.08, "m/s"),
     "travel_actuator_length": (0.38, 0.30, 0.65, "m"),
     "actuator_retracted_length": (0.45, 0.25, 0.65, "m"),  # compact starting pose
@@ -41,6 +41,9 @@ DESIGN = {
 
 # name: (value, units). These are fixed during one optimization, but editable.
 ASSUMPTIONS = {
+    # Fixed for each solve; CLI --set accepts degrees. Separate from static slope_angle.
+    "empty_slope_degrees": (30.0, "deg"),
+    "loaded_slope_degrees": (20.0, "deg"),
     "actuator_attachment_fraction": (1.0, None),  # B-to-pin / arm length; 0 < f <= 1; move to DESIGN to optimize
     "gravity": (9.80665, "m/s**2"),
     "run_time": (900.0, "s"),

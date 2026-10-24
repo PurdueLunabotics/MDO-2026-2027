@@ -2,13 +2,15 @@
 import json
 from pathlib import Path
 import unittest
+from dataclasses import replace
 import numpy as np
 
 from rover.alternatives.x44_motor import CURVE, X44MotorProvider
 from rover.motors import Gearmotor
 from rover.problem import build_problem
 from reporting.report import snapshot
-from rover.models import ModelSet
+from rover.models import ModelSet, plate_frame_models
+from rover.alternatives.bekker_wong_reece import BekkerWongReeceMobility
 from rover.excavation import Excavation
 from rover.mobility import Mobility
 from rover.relocation import SiteRelocation
@@ -51,7 +53,11 @@ class MotorInterfaceTests(unittest.TestCase):
         fixture=json.loads((ROOT/'tests/fixtures/motor_interface_before.json').read_text())
         for c in fixture['cases']:
             with self.subTest(structure=c['structure'],motors=c['motors'],inputs=c['inputs']):
-                p=build_problem(c['inputs'],structure=c['structure'],motors=c['motors'])
+                # Freeze the legacy mobility equation for this historical motor
+                # regression; default BWR is tested separately with both providers.
+                models = plate_frame_models() if c['structure'] == 'plate-frame' else ModelSet()
+                p=build_problem(c['inputs'],structure=c['structure'],motors=c['motors'],
+                                models=replace(models,mobility=Mobility))
                 try:
                     p.run_model();result=snapshot(p)
                     # This fixture predates the intentional X44 energy simplification.
@@ -67,7 +73,9 @@ class MotorInterfaceTests(unittest.TestCase):
                     retired_outputs = {n for n in c["outputs"]
                                        if "stator_current" in n or "required_voltage" in n}
                     if c["motors"] == "reference":
-                        self.assertEqual(result['feasible'],c['feasible'])
+                        old_checks = [v['passed'] for n,v in result['constraints'].items()
+                                      if n not in ('empty_slope_traversal_margin','loaded_slope_traversal_margin')]
+                        self.assertEqual(all(old_checks),c['feasible'])
                     for n,expected in c['outputs'].items():
                         if c["motors"] == "x44-standard" and n in changed_outputs | retired_outputs:
                             continue
@@ -83,7 +91,7 @@ class MotorInterfaceTests(unittest.TestCase):
 
     def test_hardware_profile_keeps_the_same_discipline_classes(self):
         p=self.problem(motors='x44-standard')
-        for slot,cls in [('excavation',Excavation),('mobility',Mobility),('relocation',SiteRelocation),
+        for slot,cls in [('excavation',Excavation),('mobility',BekkerWongReeceMobility),('relocation',SiteRelocation),
                          ('drum_mass',DrumMass),('geometry',GeometryMass)]:
             self.assertIs(type(getattr(p.model,slot)),cls)
         self.assertIs(p.model.excavation.options['motor_model'],X44MotorProvider)

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "revision": "demishkevich-2025-table4.8-v1",
+  "purpose": "Independent four-wheel measured data; geometry and slip reference provenance retained for BWR comparison",
+  "source": {
+    "title": "Experimental Evaluation of Rover Mobility Prediction Methods using Single Wheel Experiments",
+    "author": "Alexander Demishkevich",
+    "institution": "Concordia University",
+    "year": 2025,
+    "pdf_url": "https://spectrum.library.concordia.ca/id/eprint/995136/1/Demishkevich_MA_S2025.pdf",
+    "pdf_sha256": "76c469125989994bb0373d80f7e1a08b881027ccb91cfd710f75ec6d41a3f433",
+    "geometry_location": "Figure 3.5 and section 3.2, printed pages 29-30, PDF pages 41-42; Table 4.2, printed page 46",
+    "slip_location": "Table 4.8, Full Rover Results row, printed page 51, PDF page 63",
+    "retrieved": "2026-10-23"
+  },
+  "rover": {
+    "platform": "Four-wheel Clearpath Husky with scaled rigid grouser wheels",
+    "wheel_count": 4,
+    "total_mass_kg": 63,
+    "outer_diameter_m": 0.384,
+    "nominal_diameter_m": 0.34304,
+    "wheel_width_m": 0.064,
+    "soil": "GRC-1 lunar simulant, prepared at approximately 28-31 percent relative density",
+    "environment": "Earth tilt-bed experiments; dimensions/mass selected using the source's granular scaling law procedure"
+  },
+  "observations": [
+    {"slope_deg": 10, "measured_slip": 0.396},
+    {"slope_deg": 12.5, "measured_slip": 0.6},
+    {"slope_deg": 15, "measured_slip": 0.806}
+  ],
+  "measurement": {
+    "type": "Numerical transcription from the Full Rover Results row, not the single-wheel prediction rows",
+    "method": "Rover position measured by Leica Total Station, compared with commanded wheel motion; steady-state average slip",
+    "repeat_information": "Section 4.4.3 describes averaging two full-rover slope trials for the validation comparison"
+  },
+  "comparison_limit": "384 mm outer diameter exceeds the present table maximum of 327 mm. The strict model rejects this geometry; no extrapolated prediction is supplied."
+}

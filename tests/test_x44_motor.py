@@ -214,18 +214,24 @@ class X44Tests(unittest.TestCase):
                         error=abs(np.asarray(changed[out]-base[out]).item())/max(1.,abs(np.asarray(base[out]).item()))
                         self.assertLess(error,1e-9,f'{slot}.{out} <- {n}')
 
-    def test_report_and_supported_feasible_start_optimization(self):
+    def test_historical_feasible_start_fails_new_bwr_climb_requirements(self):
         fixture=json.loads((ROOT/'tests/fixtures/x44_standard_feasible_start.json').read_text())
         p=build_problem(fixture['inputs'],structure=fixture['structure'],motors=fixture['motors'],
-                        optimizer=fixture['optimizer'],maxiter=fixture['maxiter'],cobyla_radius=fixture['cobyla_radius'])
+                        optimizer=fixture['optimizer'],maxiter=2,cobyla_radius=fixture['cobyla_radius'])
         self.addCleanup(p.cleanup)
         p.run_model();before=snapshot(p)
-        self.assertTrue(before['feasible'])
+        self.assertFalse(before['feasible'])
+        self.assertFalse(before['constraints']['empty_slope_traversal_margin']['passed'])
+        self.assertFalse(before['constraints']['loaded_slope_traversal_margin']['passed'])
+        # This small-wheel historical start also exceeds the BWR straight-drive
+        # motor envelope; unchanged turn/drum physics still passes its screens.
+        self.assertFalse(before['constraints']['straight_motor_margin']['passed'])
+        p.driver.options['maxiter'] = len(p.design_specs)+2
         result=p.run_driver();p.run_model();after=snapshot(p)
-        self.assertTrue(result.success)
-        self.assertTrue(after['feasible'])
-        self.assertGreater(after['outputs']['construction_points']['value'],before['outputs']['construction_points']['value'])
-        for n in ("straight_motor_margin","turn_motor_margin","drum_torque_margin","dump_torque_margin"):
+        self.assertFalse(result.success)
+        self.assertFalse(after['feasible'])
+        self.assertFalse(after['constraints']['straight_motor_margin']['passed'])
+        for n in ("turn_motor_margin","drum_torque_margin","dump_torque_margin"):
             self.assertTrue(after["constraints"][n]["passed"],n)
         self.assertEqual(p.get_val("drive_gear_ratio").item(),100.)
         self.assertIn('wheelbase',p.design_specs)

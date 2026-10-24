@@ -24,7 +24,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
       - run: python main.py --baseline --output results/ci_baseline.json
-      - name: Verify optimization from recorded feasible start
+      - name: Verify derivatives and honest optimization status
         shell: python
         run: |
           import json
@@ -32,12 +32,19 @@ jobs:
           import sys
           from pathlib import Path
 
-          # Match the optimizer regression test; default-start failures remain documented.
-          fixture = json.loads(Path("tests/fixtures/traversal_stability_feasible_start.json").read_text())
-          start = fixture["inputs"]
+          # Historical feasible starts predate BWR climbing requirements.
+          # A failed design is allowed; a crash or falsely feasible report is not.
           command = [sys.executable, "main.py", "--check-derivatives",
-                     "--optimizer", fixture["optimizer"], "--maxiter", str(fixture["maxiter"]),
-                     "--cobyla-radius", str(fixture["cobyla_radius"]), "--output", "results/ci_optimization.json"]
-          for name, value in start.items():
-              command.extend(["--set", f"{name}={value}"])
-          subprocess.run(command, check=True)
+                     "--output", "results/ci_optimization.json"]
+          result = subprocess.run(command)
+          assert result.returncode in (0, 1), result.returncode
+          record = json.loads(Path("results/ci_optimization.json").read_text())
+          final = record["final"]
+          accepted = record["optimizer_success"] and final["feasible"]
+          assert result.returncode == (0 if accepted else 1)
+          assert record["status"] == ("converged_feasible" if accepted else "failed_or_infeasible")
+          for state in ("empty", "loaded"):
+              outputs = final["outputs"]
+              valid = outputs[state+"_slope_solution_valid"]["value"] == 1
+              slip = outputs[state+"_slope_slip"]["value"]
+              assert final["constraints"][state+"_slope_traversal_margin"]["passed"] == (valid and 0 <= slip < 1)

@@ -44,6 +44,17 @@ class Mobility(SimpleComponent):
     def initialize(self):
         self.options.declare("motor_model", default=ReferenceMotorProvider)
 
+    def straight_response(self, values, *, mass, drag, accel, peak, distance):
+        """Mechanical straight segment; alternatives must preserve turn physics."""
+        force = drag + mass * accel
+        return {"force": force, "power": force * peak,
+                "work": drag * distance + .5 * mass * peak**2,
+                "peak_rim_speed": peak, "ground_speed_factor": 1.0}
+
+    def straight_responder(self, values, segments):
+        """Prepare responses once per evaluation; alternatives can batch physics."""
+        return lambda **kw: self.straight_response(values, **kw)
+
     def setup(self):
         from .dependencies import dependencies
         motor = self.options["motor_model"]
@@ -96,12 +107,14 @@ class Mobility(SimpleComponent):
         segments = [(dry + payload, "loaded", p) for p in profiles]
         segments += [(dry, "empty", p) for p in reversed(profiles)]
         segments += [(dry + payload / 2, "half", ("turn", turn_path, turn_time, turn_peak, turn_accel))]
+        straight_response = self.straight_responder(v, segments)
         forces, powers, motor_margins, traction_margins = {}, {}, {}, {}
         electrical = {"straight": [], "turn": []}
         for kind in ("straight", "turn"):
             forces[kind], powers[kind], motor_margins[kind], traction_margins[kind] = [], [], [], []
         stability = []
         pressure_factors = []
+        straight_speed_factors = []
         for mass, state, (kind, d, t, peak, accel) in segments:
             drag = resistance(mass)
             effective_mass = mass
@@ -123,10 +136,16 @@ class Mobility(SimpleComponent):
             power = force * peak
             # Resistance work plus one acceleration from rest; no regeneration.
             work = drag*d + 0.5*effective_mass*peak**2
+            peak_rim_speed = peak
+            if kind == "straight":
+                response = straight_response(mass=mass, drag=drag, accel=accel, peak=peak, distance=d)
+                force, power, work = (response[n] for n in ("force", "power", "work"))
+                peak_rim_speed = response["peak_rim_speed"]
+                straight_speed_factors.append(response["ground_speed_factor"])
             electrical[kind].append(motor.evaluate(work/4, power/4))
             forces[kind].append(force)
             powers[kind].append(power)
-            motor_margins[kind].append(4*motor.available_torque(peak/radius*30/math.pi)/radius-force)
+            motor_margins[kind].append(4*motor.available_torque(peak_rim_speed/radius*30/math.pi)/radius-force)
             # Equal wheel torque is limited by the lighter axle; a torque allocator
             # can replace this conservative screen when tested.
             light_axle_factor = max(0,2-load_factor)
@@ -151,6 +170,10 @@ class Mobility(SimpleComponent):
         outputs["no_load_speed"], outputs["stall_drive_force"] = no_load_speed, stall_force
         outputs["loaded_motor_speed_limit"] = motor.speed_limit(max(forces["straight"])*radius/4)*math.pi/30*radius
         outputs["loaded_power_speed_limit"] = rating / max(forces["straight"])
+        # Optional straight-slip models express these diagnostic limits in ground
+        # speed. Reference factors are exactly one; turn outputs are unaffected.
+        outputs["loaded_motor_speed_limit"] *= min(straight_speed_factors)
+        outputs["loaded_power_speed_limit"] *= min(straight_speed_factors)
         for kind in ("straight", "turn"):
             outputs[kind + "_motor_margin"] = min(motor_margins[kind])
             outputs[kind + "_traction_margin"] = min(traction_margins[kind])

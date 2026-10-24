@@ -17,7 +17,8 @@ from .tip_stability import TipStability
 from .alternatives.obstacle_stability import ObstacleStability
 from .alternatives.parallel_cylinder_clearance import ParallelCylinderClearance
 from .alternatives.traversal_stability import TraversalStability
-from .mobility import Mobility
+from .alternatives.bekker_wong_reece import BekkerWongReeceMobility
+from .alternatives.slope_traversal import SlopeTraversal
 from .wheels import WheelMass
 from .drums import DrumMass
 from .components import GeometryMass
@@ -41,7 +42,8 @@ class ModelSet:
     obstacle_stability: Callable = ObstacleStability
     obstacle_clearance: Callable = ParallelCylinderClearance
     traversal_stability: Callable = TraversalStability
-    mobility: Callable = Mobility
+    mobility: Callable = BekkerWongReeceMobility
+    slope_traversal: Callable = SlopeTraversal
 
     def metadata(self):
         return {name: f"{getattr(factory, '__module__', type(factory).__module__)}.{getattr(factory, '__qualname__', type(factory).__qualname__)}"

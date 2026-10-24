@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "revision": "watanabe-2026-b60-slip10-v1",
+  "purpose": "Archived independent small-rover measurements; not used to fit BWR",
+  "source": {
+    "title": "Effects of wheel width on running performance of four-wheeled small lunar rover",
+    "authors": "Kimitaka Watanabe, Moegi Maru, Masataka Kawaguchi and Kazuto Tanaka",
+    "year": 2026,
+    "doi": "10.1299/transjsme.25-00224",
+    "url": "https://doi.org/10.1299/transjsme.25-00224",
+    "pdf_url": "https://www.jstage.jst.go.jp/article/transjsme/92/956/92_25-00224/_pdf/-char/ja",
+    "pdf_sha256": "1711255d5b4914bacf7e1c2e86c0fc2a98476160621a1d3983cd2a5795a0873f",
+    "retrieved": "2026-10-23"
+  },
+  "rover": {
+    "wheel_count": 4,
+    "total_mass_kg": 1.5,
+    "wheelbase_m": 0.2,
+    "outer_diameter_m": 0.14,
+    "bare_rim_diameter_m": 0.12,
+    "wheel_width_m": 0.06,
+    "wheel_name": "b60",
+    "grouser_height_m": 0.01,
+    "grouser_count": 12,
+    "wheel_rpm": 10,
+    "trial_distance_m": 0.7,
+    "gravity_environment": "Earth laboratory; physical rover mass 1.5 kg, not a lunar-gravity test"
+  },
+  "measurement": {
+    "response": "slip = 1 - ground_speed / wheel_rim_speed for forward driving",
+    "trials_per_condition": 5,
+    "reported_statistic": "mean with standard deviation plotted in the paper",
+    "extraction": "Manual reading of magenta b60 mean-marker centers from native image 2 of PDF pages 6 and 7; no individual trials or standard deviations reconstructed",
+    "estimated_reading_uncertainty_slip": 0.01,
+    "selection": "b60 is the only tested width inside the Sutoh table's 50-150 mm width domain. The 10-degree marker is visibly resolved in both plots. Higher angles are outside the common contributing-curve support at this geometry."
+  },
+  "observations": [
+    {
+      "soil": "silica sand",
+      "figure": "9(c)",
+      "pdf_page_1based": 6,
+      "native_image_size_px": [414, 381],
+      "slope_deg": 10,
+      "marker_xy_px": [181, 298],
+      "slip_zero_y_px": 320,
+      "slip_one_y_px": 11
+    },
+    {
+      "soil": "FJS-1 lunar regolith simulant",
+      "figure": "10(c)",
+      "pdf_page_1based": 7,
+      "native_image_size_px": [436, 381],
+      "slope_deg": 10,
+      "marker_xy_px": [190, 250],
+      "slip_zero_y_px": 315,
+      "slip_one_y_px": 12
+    }
+  ],
+  "comparison_limits": [
+    "Geometry lies inside the table, but load, speed, soil and grouser transfer are provisional, not matched experimental conditions.",
+    "The source rover supports about 0.375 kg per wheel, versus 3 kg per wheel in the Sutoh geometry sweep.",
+    "The source uses 10 mm grousers and 12 grousers per wheel; the default smooth rigid cylinder does not explicitly model them.",
+    "Two soils at one supported geometry/angle cannot support a Pearson correlation coefficient or a universal correction factor.",
+    "Other widths below 50 mm, higher unsupported angles and stuck conditions are not assigned invented model predictions."
+  ]
+}

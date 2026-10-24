@@ -247,14 +247,15 @@ class PlateFrameTests(unittest.TestCase):
             self.assertIn("Removed screens: diagnostics only", html)
             self.assertTrue((Path(folder)/"plate_frame.svg").exists())
 
-    def test_new_profile_optimizer_retains_success_feasibility_and_score_improvement(self):
+    def test_new_profile_failed_climbs_are_not_reported_feasible(self):
         p = self.problem()
+        p.driver.options['maxiter'] = len(p.design_specs)+2  # Failed-run reporting, not convergence.
         before = p.get_val("construction_points").item()
         result = p.run_driver()
         p.run_model()
-        self.assertTrue(result.success)
-        self.assertTrue(snapshot(p)["feasible"])
-        self.assertGreater(p.get_val("construction_points").item(), before)
+        self.assertFalse(result.success)
+        self.assertFalse(snapshot(p)["feasible"])
+        self.assertFalse(snapshot(p)["constraints"]["loaded_slope_traversal_margin"]["passed"])
         self.assertEqual(p.get_val("plate_thickness").item(), .00635)
         self.assertEqual(p.get_val("cf_tube_inner_diameter").item(), .0254)
 

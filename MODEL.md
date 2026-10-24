@@ -144,6 +144,33 @@ Each reference segment stops/starts: peak=min(requested_speed,sqrt(distance*acce
 
 Half-loaded turns reserve traction for tangential/centripetal CG acceleration. Axle transfer limits equal-wheel-torque traction through the lighter axle; pressure uses the heavier axle and a rocker factor. Pitch/roll support reserves are checked. Rolling/contact-pressure and scrub laws are uncalibrated. No terrain/controller simulation, detailed per-wheel friction circle or wheel rotational kinetic energy is claimed.
 
+The default [rigid-wheel Bekker-Wong-Reece model](docs/BEKKER_WONG_REECE.md)
+integrates Bekker normal pressure and Janosi-Hanamoto shear with a continuous
+Wong-Reece contact distribution. It solves normal equilibrium for sinkage and
+net axle-force demand for slip using independently published loose GRC-1 soil
+fits and assumed stress-shape coefficients. Straight-segment torque/work replaces
+the old rolling law without double-counting compaction or kinetic work. Point
+turns and existing pressure/stability screens retain their equations. The earlier
+straight-slip interpolation and its executable/data pipeline have been removed.
+
+`ModelSet.slope_traversal` adds two independent quasi-static uphill checks:
+`empty_slope_degrees=30` for dry mass and `loaded_slope_degrees=20` for dry mass
+plus all four drums' payload. Both are editable degree-valued configuration
+inputs, fixed during optimization. Each wheel receives `m*g*cos(alpha)/4` normal
+load and must supply `m*g*sin(alpha)/4` net force. Acceptance requires a solved
+slip **strictly below 1**, without a 98% numerical cutoff or extra slip reserve.
+Imposed slip=1 is supported only as the locked-wheel force limit. A failed force
+solve gives an explicitly invalid slip=1 sentinel, negative normalized force
+shortfall margin, and `solution_valid=0`; it never passes via report tolerance.
+For valid solutions the margin is `1-slip`. Slope motor limits and required speed
+are outside this slip-only criterion. The existing 30-degree full-load static
+support constraint remains separate.
+
+The student selected this model as a conservative design assumption. Published
+coefficients are unchanged and no rover data are fitted. The independent
+larger-rover accuracy gate still fails; the documentation retains quantitative
+errors, failures, soil preparation mismatch and missing prototype calibration.
+
 ## Uneven-load tip stability
 
 The static screen checks the prescribed asymmetric case: one front/rear drum pair is full, the other is empty, and both pairs are at full actuator extension. Each full drum holds one quarter of `payload_mass`. Symmetric dry hardware cancels when both arms occupy the same position, so `CG_x = (payload_mass/2)*extended_x/(dry_mass+payload_mass/2)` and `CG_y = 0`. The signed margin is `min(wheelbase/2 - abs(CG_x), track_width/2)`, using the wheel-center rectangle as the support polygon. Front-full and rear-full cases are mirrored. The retained `tip_worst_mask` diagnostic is 3 (front pair full); mask 12 is equivalent.

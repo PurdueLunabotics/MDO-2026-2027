@@ -15,5 +15,6 @@
     "wheel_areal_mass": 8,
     "slope_angle": 0.5235987755982988,
     "obstacle_height": 0.4
-  }
+  },
+  "requirement_scope": "Historical numerical start before BWR empty/full climb constraints. Not a feasible start under the current 25/20-degree default requirements; inputs retained unchanged for regression."
 }

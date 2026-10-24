@@ -315,6 +315,7 @@ See [method, findings, and limitations](docs/SENSITIVITY_STUDY.md).
 | Add a model, understand interfaces, solver settings, or submit a PR | [Development guide](docs/MODEL_DEVELOPMENT.md) |
 | Plate-frame geometry and structural load scope | [Plate frame](docs/PLATE_FRAME.md) |
 | X44 curve, gearing, energy accounting, replacement API | [Motors](docs/X44_MOTORS.md) |
+| Default rigid-wheel BWR, climbing requirements and larger-rover benchmark | [Bekker-Wong-Reece](docs/BEKKER_WONG_REECE.md) |
 | Obstacle, slope, wheel unloading, clearance, and unverified ditch | [Traversal](docs/OBSTACLE_TRAVERSAL.md) |
 | Plan physical tests or offline simulation | [Experiments](docs/EXPERIMENTS.md) |
 | Latest checks and reproducible commands | [Verification](docs/VERIFICATION.md) |
@@ -336,3 +337,27 @@ Keep `.venv`, temporary results, raw simulator runs, and credentials out of Git.
 `results/` is ignored: a fresh clone must regenerate study outputs. The two
 curated reports and PDFs above are versioned; hundreds of individual study
 reports are kept locally or shared separately as a complete folder.
+
+## Default mobility and editable climbing requirements
+
+Straight driving uses rigid-wheel Bekker-Wong-Reece (BWR) with published loose
+GRC-1 soil parameters. The previous straight-slip surrogate has been removed.
+Point-turn equations remain unchanged. This is the student's conservative design
+assumption; the independent rover comparison and calibration limitations are in
+[the model card and equations](docs/BEKKER_WONG_REECE.md).
+
+Two additional constraints require a solved BWR driving slip **strictly below 1**:
+empty at **30 degrees** and full at **20 degrees** by default. Empty uses `dry_mass`; full
+uses `dry_mass+payload_mass`. The separate 30-degree static tipping check remains.
+These checks impose no additional slope motor or speed requirement.
+
+Edit `empty_slope_degrees` and `loaded_slope_degrees` in `rover/config.py`, or set
+values for a single analysis/optimization in degrees:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_optimized.json --optimize --set empty_slope_degrees=25 --set loaded_slope_degrees=20 --output results/bwr_custom_slopes.json
+```
+
+Unreachable climbing demands remain failed. Reports show “No climbing solution”;
+the numeric slip=1 sentinel is accompanied by `solution_valid=0`. Historical
+feasible-start fixtures predate these new requirements and must be reevaluated.
