@@ -6,27 +6,37 @@
 footer { overflow-wrap:anywhere; }
 </style></head><body><main>
 <header class="hero"><p class="eyebrow">Lunabotics / design sensitivity</p><h1>Traversal time × drum fill ceiling</h1>
-<p>Construction points are encoded by color. Select a cell to inspect its optimized geometry and detailed report.</p>
-<p class="muted">Each cell fixes one-way route time and fill ceiling, then reoptimizes the hardware design. The return route uses the same time. Fill is a storage ceiling; the model may collect less when reachable soil is limiting.</p>
+<p id="hero-intro">Construction points are encoded by color. Select a cell to inspect its optimized geometry and detailed report.</p>
+<p id="method-note" class="muted">Each cell fixes one-way route time and fill ceiling, then reoptimizes the hardware design. The return route uses the same time. Fill is a storage ceiling; the model may collect less when reachable soil is limiting.</p>
 <p id="progress" class="status-line"></p></header>
 <section class="panel" aria-labelledby="map-title"><div class="selected-head"><h2 id="map-title">Construction points / continuous mission estimate</h2><div><a href="summary.csv">Download table (CSV)</a> · <a href="study.json">Study data</a></div></div>
 <div class="scroll"><svg id="heatmap" viewBox="0 0 1100 600" aria-label="Construction points by one-way traversal time and fill ceiling"></svg></div>
-<p class="muted">Gray × = no converged, modeled-feasible result from the tested starts. Blank = pending. These cells remain selectable; their scores are not treated as valid optima.</p><p id="speed-limit" class="muted"></p></section>
+<p id="map-legend" class="muted">Gray × = no converged, modeled-feasible result from the tested starts. Blank = pending. These cells remain selectable; their scores are not treated as valid optima.</p><p id="speed-limit" class="muted"></p></section>
 <section id="selected" class="panel" aria-live="polite"><div class="selected-head"><h2 id="selected-title">Select a design</h2><span id="selected-status" class="badge"></span></div>
 <p id="selection-note" class="muted"></p><div id="selected-metrics" class="metrics"></div>
 <div class="views"><div class="view"><h3>Top-down / travel pose</h3><div id="top-view"></div></div><div class="view"><div class="controls"><h3>Side view</h3><button data-pose="travel" aria-pressed="true">Travel</button><button data-pose="retracted" aria-pressed="false">Compact</button><button data-pose="extended" aria-pressed="false">Digging</button></div><div id="side-view"></div></div></div>
 <p><a id="report-link" class="button" target="_blank" rel="noopener">Open detailed report</a><a id="analysis-link" target="_blank" rel="noopener">Numeric result JSON</a></p>
-<div class="two-col"><div><h3>Design dimensions</h3><table><thead><tr><th>Quantity</th><th>Value</th></tr></thead><tbody id="design-values"></tbody></table></div><div><h3>Solver starts</h3><table><thead><tr><th>Starting design</th><th>Status</th><th>Points</th></tr></thead><tbody id="attempt-values"></tbody></table><p id="fill-note" class="muted"></p><details><summary>Failed checks</summary><div id="failed-checks"></div></details></div></div></section>
-<section class="panel"><h2>Individual sensitivities through the baseline assumptions</h2><div class="two-col"><div><h3 id="time-slice-title"></h3><svg id="time-slice" class="mini-chart" viewBox="0 0 550 290"></svg></div><div><h3 id="fill-slice-title"></h3><svg id="fill-slice" class="mini-chart" viewBox="0 0 550 290"></svg></div></div><p class="muted">These are independently reoptimized grid points, not evaluations of one fixed rover. Click a marker to inspect that design.</p></section>
-<footer><p>Best local result among deterministic starting designs; global optimality is not established. Uncalibrated conceptual model: passing checks and solver convergence do not establish hardware performance.</p><p id="provenance"></p></footer>
+<div class="two-col"><div><h3>Design dimensions</h3><table><thead><tr><th>Quantity</th><th>Value</th></tr></thead><tbody id="design-values"></tbody></table></div><div><h3 id="attempt-title">Solver starts</h3><table><thead><tr><th>Starting design</th><th>Status</th><th>Points</th></tr></thead><tbody id="attempt-values"></tbody></table><p id="fill-note" class="muted"></p><details><summary>Failed checks</summary><div id="failed-checks"></div></details></div></div></section>
+<section class="panel"><h2>Individual sensitivities through the baseline assumptions</h2><div class="two-col"><div><h3 id="time-slice-title"></h3><svg id="time-slice" class="mini-chart" viewBox="0 0 550 290"></svg></div><div><h3 id="fill-slice-title"></h3><svg id="fill-slice" class="mini-chart" viewBox="0 0 550 290"></svg></div></div><p id="slice-note" class="muted">These are independently reoptimized grid points, not evaluations of one fixed rover. Click a marker to inspect that design.</p></section>
+<footer><p id="footer-method">Best local result among deterministic starting designs; global optimality is not established. Uncalibrated conceptual model: passing checks and solver convergence do not establish hardware performance.</p><p id="provenance"></p></footer>
 <script id="study-data" type="application/json">__STUDY_DATA__</script>
 <script>
 (()=>{
 'use strict';
 const study=JSON.parse(document.getElementById('study-data').textContent), rows=study.rows;
 const times=study.traversal_times_s,fills=study.fill_fractions;
+const fixed=study.mode==='fixed_design';
 const accepted=r=>r&&r.status==='converged_feasible'&&r.optimizer_success&&r.feasible;
-const valid=rows.filter(accepted), scores=valid.map(r=>r.outputs.construction_points);
+const scored=r=>fixed?r&&r.status==='baseline'&&Number.isFinite(r.outputs?.construction_points):accepted(r);
+const plotted=rows.filter(scored), scores=plotted.map(r=>r.outputs.construction_points);
+if(fixed){
+ document.getElementById('hero-intro').textContent='Fixed baseline hardware / no optimization. Color shows predicted construction points, including evaluations with failed checks.';
+ document.getElementById('method-note').textContent='Only one-way route time and fill ceiling change. Every hardware design variable stays at its source baseline value. The return route uses the same time; actual payload may be reach-limited.';
+ document.getElementById('map-legend').textContent='! = one or more model checks fail; scores remain visible as predictions. Orange line-plot markers also flag failed checks. Gray × = evaluation error. Blank = pending. See each cell for its failed checks; these predictions are not accepted feasible designs.';
+ document.getElementById('attempt-title').textContent='Baseline evaluation';
+ document.getElementById('slice-note').textContent='Each point evaluates the same baseline hardware. Predicted scores include cases with failed checks. Click a marker to inspect the evaluation.';
+ document.getElementById('footer-method').textContent='Fixed-design predictions from an uncalibrated conceptual model. Failed constraints remain failed; plotted scores do not establish hardware feasibility or performance.';
+}
 const low=scores.length?Math.min(...scores):0, high=scores.length?Math.max(...scores):1;
 const fmt=(n,d=2)=>Number.isFinite(n)?n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
 const byId=new Map(rows.map(r=>[r.id,r]));let current=null,pose='travel';
@@ -38,12 +48,13 @@ const lookup=(t,f)=>rows.find(r=>r.traversal_time_s===t&&r.fill_fraction===f);
 function drawMap(){
  map.replaceChildren();
  for(let yi=0;yi<fills.length;yi++)for(let xi=0;xi<times.length;xi++){
-  const f=fills[fills.length-1-yi],t=times[xi],r=lookup(t,f),ok=accepted(r),x=left+xi*cw,y=top+yi*ch;
+  const f=fills[fills.length-1-yi],t=times[xi],r=lookup(t,f),ok=scored(r),x=left+xi*cw,y=top+yi*ch;
   const g=el('g',{'class':'chart-cell','data-case':r?r.id:'pending',tabindex:r?0:-1,role:'button',
-    'aria-label':`${t} seconds one way, fill ${f}: ${r?(ok?fmt(r.outputs.construction_points)+' construction points':r.status):'pending'}`});
+    'aria-label':`${t} seconds one way, fill ${f}: ${r?(ok?fmt(r.outputs.construction_points)+' construction points'+(fixed&&!r.feasible?', checks failed':''):r.status):'pending'}`});
   const rect=el('rect',{x:x+2,y:y+2,width:cw-4,height:ch-4,rx:3,fill:ok?color(r.outputs.construction_points):r?'#dce2e5':'#f1f4f5',stroke:r&&current&&r.id===current.id?'#17323e':'none','stroke-width':3});
   g.append(rect); const txt=el('text',{x:x+cw/2,y:y+ch/2+4,'text-anchor':'middle','font-size':12,'font-weight':ok?650:400},r?(ok?fmt(r.outputs.construction_points,0):'×'):'·');
   if(ok&&(r.outputs.construction_points-low)/(high-low||1)>.72)txt.style.fill='white';g.append(txt);
+  if(fixed&&ok&&!r.feasible)g.append(el('text',{x:x+cw-10,y:y+15,'text-anchor':'middle','font-size':13,'font-weight':800},'!'));
   g.append(el('title',{},r?`${t} s / fill ${f}: ${r.status}${r.outputs?' / '+fmt(r.outputs.construction_points)+' diagnostic points':''}`:'Pending'));
   if(r){g.addEventListener('click',()=>select(r.id));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(r.id);}});}map.append(g);
  }
@@ -57,20 +68,21 @@ function drawMap(){
 }
 function metric(title,value){const e=document.createElement('div');e.className='metric';const a=document.createElement('span'),b=document.createElement('strong');a.textContent=title;b.textContent=value;e.append(a,b);return e;}
 function tdrow(parent,values){const tr=document.createElement('tr');values.forEach(t=>{const td=document.createElement('td');td.textContent=t;tr.append(td);});parent.append(tr);}
-function showViews(){const unavailable='<p class="muted">No usable optimized geometry is available for this cell. Open the diagnostic report for the actual solver errors.</p>';document.getElementById('top-view').innerHTML=current&&current.views?current.views.top:unavailable;document.getElementById('side-view').innerHTML=current&&current.views?current.views[pose]:unavailable;}
+function showViews(){const unavailable='<p class="muted">No usable geometry is available for this cell. Open the diagnostic report for the evaluation errors.</p>';document.getElementById('top-view').innerHTML=current&&current.views?current.views.top:unavailable;document.getElementById('side-view').innerHTML=current&&current.views?current.views[pose]:unavailable;}
 function select(id){
  current=byId.get(id);if(!current)return;location.hash=id;
- const r=current,o=r.outputs||{},ok=accepted(r),s=document.getElementById('selected-status');
+ const r=current,o=r.outputs||{},ok=scored(r),s=document.getElementById('selected-status');
  document.getElementById('selected-title').textContent=`${r.traversal_time_s} seconds one way / ${Math.round(r.fill_fraction*100)}% fill ceiling`;
  s.textContent=ok?'Converged / modeled feasible':'No converged feasible result';s.className='badge'+(ok?'':' fail');
  document.getElementById('selection-note').textContent=ok?`Best local candidate from ${r.attempts.length} starts. Selected start: ${r.selected_start.replaceAll('_',' ')}.`:r.views?'The shown geometry and score are failed-trial diagnostics. This cell is excluded from the construction-point color scale.':'No usable final numeric state was saved. This cell is excluded from the color scale; no optimized geometry is claimed.';
- const m=document.getElementById('selected-metrics');m.replaceChildren(metric(ok?'Construction points':'Trial points (failed)',fmt(o.construction_points)),metric('Dry mass',fmt(o.dry_mass)+' kg'),metric('Payload / cycle',fmt(o.payload_mass)+' kg'),metric('Complete-cycle points',fmt((r.whole_cycles||{}).construction_points)));
+ if(fixed){s.textContent=ok?(r.feasible?'Evaluated / model checks pass':'Evaluated / checks failed'):'Evaluation error';s.className='badge'+(ok&&r.feasible?'':' fail');document.getElementById('selection-note').textContent=ok?'Fixed baseline hardware; no optimizer was run. Predicted scores remain visible when constraints fail. Review the failed checks below.':'The baseline evaluation failed without a usable numeric state.';}
+ const m=document.getElementById('selected-metrics');m.replaceChildren(metric(fixed?'Predicted construction points':ok?'Construction points':'Trial points (failed)',fmt(o.construction_points)),metric('Dry mass',fmt(o.dry_mass)+' kg'),metric('Payload / cycle',fmt(o.payload_mass)+' kg'),metric('Complete-cycle points',fmt((r.whole_cycles||{}).construction_points)));
  showViews();for(const[k,key]of [['report-link','report'],['analysis-link','analysis']]){const a=document.getElementById(k);a.hidden=!r[key];if(r[key])a.href=r[key];}
  const values=document.getElementById('design-values');values.replaceChildren();
  for(const[n,title,scale,u]of [['wheel_diameter','Wheel diameter',1000,'mm'],['wheel_width','Wheel width',1000,'mm'],['wheelbase','Wheelbase',1000,'mm'],['track_width','Wheel-center track',1000,'mm'],['drum_diameter','Drum outer diameter',1000,'mm'],['drum_length','Each drum axial length',1000,'mm'],['arm_length','Arm length',1000,'mm'],['battery_capacity','Battery capacity',1,'Wh'],['actuator_force_rating','Actuator force rating',1,'N']])if(r.design&&n in r.design)tdrow(values,[title,fmt(r.design[n]*scale)+' '+u]);
  const a=document.getElementById('attempt-values');a.replaceChildren();r.attempts.forEach(v=>tdrow(a,[v.start.replaceAll('_',' '),v.status,fmt(v.construction_points)]));
  document.getElementById('fill-note').textContent=r.storage_use_fraction!==undefined?`Payload uses ${fmt(r.storage_use_fraction*100,1)}% of the allowed storage ceiling. Target storage payload: ${fmt(o.target_payload_mass)} kg; reachable-soil limit: ${fmt(o.reachable_soil_mass)} kg. Actual modeled fill fraction: ${fmt(r.fill_fraction*r.storage_use_fraction,3)}.`:'';
- const fail=document.getElementById('failed-checks');fail.replaceChildren();const failed=Object.entries(r.failed_checks||{});if(!failed.length)fail.textContent=ok?'All saved model checks pass.':'No numeric final state available.';else for(const[n,v]of failed){const p=document.createElement('p');p.className='failed-text';p.textContent=`${n}: ${fmt(v.margin,5)} ${v.units||''}`;fail.append(p);}
+ const fail=document.getElementById('failed-checks');fail.replaceChildren();const failed=Object.entries(r.failed_checks||{});if(!failed.length)fail.textContent=r.feasible?'All saved model checks pass.':r.outputs?'No failed numeric checks saved.':'No numeric final state available.';else for(const[n,v]of failed){const p=document.createElement('p');p.className='failed-text';p.textContent=`${n}: ${fmt(v.margin,5)} ${v.units||''}`;fail.append(p);}
  drawMap();
 }
 document.querySelectorAll('[data-pose]').forEach(button=>button.addEventListener('click',()=>{pose=button.dataset.pose;document.querySelectorAll('[data-pose]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));showViews();}));
@@ -79,16 +91,16 @@ function slice(svgId,series,xname,xlabel){
  const l=65,w=450,h=195,yt=15;const xs=series.map(r=>r[xname]),minX=Math.min(...xs),maxX=Math.max(...xs),mx=x=>l+(x-minX)/(maxX-minX||1)*w,my=y=>yt+h-(y-low)/(high-low||1)*h;
  svg.append(el('line',{x1:l,y1:yt+h,x2:l+w,y2:yt+h,stroke:'#bccdd3'}));svg.append(el('line',{x1:l,y1:yt,x2:l,y2:yt+h,stroke:'#bccdd3'}));
  label(svg,l-8,yt+8,fmt(high,0),{'text-anchor':'end','font-size':11});label(svg,l-8,yt+h,fmt(low,0),{'text-anchor':'end','font-size':11});
- let last=null;for(const r of series){const x=mx(r[xname]);if(accepted(r)){const y=my(r.outputs.construction_points);if(last)svg.append(el('line',{x1:last[0],y1:last[1],x2:x,y2:y,stroke:'#176a67','stroke-width':2}));last=[x,y];const c=el('circle',{cx:x,cy:y,r:5,fill:'#176a67',tabindex:0,role:'button','aria-label':`${r[xname]}: ${fmt(r.outputs.construction_points)} points`});c.append(el('title',{},`${r[xname]}: ${fmt(r.outputs.construction_points)} points`));c.addEventListener('click',()=>select(r.id));c.addEventListener('keydown',e=>{if(e.key==='Enter')select(r.id);});svg.append(c);}else{last=null;label(svg,x,yt+h-4,'×',{'text-anchor':'middle'});}label(svg,x,yt+h+22,r[xname],{'text-anchor':'middle','font-size':11});}
+ let last=null;for(const r of series){const x=mx(r[xname]);if(scored(r)){const y=my(r.outputs.construction_points);if(last)svg.append(el('line',{x1:last[0],y1:last[1],x2:x,y2:y,stroke:'#176a67','stroke-width':2}));last=[x,y];const c=el('circle',{cx:x,cy:y,r:5,fill:fixed&&!r.feasible?'#a13e25':'#176a67',tabindex:0,role:'button','aria-label':`${r[xname]}: ${fmt(r.outputs.construction_points)} points${fixed&&!r.feasible?', checks failed':''}`});c.append(el('title',{},`${r[xname]}: ${fmt(r.outputs.construction_points)} points${fixed&&!r.feasible?' / checks failed':''}`));c.addEventListener('click',()=>select(r.id));c.addEventListener('keydown',e=>{if(e.key==='Enter')select(r.id);});svg.append(c);}else{last=null;label(svg,x,yt+h-4,'×',{'text-anchor':'middle'});}label(svg,x,yt+h+22,r[xname],{'text-anchor':'middle','font-size':11});}
  label(svg,l+w/2,yt+h+55,xlabel,{'text-anchor':'middle'});label(svg,15,yt+h/2,'Construction points',{transform:`rotate(-90 15 ${yt+h/2})`,'text-anchor':'middle','font-size':12});
 }
-document.getElementById('progress').textContent=`${rows.length} / ${times.length*fills.length} combinations complete; ${valid.length} with a converged, modeled-feasible design. ${study.starts.length} deterministic starts per combination.`;
+document.getElementById('progress').textContent=fixed?`${rows.length} / ${times.length*fills.length} combinations complete; ${plotted.length} numeric baseline evaluations, ${rows.filter(r=>r.status==='baseline'&&r.feasible).length} passing all model checks. No optimization.`:`${rows.length} / ${times.length*fills.length} combinations complete; ${plotted.length} with a converged, modeled-feasible design. ${study.starts.length} deterministic starts per combination.`;
 if(study.independent_speed_limit){const b=study.independent_speed_limit;document.getElementById('speed-limit').textContent=`Independent speed check: the 15 s profile needs at least ${fmt(b.required_peak_at_15s_m_s)} m/s, above the hardware's ${fmt(b.maximum_no_load_speed_m_s)} m/s maximum no-load speed. The optimistic minimum one-way time is ${fmt(b.minimum_one_way_time_s_no_load,1)} s; loads can increase it.`;}
 document.getElementById('time-slice-title').textContent=`Traversal time at fill ceiling ${study.baseline_fill.toFixed(2)}`;
 document.getElementById('fill-slice-title').textContent=`Fill ceiling at ${study.baseline_time_s} seconds one way`;
 slice('time-slice',rows.filter(r=>r.fill_fraction===study.baseline_fill).sort((a,b)=>a.traversal_time_s-b.traversal_time_s),'traversal_time_s','Traversal time (s, one way)');
 slice('fill-slice',rows.filter(r=>r.traversal_time_s===study.baseline_time_s).sort((a,b)=>a.fill_fraction-b.fill_fraction),'fill_fraction','Drum fill ceiling (fraction)');
-document.getElementById('provenance').textContent=`Source: ${study.source}. SHA-256: ${study.source_sha256}. Solver limit: ${study.maxiter_per_start} evaluations per start. Hardware: ${study.structure} / ${study.motors}.`;
-drawMap();const preferred=byId.get(location.hash.slice(1))||lookup(study.baseline_time_s,study.baseline_fill)||valid[0]||rows[0];if(preferred)select(preferred.id);
+document.getElementById('provenance').textContent=`Source: ${study.source}. SHA-256: ${study.source_sha256}. ${fixed?'Fixed hardware; optimizer not run.':`Solver limit: ${study.maxiter_per_start} evaluations per start.`} Hardware: ${study.structure} / ${study.motors}.`;
+drawMap();const preferred=byId.get(location.hash.slice(1))||lookup(study.baseline_time_s,study.baseline_fill)||plotted[0]||rows[0];if(preferred)select(preferred.id);
 })();
 </script></main></body></html>

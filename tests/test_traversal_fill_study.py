@@ -1,10 +1,12 @@
 """Sweep coordinates, physical invariants and truthful candidate selection."""
 import copy
+import csv
 import json
 import math
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from rover.mobility import route_profiles
 from rover.problem import build_problem
@@ -12,7 +14,7 @@ from rover.config import configuration
 from rover.alternatives.x44_motor import CURVE
 from reporting.report import snapshot
 from studies.traversal_fill import (validate_grid, select_attempt, run_cell,
-                                    load_study_inputs, DEFAULT_TIMES, DEFAULT_FILLS)
+                                    load_study_inputs, resolve_output, DEFAULT_TIMES, DEFAULT_FILLS)
 from studies.traversal_fill_view import write_explorer
 
 
@@ -38,6 +40,48 @@ class TraversalFillStudyTests(unittest.TestCase):
                              ([45], [.1]), ([45], [1]), ([math.nan], [.4]), ([45], [math.inf]), ([True],[.4])):
             with self.subTest(times=times, fills=fills), self.assertRaises(ValueError):
                 validate_grid(times, fills)
+
+    def test_default_output_resumes_matching_run_and_preserves_legacy_results(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            legacy = root/'study.json'
+            legacy.write_text(json.dumps({'fingerprint':'legacy'}), encoding='utf-8')
+            before = legacy.read_bytes()
+            with patch('studies.traversal_fill.DEFAULT_OUTPUT_ROOT', root):
+                first = resolve_output(None, 'a'*64)
+                first.mkdir(parents=True)
+                (first/'study.json').write_text(json.dumps({'fingerprint':'a'*64}), encoding='utf-8')
+                self.assertEqual(resolve_output(None, 'a'*64), first)
+                changed = resolve_output(None, 'b'*64)
+                self.assertNotEqual(changed, first)
+                self.assertFalse(changed.exists())
+                self.assertEqual(first.parent, root/'runs')
+                self.assertEqual(legacy.read_bytes(), before)
+
+    def test_explicit_output_rejects_stale_manifest_and_unrequested_cells(self):
+        # Check the entire folder, even when a requested grid would not overlap
+        # the old cases, so a new manifest cannot hide mixed-model results.
+        for record in ('study.json', 'cases/t15_f0p2/cell.json'):
+            with self.subTest(record=record), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                stale = root/record
+                stale.parent.mkdir(parents=True, exist_ok=True)
+                stale.write_text(json.dumps({'fingerprint':'old'}), encoding='utf-8')
+                before = stale.read_bytes()
+                with self.assertRaisesRegex(ValueError, 'Omit --output'):
+                    resolve_output(root, 'new')
+                self.assertEqual(stale.read_bytes(), before)
+                self.assertEqual(resolve_output(root, 'old'), root)
+                self.assertEqual(resolve_output(root/'fresh', 'new'), root/'fresh')
+
+    def test_default_fingerprint_prefix_collision_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch('studies.traversal_fill.DEFAULT_OUTPUT_ROOT', Path(folder)):
+                first = resolve_output(None, 'a'*16+'b'*48)
+                first.mkdir(parents=True)
+                (first/'study.json').write_text(json.dumps({'fingerprint':'a'*16+'b'*48}), encoding='utf-8')
+                with self.assertRaisesRegex(ValueError, 'Stale study/cache'):
+                    resolve_output(None, 'a'*16+'c'*48)
 
     def test_route_distance_and_inverse_time_scaling_are_preserved(self):
         v = self.values
@@ -111,6 +155,56 @@ class TraversalFillStudyTests(unittest.TestCase):
         self.assertEqual(values,self.values)
         for p, raw in before.items():
             self.assertEqual(p.read_bytes(),raw)
+
+    def test_fixed_baseline_never_runs_optimizer_and_retains_failed_checks_and_scores(self):
+        before = {p:p.read_bytes() for p in (Path('design_baseline.json'),Path('design_optimized.json'))}
+        expected = self.evaluate(45, .9)
+        with tempfile.TemporaryDirectory() as folder:
+            job = {'seconds':45., 'fill':.9, 'output':folder, 'source_inputs':copy.deepcopy(self.values),
+                   'source_name':'design_baseline.json', 'source_revision':'test', 'source_sha256':self.meta['sha256'],
+                   'structure':self.structure, 'motors':self.motors, 'maxiter':2000,
+                   'starts':[('baseline',{})], 'fingerprint':'test-fixed', 'mode':'fixed_design'}
+            with patch('openmdao.core.problem.Problem.run_driver', side_effect=AssertionError('Optimizer must not run')) as driver:
+                row = run_cell(job)
+                driver.assert_not_called()
+            self.assertEqual(row['status'], 'baseline')
+            self.assertIsNone(row['optimizer_success'])
+            self.assertFalse(row['feasible'])
+            self.assertIn('empty_slope_traversal_margin', row['failed_checks'])
+            self.assertIn('loaded_slope_traversal_margin', row['failed_checks'])
+            self.assertEqual(row['outputs']['construction_points'], expected['outputs']['construction_points']['value'])
+            self.assertEqual(row['design'], {n:v['value'] for n,v in expected['design'].items()})
+            record = json.loads((Path(folder)/row['analysis']).read_text())
+            self.assertEqual(record['report_context']['mode'], 'fixed_design')
+            self.assertEqual(record['baseline'], record['final'])
+            self.assertTrue((Path(folder)/row['report']).exists())
+            study = {'mode':'fixed_design', 'rows':[row], 'source_inputs':self.values, 'fingerprint':'test-fixed'}
+            write_explorer(study, folder)
+            with (Path(folder)/'summary.csv').open(newline='') as stream:
+                saved = next(csv.DictReader(stream))
+            self.assertEqual(saved['mode'], 'fixed_design')
+            self.assertEqual(saved['feasible'], 'False')
+            self.assertEqual(saved['optimizer_success'], '')
+            self.assertEqual(float(saved['construction_points']), row['outputs']['construction_points'])
+        for p, raw in before.items():
+            self.assertEqual(p.read_bytes(), raw)
+
+    def test_fixed_baseline_exception_does_not_invent_a_score_or_geometry(self):
+        with tempfile.TemporaryDirectory() as folder:
+            job = {'seconds':45., 'fill':.4, 'output':folder, 'source_inputs':self.values,
+                   'source_name':'design_baseline.json', 'source_revision':'test', 'source_sha256':self.meta['sha256'],
+                   'structure':self.structure, 'motors':self.motors, 'maxiter':2000,
+                   'starts':[('baseline',{})], 'fingerprint':'test-fixed-error', 'mode':'fixed_design'}
+            with patch('rover.problem.build_problem', side_effect=ValueError('Actual invalid input')):
+                row = run_cell(job)
+            self.assertEqual(row['status'], 'error')
+            self.assertNotIn('outputs', row)
+            self.assertIsNone(row['analysis'])
+            write_explorer({'mode':'fixed_design', 'rows':[row], 'source_inputs':self.values}, folder)
+            report = (Path(folder)/row['report']).read_text(encoding='utf-8')
+            self.assertIn('No usable baseline evaluation', report)
+            self.assertIn('Actual invalid input', report)
+            self.assertNotIn('<svg', report)
 
     def test_missing_final_state_gets_diagnostics_without_invented_geometry(self):
         with tempfile.TemporaryDirectory() as folder:

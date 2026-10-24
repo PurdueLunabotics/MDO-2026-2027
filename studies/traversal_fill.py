@@ -1,4 +1,4 @@
-"""Optimize a Cartesian grid of one-way route time and drum storage ceilings.
+"""Sweep one-way route time and drum storage ceilings, with optional optimization.
 
 python -m studies.traversal_fill --workers 6
 Outputs stay under ignored results/. This never rewrites either design JSON.
@@ -19,6 +19,7 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TIMES = tuple(range(15, 181, 15))
 DEFAULT_FILLS = tuple(i/10 for i in range(2, 10))
+DEFAULT_OUTPUT_ROOT = ROOT/'results/sensitivity/traversal_fill'
 
 
 def utc_now():
@@ -34,6 +35,22 @@ def atomic_json(path, value):
     temporary = path.with_suffix(path.suffix+".tmp")
     temporary.write_text(json.dumps(value, indent=2, allow_nan=False)+"\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def resolve_output(requested, fingerprint):
+    """Isolate default runs, and reject mixed caches before writing anything."""
+    output = (Path(requested) if requested is not None else
+              DEFAULT_OUTPUT_ROOT/'runs'/fingerprint[:16]).resolve()
+    records = [output/'study.json', *sorted((output/'cases').glob('*/cell.json'))]
+    for path in records:
+        if path.exists():
+            saved = json.loads(path.read_text(encoding='utf-8'))
+            if saved.get('fingerprint') != fingerprint:
+                raise ValueError(
+                    f"Stale study/cache at {path}; inputs, model/data, or solver settings differ. "
+                    "Existing results were preserved. Omit --output to select a matching run folder "
+                    "automatically, or use --output with a new, empty folder.")
+    return output
 
 
 def validate_grid(times, fills):
@@ -83,38 +100,44 @@ def run_attempt(job, seed_name, seed_design):
     from rover.problem import build_problem
     from reporting.report import snapshot
     import openmdao
-    values = {**job['source_inputs'], **seed_design,
+    fixed = job.get('mode') == 'fixed_design'
+    values = {**job['source_inputs'], **({} if fixed else seed_design),
               'traversal_time_one_way': job['seconds'], 'fill_fraction': job['fill']}
     p = None
     started = time.perf_counter()
     record = {'schema_version': 2, 'openmdao_version': openmdao.__version__,
-              'optimizer_success': False, 'status': 'error', 'notice': 'Uncalibrated conceptual estimates.',
+              'optimizer_success': None if fixed else False, 'status': 'error', 'notice': 'Uncalibrated conceptual estimates.',
               'report_context': {'name': f"Traversal {job['seconds']:g} s / fill ceiling {job['fill']:.2f}",
                                  'revision': job['source_revision'], 'source': job['source_name'],
                                  'source_sha256': job['source_sha256'], 'generated_utc': utc_now(),
-                                 'mode': 'optimization', 'input_file_names': sorted(job['source_inputs']),
+                                 'mode': 'fixed_design' if fixed else 'optimization', 'input_file_names': sorted(job['source_inputs']),
                                  'cli_override_names': ['traversal_time_one_way', 'fill_fraction'],
                                  'source_notes': {'study': 'traversal_fill', 'start': seed_name,
                                                   'study_fingerprint': job['fingerprint']}}}
     try:
         p = build_problem(values, structure=job['structure'], motors=job['motors'],
-                          maxiter=job['maxiter'], display=False)
+                          maxiter=None if fixed else job['maxiter'], display=False)
         record['model_metadata'] = p.model_metadata
         assert not {'traversal_time_one_way', 'fill_fraction'} & set(p.design_specs)
         p.run_model()
         record['baseline'] = snapshot(p)
-        result = p.run_driver()
-        p.run_model()
-        record['final'] = snapshot(p)
-        record['optimizer_success'] = bool(result.success)
-        record['optimizer_result'] = str(result)
-        record['optimizer'] = p.model_metadata['optimizer_settings']['optimizer']
-        record['status'] = 'converged_feasible' if result.success and record['final']['feasible'] else 'failed_or_infeasible'
+        if fixed:
+            record['final'] = record['baseline']
+            record['optimizer_result'] = 'Fixed-design analysis; optimizer not run.'
+            record['status'] = 'baseline'
+        else:
+            result = p.run_driver()
+            p.run_model()
+            record['final'] = snapshot(p)
+            record['optimizer_success'] = bool(result.success)
+            record['optimizer_result'] = str(result)
+            record['optimizer'] = p.model_metadata['optimizer_settings']['optimizer']
+            record['status'] = 'converged_feasible' if result.success and record['final']['feasible'] else 'failed_or_infeasible'
         for name, requested in (('traversal_time_one_way', job['seconds']), ('fill_fraction', job['fill'])):
             if p.get_val(name).item() != requested:
                 raise RuntimeError(f"The swept input {name} was not held fixed.")
     except Exception:
-        record.update(status='error', optimizer_success=False, error=traceback.format_exc())
+        record.update(status='error', optimizer_success=None if fixed else False, error=traceback.format_exc())
         # A computation exception cannot promote its last diagnostic state.
         record.pop('final', None)
     finally:
@@ -136,7 +159,7 @@ def run_cell(job):
             result = run_attempt(job, seed_name, seed_design)
             atomic_json(folder/f"attempt_{seed_name}.json", result)
             attempts.append(result)
-        selected = select_attempt(attempts)
+        selected = (attempts[0] if attempts[0].get('final') else None) if job.get('mode') == 'fixed_design' else select_attempt(attempts)
         if selected:
             atomic_json(folder/'analysis.json', selected)
             from reporting.html_report import write_report
@@ -189,23 +212,33 @@ def load_study_inputs(path, seed_path):
 
 def build_study(args):
     times, fills = validate_grid(args.times, args.fills)
-    values, meta, structure, motors, starts = load_study_inputs(args.inputs, args.seed)
-    files = sorted((ROOT/'rover').rglob('*.py')) + sorted((ROOT/'data/motors').glob('*.csv')) + [ROOT/'data/motors/manifest.json']
+    fixed = getattr(args, 'baseline', False)
+    mode = 'fixed_design' if fixed else 'optimization'
+    values, meta, structure, motors, starts = load_study_inputs(args.inputs, None if fixed else args.seed)
+    files = (sorted((ROOT/'rover').rglob('*.py')) + sorted((ROOT/'data/motors').glob('*.csv'))
+             + [ROOT/'data/motors/manifest.json']
+             + sorted((ROOT/'data/mobility/bekker_wong_reece').glob('*.json')))
     model_hashes = {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     versions = {name: version(name) for name in ('openmdao', 'numpy', 'scipy')}
     fingerprint = digest({'source_inputs': values, 'source_sha256': meta['sha256'], 'starts': starts,
-                          'structure': structure, 'motors': motors, 'maxiter': args.maxiter,
+                          'structure': structure, 'motors': motors, 'mode': mode,
+                          'maxiter': None if fixed else args.maxiter,
                           'model_hashes': model_hashes, 'versions': versions,
                           'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()})
-    output = args.output.resolve()
+    output = resolve_output(args.output, fingerprint)
     output.mkdir(parents=True, exist_ok=True)
-    manifest = {'schema_version': 1, 'created_utc': utc_now(), 'source': args.inputs.name,
+    print(f"Study output: {output}", flush=True)
+    print(f"Open/refresh: {output/'index.html'}", flush=True)
+    manifest = {'schema_version': 1, 'mode': mode, 'created_utc': utc_now(), 'source': args.inputs.name,
                 'source_sha256': meta['sha256'], 'source_inputs': values, 'source_model_sha256': model_hashes,
                 'fingerprint': fingerprint, 'structure': structure, 'motors': motors,
                 'traversal_times_s': times, 'fill_fractions': fills, 'starts': [n for n, _ in starts],
-                'maxiter_per_start': args.maxiter, 'package_versions': versions,
-                'objective': 'maximum saved continuous construction_points among converged, modeled-feasible starts',
-                'limitations': 'Best local result from deterministic starts, not a proven global optimum. Uncalibrated physics. Fill is a storage ceiling; actual payload can be soil-reach limited.',
+                'maxiter_per_start': None if fixed else args.maxiter, 'package_versions': versions,
+                'objective': ('fixed baseline hardware predictions; no optimization' if fixed else
+                              'maximum saved continuous construction_points among converged, modeled-feasible starts'),
+                'limitations': (('Fixed-design predictions include cases with failed checks; these are not feasible designs. ' if fixed else
+                                 'Best local result from deterministic starts, not a proven global optimum. ')
+                                + 'Uncalibrated physics. Fill is a storage ceiling; actual payload can be soil-reach limited.'),
                 'rows': []}
     jobs, rows = [], []
     for fill in fills:
@@ -213,31 +246,32 @@ def build_study(args):
             cached = output/'cases'/case_id(seconds, fill)/'cell.json'
             if cached.exists():
                 row = json.loads(cached.read_text(encoding='utf-8'))
-                if row.get('fingerprint') != fingerprint:
-                    raise ValueError(f"Stale case {cached}; choose a new output folder for changed inputs/settings/code.")
                 rows.append(row)
             else:
                 jobs.append({'seconds': seconds, 'fill': fill, 'output': str(output), 'source_inputs': values,
                              'source_name': args.inputs.name, 'source_revision': meta.get('revision', 'Not specified'),
                              'source_sha256': meta['sha256'], 'structure': structure, 'motors': motors,
-                             'maxiter': args.maxiter, 'starts': starts, 'fingerprint': fingerprint})
+                             'maxiter': args.maxiter, 'mode': mode, 'starts': starts, 'fingerprint': fingerprint})
     from .traversal_fill_view import write_explorer
     def save_progress():
         manifest['rows'] = sorted(rows, key=lambda r: (r['fill_fraction'], r['traversal_time_s']))
         manifest['completed_cases'] = len(rows)
         manifest['converged_feasible_cases'] = sum(r['status'] == 'converged_feasible' for r in rows)
+        manifest['modeled_feasible_cases'] = sum(bool(r.get('feasible')) for r in rows)
         atomic_json(output/'study.json', manifest)
         write_explorer(manifest, output)
     save_progress()
-    print(f"{len(times)} x {len(fills)} = {len(times)*len(fills)} cases, {len(starts)} starts/case; {len(rows)} cached.", flush=True)
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(run_cell, job): job for job in jobs}
-        for future in as_completed(futures):
-            row = future.result()
-            rows.append(row)
-            save_progress()
-            print(f"[{len(rows)}/{len(times)*len(fills)}] {row['id']}: {row['status']} "
-                  f"{row.get('outputs', {}).get('construction_points', float('nan')):.2f} points", flush=True)
+    print(f"{len(times)} x {len(fills)} = {len(times)*len(fills)} cases, "
+          f"{'fixed baseline; no optimization' if fixed else str(len(starts))+' starts/case'}; {len(rows)} cached.", flush=True)
+    if jobs:
+        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+            futures = {pool.submit(run_cell, job): job for job in jobs}
+            for future in as_completed(futures):
+                row = future.result()
+                rows.append(row)
+                save_progress()
+                print(f"[{len(rows)}/{len(times)*len(fills)}] {row['id']}: {row['status']} "
+                      f"{row.get('outputs', {}).get('construction_points', float('nan')):.2f} points", flush=True)
     print(f"Saved {output/'index.html'}", flush=True)
     return manifest
 
@@ -246,11 +280,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--inputs', type=Path, default=Path('design_baseline.json'))
     parser.add_argument('--seed', type=Path, default=Path('design_optimized.json'))
+    parser.add_argument('--baseline', action='store_true',
+                        help='Evaluate fixed baseline hardware at each grid point without optimization; ignore --seed.')
     parser.add_argument('--times', nargs='+', type=float, default=DEFAULT_TIMES)
     parser.add_argument('--fills', nargs='+', type=float, default=DEFAULT_FILLS)
     parser.add_argument('--workers', type=int, default=6)
     parser.add_argument('--maxiter', type=int, default=2000)
-    parser.add_argument('--output', type=Path, default=Path('results/sensitivity/traversal_fill'))
+    parser.add_argument('--output', type=Path, default=None,
+                        help='Exact output folder (must match any cached study). By default, select '
+                             'results/sensitivity/traversal_fill/runs/<fingerprint> automatically.')
     args = parser.parse_args()
     if args.workers < 1 or args.maxiter < 1:
         parser.error('Workers and maxiter must be positive.')

@@ -308,13 +308,22 @@ The study independently optimizes 96 combinations: one-way traversal times
 .\.venv\Scripts\python.exe -m studies.traversal_fill --workers 6
 ```
 
-Open **`results/sensitivity/traversal_fill/index.html`**. Click a heat-map cell
+For the same grid with fixed baseline hardware and **no optimization**, add
+`--baseline`. Predicted scores remain visible with failed checks explicitly
+marked, including BWR failures; this does not declare those designs feasible.
+
+Open the `index.html` path printed at startup, under
+**`results/sensitivity/traversal_fill/runs/<fingerprint>/`**. Click a heat-map cell
 for its top/side geometry, dimensions, solver outcomes, and detailed report.
 The study takes longer than a single optimization; reduce `--workers` on a
-smaller computer. Repeating the command resumes matching completed cells.
+smaller computer. Repeating the command resumes matching completed cells;
+changed inputs, model/data, or solver settings select a new default folder.
+An explicit `--output` folder must match its cached study. Earlier results at
+`results/sensitivity/traversal_fill/index.html` remain available as history.
 
-The completed study found 88 converged feasible cells; the 15 s row is beyond
-the current drive profile's speed capability. Fill fraction affects component
+The historical study, before BWR mobility and box arms, found 88 converged
+feasible cells; its 15 s row exceeded the drive profile's speed capability.
+Those results have not been rerun with the current baseline. Fill fraction affects component
 sizing as well as score; similar drawings do not establish hardware robustness.
 See [method, findings, and limitations](docs/SENSITIVITY_STUDY.md).
 

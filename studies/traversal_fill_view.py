@@ -7,6 +7,7 @@ from pathlib import Path
 
 def write_explorer(study, output):
     output = Path(output)
+    fixed = study.get('mode') == 'fixed_design'
     if study.get('motors') == 'x44-standard':
         # Independent optimistic limit for the prescribed profile: use the
         # narrowest track and largest wheel, even before allowing for load.
@@ -31,11 +32,15 @@ def write_explorer(study, output):
             folder = output/'cases'/source['id']
             diagnostics = ''.join('<h2>'+escape(a['start'])+'</h2><pre>'+escape(error or 'No final state saved.')+'</pre>'
                                   for a, error in zip(source['attempts'], source.get('errors', [])))
+            heading = 'No usable baseline evaluation' if fixed else 'No usable optimized design'
+            explanation = ('The fixed baseline evaluation ended without a usable numeric state. '
+                           'No geometry or score is claimed for this point. ' if fixed else
+                           'Both starts ended without a usable final numeric state. No optimized geometry or valid optimum is claimed for this point. ')
             (folder/'error.html').write_text(
                 '<!doctype html><html lang="en"><meta charset="utf-8"><title>Study solver diagnostics</title>'
                 '<style>body{font:15px/1.6 system-ui;max-width:1100px;margin:40px auto;padding:20px}pre{white-space:pre-wrap;overflow-wrap:anywhere}h1{color:#a13e25}</style>'
-                f'<h1>No usable optimized design: {source["traversal_time_s"]:g} s / fill ceiling {source["fill_fraction"]:g}</h1>'
-                '<p>Both starts ended without a usable final numeric state. No optimized geometry or valid optimum is claimed for this point. '
+                f'<h1>{heading}: {source["traversal_time_s"]:g} s / fill ceiling {source["fill_fraction"]:g}</h1>'
+                '<p>'+explanation+
                 'The model constraints and failure status have not been relaxed.</p><p><a href="../../index.html">Return to heat map</a></p>'+diagnostics+'</html>', encoding='utf-8')
             source['report'] = f"cases/{source['id']}/error.html"
         row = {k: v for k, v in source.items() if k not in ('assumptions', 'fingerprint')}
@@ -54,7 +59,7 @@ def write_explorer(study, output):
     temporary.write_text(template.replace('__STUDY_DATA__', text), encoding='utf-8')
     temporary.replace(output/'index.html')
     design_names = sorted({n for row in rows for n in row.get('design', {})})
-    names = ['id', 'traversal_time_one_way_s', 'fill_fraction', 'status', 'selected_start',
+    names = ['id', 'traversal_time_one_way_s', 'fill_fraction', 'status', 'mode', 'feasible', 'optimizer_success', 'selected_start',
              'construction_points', 'mass_points', 'energy_points', 'whole_cycle_points', 'completed_cycles',
              'dry_mass_kg', 'payload_mass_kg', 'mission_energy_Wh', 'cycle_time_s', 'storage_use_fraction',
              'failed_checks', 'report', *design_names]
@@ -65,6 +70,8 @@ def write_explorer(study, output):
             outputs, whole = row.get('outputs', {}), row.get('whole_cycles', {})
             writer.writerow({'id': row['id'], 'traversal_time_one_way_s': row['traversal_time_s'],
                              'fill_fraction': row['fill_fraction'], 'status': row['status'],
+                             'mode': study.get('mode', 'optimization'), 'feasible': row.get('feasible'),
+                             'optimizer_success': row.get('optimizer_success'),
                              'selected_start': row.get('selected_start'),
                              **{k: outputs.get(k) for k in ('construction_points', 'mass_points', 'energy_points')},
                              'whole_cycle_points': whole.get('construction_points'), 'completed_cycles': whole.get('completed'),

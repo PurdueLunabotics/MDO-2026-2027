@@ -1,8 +1,38 @@
 # Traversal-time and drum-fill sensitivity
 
 Optimize the hardware independently at each combination of two fixed operating
-assumptions, then inspect scores and geometry in an offline heat map. Neither
+assumptions, or evaluate the same baseline hardware throughout the grid, then
+inspect scores and geometry in an offline heat map. Neither
 `design_baseline.json` nor `design_optimized.json` is changed.
+
+## Fixed baseline hardware, without optimization
+
+```powershell
+.\.venv\Scripts\python.exe -m studies.traversal_fill --baseline --workers 6
+```
+
+This evaluates `design_baseline.json` once per grid cell. All hardware design
+variables remain fixed; only traversal time and fill ceiling change.
+`design_optimized.json` and `--seed` are ignored, and no optimizer runs.
+Use `--inputs another_baseline.json` to evaluate a different saved rover.
+
+The heat map and both line charts show predicted construction points even when
+BWR or other checks fail. A **!** on a colored cell and orange line-plot markers
+flag failed checks; select a cell for their names and margins. Status is
+`baseline`, feasibility remains explicit, and optimizer success is unset.
+These are conditional score predictions, not accepted feasible designs.
+Gray × indicates an evaluation error with no usable numeric result.
+The BWR equations and constraint thresholds are unchanged.
+
+Fixed-design and optimization runs use separate fingerprints and output folders.
+`--maxiter` has no effect on baseline evaluation or its fingerprint. The default
+command without `--baseline` still reoptimizes each cell.
+
+For a single baseline report without the sensitivity grid:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --baseline --output results/baseline_check.json
+```
 
 ## Run, view, or resume
 
@@ -10,26 +40,56 @@ assumptions, then inspect scores and geometry in an offline heat map. Neither
 .\.venv\Scripts\python.exe -m studies.traversal_fill --workers 6
 ```
 
-Open **`results/sensitivity/traversal_fill/index.html`** in Chrome or Edge.
+The runner prints **`Study output:`** and **`Open/refresh:`** before optimization
+starts. Open that `index.html` in Chrome or Edge. Default outputs now live in
+**`results/sensitivity/traversal_fill/runs/<fingerprint>/index.html`**, where the
+folder name is the first 16 characters of the run's fingerprint.
 Refresh during a run to see completed cells. Click a cell for its top view,
 travel/compact/digging side views, dimensions, both solver-start outcomes,
 storage utilization, and a detailed PDF-ready report. Color represents
 construction points; x is one-way time and y is fill ceiling. The two line plots
-show slices at the source baseline's other assumption (45 s and 0.4 here).
+show slices at the source baseline's other assumption.
 
 Use fewer workers on a smaller computer. Repeating the command reuses completed
 cells only when source inputs, starts, source/data hashes, package versions, and
-solver settings match. If those change, select a new output folder. For a small
-trial before the full run:
+solver settings match. Changing those selects a separate default run folder;
+old results are preserved. Worker count does not change the fingerprint. Grid
+axes are also excluded, so a small trial can later be expanded in the same run.
+For a small trial before the full run:
 
 ```powershell
-.\.venv\Scripts\python.exe -m studies.traversal_fill --times 30 45 90 --fills 0.2 0.4 0.9 --workers 2 --output results/sensitivity/trial
+.\.venv\Scripts\python.exe -m studies.traversal_fill --times 30 45 90 --fills 0.2 0.4 0.9 --workers 2
 ```
+
+Run the full command afterward to retain those cells and compute the rest.
+Changing `--maxiter` creates a different run because it changes solver settings.
+
+### If you see `Stale case` or `Stale study/cache`
+
+This means the folder contains results from different inputs, code/data, or
+solver settings; it does not mean the output folder moved. Earlier versions
+always used `results/sensitivity/traversal_fill/` and stopped when that cache
+became outdated. With the updated runner, repeat the default command above:
+it selects a separate matching run automatically. The original
+`results/sensitivity/traversal_fill/index.html` remains the historical study.
+
+`--output` still selects an **exact folder**, for example:
+
+```powershell
+.\.venv\Scripts\python.exe -m studies.traversal_fill --workers 6 --output results/sensitivity/traversal_fill_current
+```
+
+An explicit folder must be empty or contain a matching study. If it is stale,
+omit `--output` or choose another unused folder. The runner checks its manifest
+and all cached cells before writing, including cases outside the requested grid.
+It never combines stale and current predictions or deletes the old study.
 
 All outputs are ignored by Git. A fresh clone must run the study or receive a
 shared copy. To share detailed results, copy the **complete output folder**;
 the heat map itself is self-contained, but its detailed report links need
 `cases/`. Print any case through the [report guide](DESIGN_REPORT.md).
+
+The following paths are relative to the printed study output folder:
 
 | Output | Contents |
 | --- | --- |
@@ -48,8 +108,11 @@ is the smaller of that storage target and reachable captured soil.
 
 Each cell has two deterministic starts: baseline design variables and saved
 candidate design variables. Both inherit every nonswept assumption from the
-baseline. The completed study uses plate-frame / standard-X44, COBYLA, 2000
-evaluations per start, stopping accuracy 1e-5, and initial radius 0.02. Bounds,
+baseline. The runner uses the source hardware profiles and their default solver
+(COBYLA for plate-frame), with 2000 iterations/evaluations per start by default;
+the exact settings are saved in each attempt's model metadata. The historical
+completed study used plate-frame / standard-X44, COBYLA, 2000 evaluations per
+start, stopping accuracy 1e-5, and initial radius 0.02. Bounds,
 physical constraints, inward numerical reserves, score weights, Earth gravity,
 and 900 s mission are unchanged.
 
@@ -61,7 +124,12 @@ invented geometry or scores. Gray cells mean no accepted solution was found,
 not a general infeasibility proof. There is no interpolation across failures.
 These are local optimization results from two starts, not proven global optima.
 
-## Completed study: 2026-10-15
+## Historical completed study: 2026-10-15
+
+The findings below belong to the earlier model, before the current BWR mobility
+and aluminum box-arm changes. They are retained as historical results and do
+**not** describe a rerun of today's baseline. The updated runner requires a new
+run for the current model; this output-management fix does not rerun all 96 cells.
 
 All 96 cells and 192 actual starts completed. **88 cells have accepted designs.**
 All eight 15 s cells fail: five retain failed numeric iterates and three retain
