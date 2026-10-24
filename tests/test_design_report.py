@@ -12,6 +12,9 @@ import xml.etree.ElementTree as ET
 
 from reporting.case_inputs import read_case
 from reporting.html_report import write_report, top_view_svg, values_from_snapshot
+from reporting.obstacle_drawing import obstacle_pose_svg
+from reporting.frame_members import chassis_members
+from rover.alternatives.parallel_cylinder_clearance import cylinder_clearance_cases
 from reporting.archive import archive_cases
 from rover.problem import build_problem
 from reporting.report import snapshot
@@ -102,6 +105,55 @@ class DesignReportTests(unittest.TestCase):
                              (drums[0], values['drum_diameter'], values['drum_length'])):
             self.assertAlmostEqual(float(part.get('width'))/float(part.get('height')), dx/dy, places=4)
         self.assertIn('Projection overlap does not prove collision', ''.join(root.itertext()))
+
+        def members(kind):
+            return [n for n in root.iter() if n.get('data-part') == kind]
+        self.assertEqual(len(members('arm')), 2)
+        self.assertEqual(len(members('actuator')), 2)
+        self.assertEqual(len(members('rocker')), 2)
+        self.assertEqual(len(members('rocker-axle')), 1)
+        self.assertEqual(len(members('cf-connector')), 4)
+        self.assertEqual(len(members('frame-plate')), 2)
+        scale = float(wheels[0].get('width'))/values['wheel_diameter']
+        plan_center = sum(float(d.get('y'))+float(d.get('height'))/2 for d in drums)/4
+        for arm in members('arm'):
+            self.assertAlmostEqual(float(arm.get('height'))/scale, values['arm_box_width'], places=5)
+            self.assertAlmostEqual(float(arm.get('y'))+float(arm.get('height'))/2, plan_center, places=3)
+        for tube in members('cf-connector'):
+            self.assertAlmostEqual(float(tube.get('height'))/scale, values['cf_tube_span'], places=5)
+        # Both pictures use one linkage per shaft-linked pair, centered in y.
+        for member in chassis_members(values):
+            if member['kind'] in ('arm','actuator'):
+                self.assertEqual(member['start'][1], 0.)
+                self.assertEqual(member['end'][1], 0.)
+
+    def test_rock_view_single_linkages_and_camera_depth_order(self):
+        before = json.dumps(self.state, sort_keys=True)
+        values = values_from_snapshot(self.state)
+        root = ET.fromstring(obstacle_pose_svg(values))
+        layers = [n for n in root.iter() if n.get('data-depth') is not None]
+        for kind, count in (('arm',2),('actuator',2),('cf-connector',4),('wheel',4),('drum',4)):
+            self.assertEqual(sum(n.get('data-part') == kind for n in layers), count)
+        self.assertEqual([float(n.get('data-depth')) for n in layers],
+                         sorted(float(n.get('data-depth')) for n in layers))
+        # Derive the view normal independently from the two screen basis rows.
+        right,up = (.88,.45,0.),(-.12,.20,1.)
+        normal = (right[1]*up[2]-right[2]*up[1],right[2]*up[0]-right[0]*up[2],
+                  right[0]*up[1]-right[1]*up[0])
+        case = cylinder_clearance_cases(values)['cases'][0]
+        expected = []
+        for kind,centers in (('wheel',case['wheels']),('drum',case['drums'])):
+            for i,center in enumerate(centers):
+                expected.append((sum(a*b for a,b in zip(normal,center)),kind+'-'+str(i)))
+        actual = [n.get('data-object') for n in layers if n.get('data-part') in ('wheel','drum')]
+        self.assertEqual(actual, [identity for _,identity in sorted(expected)])
+        # Right-side wheels are nearer this negative-y POV than left-side mates.
+        self.assertGreater(actual.index('wheel-1'), actual.index('wheel-0'))
+        self.assertGreater(actual.index('wheel-3'), actual.index('wheel-2'))
+        for body in (n for n in layers if n.get('data-part') in ('wheel','drum')):
+            self.assertTrue(any(n.get('data-surface') == 'cap' for n in body.iter()))
+            self.assertFalse(any(n.get('fill-opacity') is not None for n in body.iter()))
+        self.assertEqual(json.dumps(self.state, sort_keys=True), before)
 
     def test_archive_keeps_failed_candidates_failed_and_rejects_unrelated_inputs(self):
         baseline = self.record()

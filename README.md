@@ -18,12 +18,16 @@ the interactive report; PDFs can be read directly on GitHub.
 | Design | Printable PDF | Interactive report |
 | --- | --- | --- |
 | Student-selected baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
-| Optimizer candidate | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
+| Historical optimizer candidate (outdated model) | [Historical PDF](output/pdf/optimized.pdf) | [Historical HTML](docs/design_reports/optimized.html) |
 
 Reports include scores, mass and energy, top and side views, failed checks, and
-complete input/output tables. The saved baseline currently has structural-stress
-and articulated-wheel-load failures; the candidate passes the current modeled
-checks. These are saved snapshots: changing inputs does not refresh them.
+complete input/output tables. The baseline was regenerated on **2026-10-24** from
+`design_baseline.json`, including the aluminum box arms and revised plan/rock
+drawings. It retains failures in empty/full climbing, turn traction,
+asymmetric-dump tipping, static slope tipping and rock-path wheel loading.
+The historical candidate reports predate the current BWR climbs and box arms;
+their old pass statuses do not establish current feasibility. These are saved
+snapshots: changing inputs does not refresh them.
 
 ## First run
 

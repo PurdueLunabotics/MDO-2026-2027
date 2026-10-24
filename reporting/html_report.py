@@ -148,9 +148,9 @@ def top_view_svg(values):
     def point(x, y):
         return 600+x*scale, 335-y*scale
 
-    def line(x1, y1, x2, y2, color="#567181", width=2, dash=""):
+    def line(x1, y1, x2, y2, color="#567181", width=2, dash="", kind=""):
         a, b = point(x1, y1); c, d = point(x2, y2)
-        return f'<line x1="{a:.3f}" y1="{b:.3f}" x2="{c:.3f}" y2="{d:.3f}" stroke="{color}" stroke-width="{width}" stroke-dasharray="{dash}"/>'
+        return f'<line data-part="{kind}" x1="{a:.3f}" y1="{b:.3f}" x2="{c:.3f}" y2="{d:.3f}" stroke="{color}" stroke-width="{width}" stroke-dasharray="{dash}"/>'
 
     def box(x, y, dx, dy, fill, stroke, dash="", kind=""):
         a, b = point(x-dx/2, y+dy/2)
@@ -167,15 +167,44 @@ def top_view_svg(values):
               '<text x="35" y="68" font-size="16">Orthographic footprints; front is +x (right). Dimensions in mm.</text>',
               box(0, 0, 1.5, .75, "none", "#5282ac", "8 5", "stowed-limit"),
               box(0, 0, wb, track, "#edf2f4", "#99aeb8", "4 5", "support-polygon")]
-    plate_y = v("cf_tube_span")/2 if "cf_tube_span" in values else track/2
-    for sy in (-1, 1):
-        pieces.append(line(-wb/2, sy*plate_y, wb/2, sy*plate_y, "#7898b0", 4))
-        for sx in (-1, 1):
-            pieces.append(box(sx*wb/2, sy*track/2, v("wheel_diameter"), ww, "#cbd6df", "#354657", kind="wheel"))
-            pieces.append(box(sx*cx, sy*(length+gap)/2, diameter, length, "#e6b68e", "#a54b1e", kind="drum"))
-            pieces.append(line(sx*v("pivot_x"), sy*plate_y, sx*cx, sy*plate_y, "#246f99", 5))
+    from .frame_members import chassis_members, rocker_bearing_span
+    members = chassis_members(values)
+    if 'cf_tube_span' in values:
+        span = rocker_bearing_span(values)
+        # A top footprint of each sloping box rocker and the central round axle.
+        pieces.append(box(0,0,v('axle_outer_diameter'),span,'#526a7b','#304859',kind='rocker-axle'))
+        for sy in (-1,1):
+            pieces.append(box(0,sy*span/2,wb,v('rocker_box_width'),'#9aafbd','#536c7f',kind='rocker'))
+            for sx in (-1,1):
+                pieces.append(line(sx*wb/2,sy*span/2,sx*wb/2,sy*track/2,
+                                   '#526a7b',3,kind='wheel-axle'))
+        plate_half_length = max(v('pivot_x'),v('actuator_pivot_x'))+v('cf_tube_inner_diameter')/2+v('cf_tube_wall')+v('frame_mount_clearance')
+        for sy in (-1,1):
+            pieces.append(box(0,sy*v('cf_tube_span')/2,2*plate_half_length,v('plate_thickness'),
+                              '#bacbd4','#7898b0',kind='frame-plate'))
+        for m in members:
+            if m['kind'] == 'cf-connector':
+                x,y,_ = m['start']; _,end_y,_ = m['end']
+                pieces.append(box(x,(y+end_y)/2,m['width'],end_y-y,'#405761','#203b46',kind=m['kind']))
+    else:
+        for sy in (-1,1):
+            pieces.append(line(-wb/2,sy*track/2,wb/2,sy*track/2,'#7898b0',4))
+    for m in members:
+        x,y,_ = m['start']; ex,ey,_ = m['end']
+        if m['kind'] == 'arm' and m['width'] is not None:
+            pieces.append(box((x+ex)/2,0,abs(ex-x),m['width'],'#76aac7','#246f99',kind='arm'))
+        elif m['kind'] == 'arm':
+            pieces.append(line(x,y,ex,ey,'#246f99',5,kind='arm'))
+        elif m['kind'] == 'actuator':
+            pieces.append(line(x,y,ex,ey,'#d77422',5,kind='actuator'))
+    for sx in (-1,1):
+        for sy in (-1,1):
+            pieces.append(box(sx*wb/2,sy*track/2,v('wheel_diameter'),ww,'#cbd6df','#354657',kind='wheel'))
+    for sx in (-1,1):
+        for sy in (-1,1):
+            pieces.append(box(sx*cx,sy*(length+gap)/2,diameter,length,'#e6b68e','#a54b1e',kind='drum'))
     for sx in (-1, 1):
-        pieces.append(line(sx*cx, -(length+gap/2), sx*cx, length+gap/2, "#a54b1e", 2))
+        pieces.append(line(sx*cx, -(length+gap/2), sx*cx, length+gap/2, "#a54b1e", 2,kind='drum-shaft'))
     dim_y = max(overall_width, .75)/2+.10
     pieces += [line(-wb/2, dim_y, wb/2, dim_y),
                text(0, dim_y, f'Wheelbase {wb*1000:.1f}', -8),
@@ -187,8 +216,9 @@ def top_view_svg(values):
         pieces.append(line(x, -dim_y-.015, x, -dim_y+.015))
     pieces += [f'<text x="35" y="605" font-size="18">Wheel-center track: {track*1000:.1f} | Overall width: {overall_width*1000:.1f} | Wheel width: {ww*1000:.1f}</text>',
                f'<text x="35" y="636" font-size="18">Each drum: {diameter*1000:.1f} diameter x {length*1000:.1f} axial length | Pair gap: {gap*1000:.1f}</text>',
-               '<text x="35" y="675" font-size="15">Dashed blue: 1500 x 750 stowed limit (reference only in this travel pose). Gray: wheel-center support polygon.</text>',
-               '<text x="35" y="705" font-size="15">Projection overlap does not prove collision. Heights, motors, equipment and connection details are not shown.</text>',
+               '<text x="35" y="675" font-size="15">Blue: one arm per drum pair · orange: actuators · charcoal: CF connectors · slate: rockers and axle.</text>',
+               '<text x="35" y="705" font-size="15">Four CF tubes: upper/lower footprints can overlap. Dashed blue: 1500 x 750 stowed limit.</text>',
+               '<text x="35" y="730" font-size="13">Plate outlines are schematic. Projection overlap does not prove collision. Heights and equipment are not shown.</text>',
                '</g></svg>']
     return ''.join(pieces)
 

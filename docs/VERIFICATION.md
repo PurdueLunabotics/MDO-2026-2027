@@ -1,6 +1,6 @@
 # Current verification status
 
-Checked locally on **2026-10-23**, using the repository's `.venv`. This page
+Checked locally on **2026-10-24**, using the repository's `.venv`. This page
 describes the current implementation; Git history retains earlier run notes.
 Software verification is separate from physical calibration and validation.
 
@@ -8,11 +8,11 @@ Software verification is separate from physical calibration and validation.
 
 | Check | Result |
 | --- | --- |
-| Full unit suite | 140 tests passed, 253.347 s |
+| Full unit suite | 148 tests passed, 178.670 s |
 | Generic reference fixed evaluation | Completed; failed constraints remain visible |
 | Generic reference derivative step-size check | Passed at its starting design |
 | Generic reference cold-start SLSQP solve | Known failure; saved as failed/infeasible, exit 1 |
-| Current saved design, reevaluated with default BWR | Only the new empty/full climb requirements fail |
+| Current saved baseline | Six failures retained: empty/full climbs, turn traction, asymmetric-dump tipping, slope tipping and rock-path wheel loading |
 | Historical optimized candidates | Prior success statements predate BWR climb requirements; reevaluation required |
 | Historical sensitivity grid | 96 cells, 192 starts; 88 formerly feasible cells, before BWR climb requirements |
 | Hardware/soil predictive validation | Not established |
@@ -52,17 +52,15 @@ inputs. Each curated HTML embeds its exact numeric run, native inputs/outputs,
 checks, source hash, and model provenance. Publishing rejects stale or unrelated
 baseline/candidate pairs and preserves the baseline byte for byte.
 
-The current baseline retains:
-
-- `structure_stress_margin = -655854.8516 Pa`
-- `rock_sweep_wheel_load_margin = -0.8535612742 N`
-
-The curated candidate passes its saved checks; this does not establish a global
-optimum. Report tests preserve failed statuses, source fidelity, and archive
-guards. Browser/PDF review checked first-page scores, section order, all printed
-checks regardless of screen filters, top view, three side poses, full native
-appendices, restored screen state, and no table overflow. Reviewed PDFs have
-27 baseline and 28 candidate pages. Regenerate and re-export after input changes.
+The current baseline is the fixed aluminum-box-arm design evaluated on
+2026-10-24: dry mass 52.67914912 kg and six failed checks, including
+`rock_sweep_wheel_load_margin = -48.36401627 N`. Structural stress passes the
+current screen. Full current metrics and inputs are embedded in the published
+baseline HTML. The curated candidate is a historical report from the earlier
+model; its saved pass status does not establish current feasibility or an
+optimum. Report tests preserve failed statuses, source fidelity and archive
+guards. Regenerate and re-export after input changes. Earlier page counts and
+validation runs below are historical snapshots; see the latest publication note.
 
 ## Sensitivity study
 
@@ -380,3 +378,68 @@ These are analytical/numerical checks, not hardware calibration. Sharp-corner
 uniform-wall sections omit stock corner radii, certified alloy/temper allowables,
 local wall instability, torsion, connections/welds and actual arm-envelope
 collisions. The existing sampled, mirrored, full-load gravity scope remains.
+
+## Report member counts and camera depth (2026-10-24)
+
+Presentation-only changes add the central rocker axle, two box rockers, plate
+footprints, four transverse CF rods, and two centered box drum arms to the plan
+view. Each front/rear shaft-linked drum pair has one arm and one actuator,
+matching the two-arm mass ownership. Arm widths, CF diameters/spans, rocker
+bearing stations and axle diameter come from the existing inputs. Upper/lower
+CF projections can overlap; the figure labels that instead of offsetting them.
+`reporting/frame_members.py` shares the centered linkage/CF drawing stations
+between plan and rock views; it does not participate in model computation.
+
+The fixed rock-view projection has screen-right (.88,.45,0) and screen-up
+(-.12,.20,1). Their cross product (.45,-.88,.23) points toward the camera.
+Rover bodies and members are painted by increasing camera depth. Visible cap
+and barrel faces are opaque; hidden outlines no longer show through nearer
+wheels/drums. Wheel labels sit beside the contact annotations.
+
+All **148 tests passed** in **178.670 s**. The report regressions check member
+counts, nominal projected widths/spans, centerline linkages, independent
+camera-normal body ordering, opaque cylinder caps, four wheel contacts,
+unreachable-pose labeling and unchanged snapshot data. Top and rock SVGs were
+rendered to PNG and visually inspected at 1600-pixel width.
+
+The full saved-baseline numerical snapshot is identical to the preceding
+box-arm report, including all constraints, mass/energy values and model
+connections. The fixed baseline evaluations completed. The reference derivative
+check passed; its optimizer smoke test used `--maxiter 1` and correctly retained
+`failed_or_infeasible` with exit 1. No full reoptimization or physics change was
+part of this graphics task. Calibration and unresolved physical failures remain
+as documented above.
+
+Reproduce the current graphics with:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/report_graphics.json
+```
+
+Open `results/report_graphics.html`; standalone drawings are
+`results/report_graphics_top.svg` and `results/report_graphics_obstacle.svg`.
+Full test output is retained locally in `results/report_graphics_tests.log`.
+
+## Published baseline refresh (2026-10-24)
+
+The curated `docs/design_reports/baseline.html`, its seven SVG drawings and
+`output/pdf/baseline.pdf` were regenerated from the unchanged
+`design_baseline.json`. The published HTML embeds the exact fixed-evaluation
+record; its source SHA-256 and every supplied input were checked against the
+saved baseline. The report gives 52.67914912 kg dry mass and 3230.488448
+construction points, with all six current failures retained. The old candidate
+reports were preserved and explicitly labeled historical/outdated in the README.
+
+The printable baseline has 27 nonempty Letter pages. All pages were rendered
+with Poppler and reviewed as a contact sheet, with full-size inspection of the
+overview, plan drawing, digging/rock drawings and first requirements page.
+The source revision, box-arm ports and wheel-load failure field were checked
+in extracted PDF text. No clipped tables, missing graphics or blank pages were
+observed. PDF export used headless Edge with all engineering details expanded.
+Windows sandbox profile creation failed on the first export attempt; the
+successful export with ordinary temporary-folder access supersedes that attempt.
+
+The graphics implementation retains the 148-test passing result and derivative
+check above. Publication introduced no further model changes or optimization;
+the fixed-evaluation and source/embedded-record checks passed before release.
+Physical calibration and unresolved feasibility are unchanged.
