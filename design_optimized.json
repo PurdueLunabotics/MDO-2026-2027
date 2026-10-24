@@ -12,7 +12,8 @@
     "dump_rpm": 59.99648860734552,
     "drum_gear_ratio": 39.86790293451219,
     "cut_depth": 0.01108554859601044,
-    "arm_tube_diameter": 0.02617090192890954,
+    "arm_box_width": 0.02617090192890954,
+    "arm_box_height": 0.02617090192890954,
     "arm_wall": 0.0010124527060859174,
     "battery_capacity": 47.345335762638804,
     "actuator_speed": 0.06635036029739994,
@@ -148,9 +149,11 @@
   "notes": {
     "source_baseline_sha256": "d240bca2c1474879c65dc87e0284230eeb933d88bef51697b111eedfb76b036b",
     "analysis_sha256": "45770467e92c28890feb80ea5c52ea164cb2e4a0d73c733cfe0cf4c6e8f0ede1",
-    "status": "converged_feasible",
-    "optimizer_success": true,
-    "modeled_feasible": true,
-    "origin": "Effective model inputs; not measured hardware validation."
+    "previous_status": "converged_feasible",
+    "previous_optimizer_success": true,
+    "previous_modeled_feasible": true,
+    "origin": "Historical candidate; not measured hardware validation.",
+    "arm_section_update": "Old round-arm outer diameter copied to both box sides solely as a new-model starting point. Not an equivalent section or a reoptimization; historical feasibility does not apply.",
+    "current_model_status": "not_reoptimized"
   }
 }

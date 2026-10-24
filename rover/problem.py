@@ -143,6 +143,12 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         diagnostic_screens["chassis_clearance_margin"] = (
             "Legacy filled rectangular envelope does not represent the open plate frame; actual frame/equipment interference remains unverified.")
     models = models or (plate_frame_models() if structure == "plate-frame" else ModelSet())
+    # A round outside diameter is not a box width/height specification. Require
+    # explicit case migration rather than silently ignoring old arm geometry.
+    if (structure == 'plate-frame' and 'arm_tube_diameter' in (overrides or {})
+            and not {'arm_box_width', 'arm_box_height'} <= set(overrides)
+            and 'arm_tube_diameter' not in getattr(models.structure_geometry, 'CONFIG_INPUTS', ())):
+        raise ValueError("arm_tube_diameter is inactive for aluminum box arms. Replace it with arm_box_width and arm_box_height (metres); keep arm_wall in metres. Historical round-arm cases require reevaluation.")
     if motors == "x44-standard":
         from .alternatives.x44_motor import X44MotorProvider, verify_source_data
         from .motor_inventory import CatalogAssemblyMass

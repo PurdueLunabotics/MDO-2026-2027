@@ -8,10 +8,11 @@ Select the coordinated optional profile with:
 ```
 
 The Python equivalent is `build_problem(structure="plate-frame")`. This selects
-five ModelSet factories: PlateStructureGeometry, PlateStructureLoads,
+five ModelSet factories: BoxArmPlateStructureGeometry, BoxArmPlateStructureLoads,
 PlateMassProperties, PlateObstacleStability, and PlateTraversalStability.
 The last is defined in `rover/alternatives/traversal_stability.py`; the others
-are in `rover/alternatives/plate_frame.py`. `ModelSet()` and CLI
+are in `rover/alternatives/plate_frame.py`, with the box-arm adapters/section
+helper in `rover/alternatives/aluminum_box_arm.py`. `ModelSet()` and CLI
 `--structure reference` retain the previous tube-frame physics and inputs. The
 profile does not mutate the reference config dictionaries. No automatic section
 sizing or mass/load fixed-point solve is hidden inside a component.
@@ -22,7 +23,10 @@ The student specified 1/4 inch (0.00635 m) 6061-T6 plates, 1 inch (0.0254 m)
 CF tube ID, aluminum box rockers, a 1/2 inch (0.0127 m) wheel-to-rocker gap,
 bonded inserts plus single bolts, and arm/actuator bushings rotating around the
 tubes. Top tubes carry actuator loads; bottom tubes carry arm-pivot loads.
-Tube loads act on their sides, not along the transverse tube axes.
+Tube loads act on their sides, not along the transverse tube axes. Drum arms
+now use aluminum box tube; the user-selected baseline is 2 x 2 inches outside,
+1/16 inch wall (50.8 x 50.8 x 1.5875 mm). The previous round arms already used
+the aluminum material inputs; CF properties apply to transverse rods only.
 
 The following remain explicit assumptions, NOT measured or selected products:
 
@@ -52,7 +56,19 @@ Plate thickness and CF ID are fixed assumptions. Profile design variables add
 common in-plane `plate_spoke_width`, `cf_tube_span`, `cf_tube_wall`,
 `rocker_box_width`, `rocker_box_height`, `rocker_wall`, `axle_outer_diameter`,
 `axle_wall` and `rocker_pivot_offset`. The old generic frame diameter/wall are
-inactive fixed entries in this profile; arm round-tube dimensions stay active.
+inactive fixed entries in this profile. Arm variables are `arm_box_width`,
+`arm_box_height` (both 25–100 mm exploratory bounds), and `arm_wall` (1–5 mm).
+Width is transverse; height is normal to the arm centerline in the x/z motion
+plane and rotates with the arm. Width/height can optimize independently, so the
+requested square baseline does not force every candidate to be square.
+The retained section-validity reserve is min(width,height)/4-wall; hollow
+section arithmetic also rejects 2*wall >= min(width,height).
+
+The legacy `arm_tube_diameter` is inactive for these arms. Input files specifying
+it must explicitly provide box width/height instead; the builder rejects a lone
+old diameter rather than silently ignoring the requested section. The reference
+model keeps its original round-arm input. Historical round-arm factories remain
+available for explicit comparisons and the strict motor-interface regression.
 `cf_tube_outer_diameter = cf_tube_inner_diameter + 2*cf_tube_wall` is reported.
 All new starting values/bounds are exploratory; no claim of COTS availability.
 
@@ -192,7 +208,14 @@ bearing centers under the corresponding sprung-side weight. Axle calculation
 omits middle-span flexure and joint rotation. Arms use point loads at C and D
 plus distributed self-weight; bending extrema are found at endpoints, pin sides
 and interior zero-shear points. Root restraint is a relative cantilever-flexure
-approximation, not a solved compliant linkage.
+approximation, not a solved compliant linkage. Box arm area/inertias are exact
+outer-minus-inner sharp rectangles. Bending and deflection use the width-axis
+inertia `(width*height^3-inner_width*inner_height^3)/12` and outer fiber height/2.
+Euler uses the smaller of both principal inertias; lateral instability cannot
+be credited with the larger in-plane bending inertia. Arm material retains the
+existing aluminum density, modulus and yield screening inputs. Stock corner
+radii, alloy/temper certification, local wall buckling, torsion, mount/weld
+strength and actual arm collision envelopes require separate verification.
 
 `structure_stress` is an eighth-norm envelope of ALUMINUM arm/rocker/axle/plate
 stress; `cf_bending_margin` is separate. `structure_buckling_margin` is the minimum

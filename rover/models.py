@@ -52,8 +52,9 @@ class ModelSet:
 
 def plate_frame_models():
     """Explicit coordinated profile; reference ModelSet() remains unchanged."""
-    from .alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads, PlateMassProperties, PlateObstacleStability
+    from .alternatives.plate_frame import PlateMassProperties, PlateObstacleStability
+    from .alternatives.aluminum_box_arm import BoxArmPlateStructureGeometry, BoxArmPlateStructureLoads
     from .alternatives.traversal_stability import PlateTraversalStability
-    return ModelSet(structure_geometry=PlateStructureGeometry, structure_loads=PlateStructureLoads,
+    return ModelSet(structure_geometry=BoxArmPlateStructureGeometry, structure_loads=BoxArmPlateStructureLoads,
                     mass_properties=PlateMassProperties, obstacle_stability=PlateObstacleStability,
                     traversal_stability=PlateTraversalStability)

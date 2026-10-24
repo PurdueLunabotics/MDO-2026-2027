@@ -141,6 +141,9 @@ ROUTE = ((2.0, 90.0), (3.0, 45.0), (3.0, 45.0), (1.0, 0.0))
 # Optional plate-frame profile. Reference DESIGN/ASSUMPTIONS above stay intact.
 # Bounds and starting section sizes are exploratory, not purchased hardware.
 PLATE_FRAME_DESIGN = {
+    "arm_box_width": (0.0508, 0.025, 0.10, "m"),  # transverse; USER baseline: 2 inches
+    "arm_box_height": (0.0508, 0.025, 0.10, "m"),  # section depth in arm-motion plane
+    "arm_wall": (0.0015875, 0.001, 0.005, "m"),  # USER baseline: 1/16 inch
     "cf_tube_span": (0.28, 0.16, 0.46, "m"),  # plate center-to-center spacing
     "cf_tube_wall": (0.002, 0.001, 0.006, "m"),  # OD = fixed ID + 2*wall
     "plate_spoke_width": (0.035, 0.012, 0.070, "m"),  # in-plane; all seven strips share it
@@ -182,7 +185,7 @@ def configuration(structure="reference", motors="reference"):
     design, assumptions = dict(DESIGN), dict(ASSUMPTIONS)
     if structure == "plate-frame":
         # Generic frame tubes are replaced by explicit rockers, CF rods and axle.
-        for name in ("frame_tube_diameter", "frame_wall"):
+        for name in ("frame_tube_diameter", "frame_wall", "arm_tube_diameter"):
             entry = design.pop(name)
             assumptions[name] = (entry[0], entry[-1])
         assumptions.pop("rocker_pivot_offset", None)

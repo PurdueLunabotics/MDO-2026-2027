@@ -317,3 +317,66 @@ The bounded run exits 1 with optimizer success false and status
 `failed_or_infeasible` after reaching its iteration limit. It verifies derivative
 consistency and failure reporting; it is not a convergence result. Full-suite
 output is retained locally in `results/slope_config_tests_verified.log`.
+
+## Aluminum box drum arms (2026-10-24)
+
+The plate-frame ModelSet now selects `BoxArmPlateStructureGeometry` and
+`BoxArmPlateStructureLoads` from `rover/alternatives/aluminum_box_arm.py`.
+The baseline uses 50.8 x 50.8 mm outside with 1.5875 mm wall. Only arm-section
+physical inputs changed: round diameter replaced by box width/height and wall
+changed from 2 mm. Other baseline inputs, aluminum properties, frame loading,
+limits and safety factors were retained. Width/height remain independent design
+variables (25–100 mm); wall bounds remain 1–5 mm. Reference `ModelSet()` retains
+round arms. Existing port names/units for mass, stress, deflection and margins
+are unchanged. The historical candidate and X44 restart have explicit nominal
+box-side migrations, without claiming reoptimization or prior feasibility.
+
+All **147 tests passed** in **195.072 s**, with ordinary Windows temporary-folder
+access. Six independent box-arm tests cover area/inertia subtraction, cantilever
+stress/deflection, rotated rectangles with weaker-axis Euler behavior, two-arm
+mass accounting, invalid sections and an undersized buckling failure. Focused
+reruns of all six and the legacy section invalid-domain check passed after the
+final validation/test cleanup. Strict historical motor/drum regression values
+and tolerances remain unchanged, using explicit historical round-arm factories;
+current box arms are tested independently. Smooth frame derivative checks use
+unequal box sides, avoiding the equal-principal-inertia branch boundary.
+
+The current saved baseline reevaluation gives:
+
+| Quantity | Previous round arm | Requested box arm |
+| --- | ---: | ---: |
+| Arm linear mass, kg/m | 0.8278724961 | 0.8437483125 |
+| Two 560 mm arms, kg | 0.9272171956 | 0.9449981100 |
+| Dry rover mass, kg | 52.6613682061 | 52.6791491205 |
+| Arm relative tip deflection, m | 7.9101278564e-6 | 5.8372826654e-6 |
+| Arm Euler buckling margin, N | 22215.78094 | 31673.33325 |
+
+The saved baseline remains infeasible on the same six checks: empty/full BWR
+climbs, turn traction, asymmetric-dump tipping, static slope tipping and rock-path
+wheel reaction. No failed check was weakened. There are 352 explicit connections,
+no automatic IVC sources, dry-mass accounting residual below 8e-15 kg and zero
+cycle-energy accounting residual. Both new section dimensions connect explicitly
+to structural geometry and loads. The frame SVG and input tables show the
+aluminum box section and wall thickness.
+
+Reproduction:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe main.py --baseline --output results/my_change_baseline.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/box_arm_baseline.json
+.\.venv\Scripts\python.exe main.py --inputs design_optimized.json --output results/box_arm_historical_candidate.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --set arm_box_width=0.045 --set arm_box_height=0.06 --output results/box_arm_derivatives.json
+.\.venv\Scripts\python.exe main.py --check-derivatives --maxiter 1 --output results/my_change_optimization.json
+```
+
+The affected-profile and generic-reference total derivative checks passed.
+Fixed evaluations completed with their failures retained. The generic reference
+optimization was deliberately bounded to one iteration; it exits 1 and remains
+`failed_or_infeasible`, not a convergence result. No design was reoptimized as
+part of this section change. Test output is `results/box_arm_tests.log`.
+
+These are analytical/numerical checks, not hardware calibration. Sharp-corner
+uniform-wall sections omit stock corner radii, certified alloy/temper allowables,
+local wall instability, torsion, connections/welds and actual arm-envelope
+collisions. The existing sampled, mirrored, full-load gravity scope remains.
