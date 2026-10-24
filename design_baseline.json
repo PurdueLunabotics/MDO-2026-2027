@@ -1,6 +1,6 @@
 {
   "name": "Design baseline",
-  "revision": "MDO import 2026-10-14",
+  "revision": "Aluminum box drum arms 2026-10-24",
   "structure": "plate-frame",
   "motors": "x44-standard",
   "inputs": {
@@ -12,8 +12,9 @@
     "dump_rpm": 60.0,
     "drum_gear_ratio": 40.0,
     "cut_depth": 0.014,
-    "arm_tube_diameter": 0.0508,
-    "arm_wall": 0.002,
+    "arm_box_width": 0.0508,
+    "arm_box_height": 0.0508,
+    "arm_wall": 0.0015875,
     "battery_capacity": 259.2,
     "actuator_speed": 0.066,
     "travel_actuator_length": 0.375,
@@ -149,8 +150,10 @@
     "origin": "User requested baseline values from latest matching optimization. Not hardware validation.",
     "optimization_file": "results/report_draft/mdo_example.json",
     "optimization_sha256": "16a09b5c2b46d75788d5afb95bc214f1944d0427196d2c1ec5deffa7f75dce1c",
-    "optimizer_success": true,
-    "modeled_feasible": true,
-    "construction_points": 2291.3007460034587
+    "previous_optimizer_success": true,
+    "previous_modeled_feasible": true,
+    "previous_construction_points": 2291.3007460034587,
+    "arm_section_update": "User selected aluminum box drum arms: 2 x 2 inches outside, 1/16 inch wall. Other physical inputs retained. Fixed evaluation, not reoptimized.",
+    "current_model_feasible": false
   }
 }

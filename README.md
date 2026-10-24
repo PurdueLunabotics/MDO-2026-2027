@@ -248,6 +248,15 @@ Inputs use the units in the report appendix: lengths in **metres**, mass in kg,
 force in N, speed in rpm, battery capacity in Wh, and angles in their stated
 units. The saved cases select the plate frame and standard X44 motors.
 
+The current plate-frame drum arms are aluminum box tube. Baseline dimensions
+are 2 x 2 inches outside with 1/16 inch wall: `arm_box_width=0.0508`,
+`arm_box_height=0.0508`, `arm_wall=0.0015875` in metres. These three dimensions
+are adjustable design variables. Width is transverse; height is the section
+depth in the arm's motion plane. Older round-arm cases must replace
+`arm_tube_diameter` with both box dimensions and be reevaluated. The historical
+candidate's nominal sides have been migrated for compatibility, without
+reoptimization or a claim that the old feasibility still applies.
+
 ```powershell
 # Evaluate an edit while keeping every input fixed
 .\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/my_baseline.json

@@ -152,6 +152,9 @@ class PlateFrameTests(unittest.TestCase):
         self.assertFalse(report["feasible"])
         with self.assertRaises(ValueError):
             plate_geometry(inputs(plate_thickness=math.nan))
+        for name in ('arm_tube_diameter', 'arm_wall'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                geometry_inventory(inputs(**{name: math.nan}))
         with self.assertRaises(ValueError):
             evaluate_frame_loads(inputs(dry_mass=1.))
 
@@ -228,7 +231,9 @@ class PlateFrameTests(unittest.TestCase):
         self.assertNotIn("dump_froude_margin", reference.model.get_constraints())
 
     def test_total_derivatives_at_smooth_geometry(self):
-        p = self.problem(wheelbase=.46, bottom_pivot_height=.16)
+        # Unequal box sides keep Euler's weak-axis selection at a smooth point.
+        p = self.problem(wheelbase=.46, bottom_pivot_height=.16,
+                         arm_box_width=.045, arm_box_height=.06)
         checks = p.check_totals(of=["construction_points", *p.margin_specs], wrt=list(p.design_specs),
                                method="fd", form="central", step=3e-5, step_calc="rel_avg", out_stream=None)
         assert_check_totals(checks, atol=1e-3, rtol=2e-3)

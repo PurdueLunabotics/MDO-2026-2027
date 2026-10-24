@@ -27,7 +27,7 @@ PLATE_TRIANGLES = ((1, 2), (4, 3), (3, 1))
 
 
 def box_section(width, height, wall):
-    """Rectangular hollow section: area, strong/weak inertias [m2,m4,m4]."""
+    """Hollow rectangle: area, width-axis and height-axis inertias [m2,m4,m4]."""
     if (not all(math.isfinite(x) and x > 0 for x in (width, height, wall))
             or 2*wall >= min(width, height)):
         raise ValueError("Box section needs positive dimensions and a hollow interior.")
@@ -35,6 +35,16 @@ def box_section(width, height, wall):
     return (width*height-wi*hi,
             (width*height**3-wi*hi**3)/12,
             (height*width**3-hi*wi**3)/12)
+
+
+def round_arm_section(values):
+    """Historical aluminum round arm; retained for explicit model comparisons."""
+    diameter, wall = values['arm_tube_diameter'], values['arm_wall']
+    if not all(math.isfinite(x) and x > 0 for x in (diameter, wall)):
+        raise ValueError('Round arm needs finite positive diameter and wall.')
+    area, inertia, _ = tube_section(diameter, wall)
+    return dict(area=area, bending_inertia=inertia, buckling_inertia=inertia,
+                depth=diameter, section_margin=diameter/4-wall)
 
 
 def plate_nodes(values):
@@ -50,7 +60,8 @@ def plate_nodes(values):
 def plate_geometry(values):
     """Inventory plus signed geometry reserves; no clipping into feasibility."""
     v = values.__getitem__
-    for name in GEOMETRY_INPUTS:
+    # Arm sections are validated by their selected section helper, not here.
+    for name in GEOMETRY_INPUTS - {'arm_tube_diameter', 'arm_wall'}:
         value = v(name)
         if not math.isfinite(value) or (name != "rocker_pivot_offset" and value <= 0):
             raise ValueError(f"Invalid frame geometry/material input {name}.")
@@ -84,11 +95,11 @@ def plate_geometry(values):
             "valid": min(*reserves, packing) >= 0}
 
 
-def geometry_inventory(values):
+def geometry_inventory(values, arm_section=round_arm_section):
     v = values.__getitem__
     g = plate_geometry(values)
     ar, _, _ = box_section(v("rocker_box_width"), v("rocker_box_height"), v("rocker_wall"))
-    aa, _, _ = tube_section(v("arm_tube_diameter"), v("arm_wall"))
+    arm = arm_section(values)
     ax, _, _ = tube_section(v("axle_outer_diameter"), v("axle_wall"))
     ac, _, _ = tube_section(g["cf_od"], v("cf_tube_wall"))
     half = math.hypot(v("wheelbase")/2, v("rocker_pivot_offset"))
@@ -115,7 +126,7 @@ def geometry_inventory(values):
     rocker_izz = rocker_mass*(v("wheelbase")**2/12+g["rocker_span"]**2/4+v("rocker_box_width")**2/12)
     total = sprung_mass+rocker_mass
     return {**g, "structure_mass": total, "rocker_mass": rocker_mass,
-            "arm_linear_mass": aa*v("tube_density"),
+            "arm_linear_mass": arm['area']*v("tube_density"),
             "plate_mass_total": 2*g["plate_mass"], "cf_tube_mass_total": cf_mass,
             "suspension_axle_mass": axle_mass, "suspension_bearing_span": g["rocker_span"],
             "cf_tube_outer_diameter": g["cf_od"],
@@ -126,7 +137,7 @@ def geometry_inventory(values):
             "structure_yaw_inertia": 2*plate_izz+cf_izz+axle_mass*g["rocker_span"]**2/12+rocker_izz,
             "frame_section_margin": min(min(v("rocker_box_width"), v("rocker_box_height"))/4-v("rocker_wall"),
                                          v("axle_outer_diameter")/4-v("axle_wall")),
-            "arm_section_margin": v("arm_tube_diameter")/4-v("arm_wall")}
+            "arm_section_margin": arm['section_margin']}
 
 
 def arm_mount_loads(bottom, top, drum, pair_weight, arm_weight, fraction):
@@ -247,10 +258,10 @@ def arm_beam_screen(length, fraction, direction, actuator, pair_weight, arm_weig
     return max(stresses), abs(tip), max(moments), max(compression)
 
 
-def evaluate_frame_loads(values):
+def evaluate_frame_loads(values, arm_section=round_arm_section):
     """All four drums fully loaded, equal front/rear poses; gravity cases only."""
     v = values.__getitem__
-    g = geometry_inventory(values)
+    g = geometry_inventory(values, arm_section=arm_section)
     for name in ("gravity", "structure_safety_factor", "structure_load_factor", "tube_youngs_modulus",
                  "tube_yield_strength", "cf_flexural_modulus", "cf_flexural_strength", "plate_buckling_k", "allowable_deflection"):
         if not math.isfinite(v(name)) or v(name) <= 0:
@@ -263,7 +274,8 @@ def evaluate_frame_loads(values):
     sf, factor, grav = v("structure_safety_factor"), v("structure_load_factor"), v("gravity")
     e, strength = v("tube_youngs_modulus"), v("tube_yield_strength")
     ac, ic, _ = tube_section(g["cf_od"], v("cf_tube_wall"))
-    aa, ia, _ = tube_section(v("arm_tube_diameter"), v("arm_wall"))
+    arm = arm_section(values)
+    aa, ia = arm['area'], arm['bending_inertia']
     ar, ir, iw = box_section(v("rocker_box_width"), v("rocker_box_height"), v("rocker_wall"))
     ax, ix, _ = tube_section(v("axle_outer_diameter"), v("axle_wall"))
     poses, _ = sweep_poses(values)
@@ -298,7 +310,7 @@ def evaluate_frame_loads(values):
         tube_motion.append(displacements)
         sigma, delta, _, compressive = arm_beam_screen(v("arm_length"), v("actuator_attachment_fraction"),
                                         np.asarray(c)-b, actuator, pair_weight, arm_weight,
-                                        aa, ia, v("arm_tube_diameter"), e)
+                                        aa, ia, arm['depth'], e)
         arm_stress.append(sigma)
         arm_deflection.append(delta)
         arm_compression.append(compressive)
@@ -327,7 +339,7 @@ def evaluate_frame_loads(values):
     rocker_sigma = rocker_axial/ar+abs(rocker_moment)*v("rocker_box_height")/(2*ir)
     rocker_delta = abs(end_force*cos*half_length**3/3-own_weight*cos*half_length**3/8)/(e*ir)
     rocker_buckling = math.pi**2*e*min(ir, iw)/(2*half_length)**2/sf-rocker_axial
-    arm_buckling = math.pi**2*e*ia/(2*v("arm_length"))**2/sf-max(arm_compression)
+    arm_buckling = math.pi**2*e*arm['buckling_inertia']/(2*v("arm_length"))**2/sf-max(arm_compression)
     # Axle overhang screen: plate-to-rocker bearing span, not wheel-center span.
     overhang = max((g["rocker_span"]-span)/2, 0.)
     sprung_side_force = max(total_weight-(v("wheel_mass")+v("drive_mass")+g["rocker_mass"])*grav*factor, 0.)/2
@@ -372,18 +384,20 @@ EVIDENCE = {"revision": 2, "status": "analytical preliminary frame; NOT hardware
 
 
 class PlateStructureGeometry(Discipline):
+    ARM_SECTION = staticmethod(round_arm_section)
     CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS))
     OUTPUT_UNITS = {**StructureGeometry.OUTPUT_UNITS, **EXTRA_GEOMETRY_OUTPUTS}
     DEPENDENCIES = {n: set(GEOMETRY_INPUTS) for n in OUTPUT_UNITS}
     model_evidence = EVIDENCE
 
     def compute(self, inputs, outputs):
-        result = geometry_inventory({n: scalar(inputs, n) for n in inputs})
+        result = geometry_inventory({n: scalar(inputs, n) for n in inputs}, arm_section=self.ARM_SECTION)
         for n in self.OUTPUT_UNITS:
             outputs[n] = result[n]
 
 
 class PlateStructureLoads(Discipline):
+    ARM_SECTION = staticmethod(round_arm_section)
     CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cf_flexural_modulus cf_flexural_strength plate_buckling_k allowable_deflection actuator_attachment_fraction actuator_retracted_length travel_actuator_length actuator_extended_length")))
     COUPLED_INPUTS = {"dry_mass": "kg", "payload_mass": "kg", "drum_mass": "kg", "wheel_mass": "kg", "drive_mass": "kg"}
     OUTPUT_UNITS = {**StructureLoads.OUTPUT_UNITS,
@@ -399,7 +413,7 @@ class PlateStructureLoads(Discipline):
     def compute(self, inputs, outputs):
         values = {n: scalar(inputs, n) for n in inputs}
         try:
-            result = evaluate_frame_loads(values)
+            result = evaluate_frame_loads(values, arm_section=self.ARM_SECTION)
         except (ValueError, np.linalg.LinAlgError):
             # Explicit failed arithmetic guard for driver trials at mechanisms or
             # toggles. Never substitute a different feasible frame/physics model.

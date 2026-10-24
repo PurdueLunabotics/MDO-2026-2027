@@ -10,6 +10,7 @@ from rover.motors import Gearmotor
 from rover.problem import build_problem
 from reporting.report import snapshot
 from rover.models import ModelSet, plate_frame_models
+from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
 from rover.alternatives.bekker_wong_reece import BekkerWongReeceMobility
 from rover.excavation import Excavation
 from rover.mobility import Mobility
@@ -56,7 +57,14 @@ class MotorInterfaceTests(unittest.TestCase):
                 # Freeze the legacy mobility equation for this historical motor
                 # regression; default BWR is tested separately with both providers.
                 models = plate_frame_models() if c['structure'] == 'plate-frame' else ModelSet()
-                p=build_problem(c['inputs'],structure=c['structure'],motors=c['motors'],
+                inputs = dict(c['inputs'])
+                if c['structure'] == 'plate-frame':
+                    # Freeze the original round-aluminum-arm model as well as
+                    # mobility for this historical motor-interface regression.
+                    models = replace(models, structure_geometry=PlateStructureGeometry,
+                                     structure_loads=PlateStructureLoads)
+                    inputs.setdefault('arm_wall', .002)
+                p=build_problem(inputs,structure=c['structure'],motors=c['motors'],
                                 models=replace(models,mobility=Mobility))
                 try:
                     p.run_model();result=snapshot(p)

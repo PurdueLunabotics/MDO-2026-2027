@@ -47,6 +47,9 @@ def plate_frame_svg(values):
              'Central support: pin, balanced mirrored gravity only.',
              'CF material properties are PROVISIONAL.',
              'Spoke buckling is a strip screen,', 'not whole-plate buckling validation.']
+    if 'arm_box_width' in values and 'arm_box_height' in values:
+        lines[6:6] = [f'Aluminum arm box: {values["arm_box_width"]*1000:.2f} x {values["arm_box_height"]*1000:.2f} mm',
+                      f'Arm wall: {values["arm_wall"]*1000:.4f} mm']
     for i, line in enumerate(lines):
         pieces.append(f'<text x="640" y="{145+30*i}" font-size="15">{escape(line)}</text>')
     pieces.append('</g></svg>')

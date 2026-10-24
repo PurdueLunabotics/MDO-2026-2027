@@ -17,6 +17,8 @@ LABELS = {
     "cut_depth": "Scoop protrusion / cut depth", "drum_rpm": "Excavation speed",
     "dump_rpm": "Dumping speed", "drum_gear_ratio": "Drum reduction ratio",
     "drive_gear_ratio": "Drive reduction ratio", "arm_length": "Arm length",
+    "arm_box_width": "Aluminum arm box width", "arm_box_height": "Aluminum arm box height",
+    "arm_wall": "Arm wall thickness", "arm_tube_diameter": "Round-arm diameter (reference model)",
     "travel_actuator_length": "Travel actuator length", "actuator_retracted_length": "Compact actuator length",
     "actuator_extended_length": "Digging actuator length", "actuator_force_rating": "Actuator rating, each",
     "actuator_speed": "Actuator speed", "battery_capacity": "Battery capacity",

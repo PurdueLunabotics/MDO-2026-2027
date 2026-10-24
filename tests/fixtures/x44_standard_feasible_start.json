@@ -15,7 +15,8 @@
     "dump_rpm": 59.99999998470461,
     "drum_gear_ratio": 39.38101912265653,
     "cut_depth": 0.01069510977462165,
-    "arm_tube_diameter": 0.025000000001151258,
+    "arm_box_width": 0.025000000001151258,
+    "arm_box_height": 0.025000000001151258,
     "arm_wall": 0.0010000000000752796,
     "battery_capacity": 46.480076926732856,
     "actuator_speed": 0.06612150288203306,
@@ -40,5 +41,5 @@
     "axle_wall": 0.0010000003812846426,
     "rocker_pivot_offset": 0.020000000103651716
   },
-  "requirement_scope": "Historical numerical start before BWR empty/full climb constraints. Not a feasible start under the current 25/20-degree default requirements; inputs retained unchanged for regression."
+  "requirement_scope": "Historical numerical start before BWR empty/full climb constraints. Not a feasible start under current climb requirements. Former arm diameter copied to both nominal box sides as an explicit starting-point migration, without reoptimization; other inputs retained."
 }

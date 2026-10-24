@@ -110,13 +110,34 @@ Digging uses all drums; dumping uses one pair at a time. Conservative ring spin 
 
 The optional `--structure plate-frame` profile replaces the following reference
 screens with coordinate-driven two-force plate strips, transverse CF rod flexure,
-aluminum box rockers and a round suspension axle. It fixes the user-specified
+aluminum box rockers and drum arms, and a round suspension axle. It fixes the user-specified
 6.35 mm sheet and 25.4 mm CF ID; common spoke width and CF wall/span are optimized.
 Only mirrored fully loaded level-ground gravity is in its structural load scope.
 Cutting/recovery and local/whole-plate instability require separate verification.
 CF properties remain provisional. Its mass placement, output interpretations,
 geometry failure domains and unchanged 5 mm envelope are documented in
 [PLATE_FRAME.md](docs/PLATE_FRAME.md). `ModelSet()` retains the reference below.
+
+Plate-frame drum arms use `arm_box_width` (transverse), `arm_box_height` (depth
+normal to the arm centerline in its motion plane), and `arm_wall`. The baseline
+is 0.0508 x 0.0508 m outside with 0.0015875 m wall (2 x 2 x 1/16 inches).
+For outer width b, height h, inner bi=b-2t and hi=h-2t:
+
+```text
+A = b*h - bi*hi
+I_bend = (b*h^3 - bi*hi^3)/12
+I_lateral = (h*b^3 - hi*bi^3)/12
+arm_linear_mass = tube_density*A
+sigma = abs(N)/A + abs(M)*h/(2*I_bend)
+Pcr = pi^2*tube_youngs_modulus*min(I_bend,I_lateral)/(2*arm_length)^2
+```
+
+Both arms enter linkage mass once. Bending/deflection use I_bend; Euler buckling
+uses the weaker axis. Existing aluminum material inputs and safety/load factors
+are retained, without certifying an alloy/temper. Sharp corners and uniform
+walls are assumed; local wall buckling, torsion, joints and section-envelope
+collisions remain unverified. The reference round-arm model remains available
+through the original ModelSet factories.
 
 Plate revision 2 uses seven strips and three triangular openings; its lower
 boundary runs through the suspension hub, allowing the hub and lower mounts
