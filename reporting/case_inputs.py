@@ -12,13 +12,18 @@ def read_case(path):
     if not isinstance(data, dict):
         raise ValueError("Input JSON must be an object containing numeric inputs.")
     if "inputs" in data:
-        extra = set(data)-{"name", "revision", "structure", "motors", "inputs", "notes"}
+        extra = set(data)-{"name", "revision", "structure", "motors", "traversal_mode", "attachment_max", "inputs", "notes"}
         if extra:
             raise ValueError(f"Unknown case fields: {', '.join(sorted(extra))}")
         values = data["inputs"]
-        metadata = {n: data[n] for n in ("name", "revision", "structure", "motors") if n in data}
+        metadata = {n: data[n] for n in ("name", "revision", "structure", "motors", "traversal_mode") if n in data}
         if any(not isinstance(value, str) for value in metadata.values()):
             raise ValueError("Case name, revision, structure and motors must be strings.")
+        if 'attachment_max' in data:
+            value=data['attachment_max']
+            if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not 1<=value<=1.5:
+                raise ValueError('Case attachment_max must be between 1 and 1.5')
+            metadata['attachment_max']=value
         if "notes" in data:
             metadata["notes"] = data["notes"]
     else:

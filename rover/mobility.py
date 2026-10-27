@@ -55,6 +55,19 @@ class Mobility(SimpleComponent):
         """Prepare responses once per evaluation; alternatives can batch physics."""
         return lambda **kw: self.straight_response(values, **kw)
 
+    def route_plan(self, values):
+        """Keep the fixed schedule behind one replaceable timing interface."""
+        v = values
+        profiles = route_profiles(v("track_width"), v("travel_speed"), v("acceleration"),
+                                  v("turn_speed_fraction"), v("turn_accel_fraction"), v("traversal_time_one_way"))
+        return {"segments": [(v("dry_mass")+v("payload_mass"), "loaded", p) for p in profiles]
+                            + [(v("dry_mass"), "empty", p) for p in reversed(profiles)],
+                "travel_time": 2*v("traversal_time_one_way"),
+                "translation_time": 2*sum(p[2] for p in profiles if p[0] == "straight"),
+                "route_turn_time": 2*sum(p[2] for p in profiles if p[0] == "turn"),
+                "peak_speed": max(p[3] for p in profiles if p[0] == "straight"),
+                "peak_acceleration": max(p[4] for p in profiles)}
+
     def setup(self):
         from .dependencies import dependencies
         motor = self.options["motor_model"]
@@ -83,6 +96,10 @@ class Mobility(SimpleComponent):
             self.add_output(name, units=units)
 
     def compute(self, inputs, outputs):
+        self.compute_route(inputs, outputs, self.route_plan(lambda n: scalar(inputs, n)))
+
+    def compute_route(self, inputs, outputs, plan):
+        """Account for one explicit route plan; timing and work share profiles."""
         v = lambda n: scalar(inputs, n)
         radius = v("wheel_diameter") / 2
         delta = v("wheel_deflection_fraction") * 2 * radius
@@ -94,8 +111,6 @@ class Mobility(SimpleComponent):
             pressure = v("rocker_load_factor") * mass * g / area
             return (v("rolling_base") + pressure / v("rolling_pressure_scale")) * mass * g
 
-        profiles = route_profiles(v("track_width"), v("travel_speed"), v("acceleration"),
-                                  v("turn_speed_fraction"), v("turn_accel_fraction"), v("traversal_time_one_way"))
         half_track = v("track_width") / 2
         turn_path = v("turn_angle") * half_track
         turn_accel = v("acceleration") * v("turn_accel_fraction")
@@ -104,8 +119,7 @@ class Mobility(SimpleComponent):
         stall_force = 4*motor.available_torque(0.)/radius
         no_load_speed = motor.free_rpm*math.pi/30*radius
         rating = 4*motor.peak_power()
-        segments = [(dry + payload, "loaded", p) for p in profiles]
-        segments += [(dry, "empty", p) for p in reversed(profiles)]
+        segments = list(plan["segments"])
         segments += [(dry + payload / 2, "half", ("turn", turn_path, turn_time, turn_peak, turn_accel))]
         straight_response = self.straight_responder(v, segments)
         forces, powers, motor_margins, traction_margins = {}, {}, {}, {}
@@ -151,16 +165,16 @@ class Mobility(SimpleComponent):
             light_axle_factor = max(0,2-load_factor)
             traction_margins[kind].append(v("traction_coefficient") * mass * g * light_axle_factor - math.hypot(force,offset_force))
         idle = 4 * v("actuator_idle_power")
-        outputs["travel_time"] = 2 * v("traversal_time_one_way")
+        outputs["travel_time"] = plan["travel_time"]
         outputs["turn_time"] = turn_time  # deposition-only; route turns already in 90 s
-        outputs["route_translation_time"] = 2 * sum(p[2] for p in profiles if p[0] == "straight")
-        outputs["route_turn_time"] = 2 * sum(p[2] for p in profiles if p[0] == "turn")
+        outputs["route_translation_time"] = plan["translation_time"]
+        outputs["route_turn_time"] = plan["route_turn_time"]
         outputs["route_distance"] = 2 * sum(p[0] for p in ROUTE)
         outputs["route_turn_angle"] = 2 * sum(abs(p[1]) for p in ROUTE)
-        outputs["actual_travel_speed"] = max(p[3] for p in profiles if p[0] == "straight")
-        outputs["route_peak_acceleration"] = max(p[4] for p in profiles)
+        outputs["actual_travel_speed"] = plan["peak_speed"]
+        outputs["route_peak_acceleration"] = plan["peak_acceleration"]
         all_electrical = electrical["straight"]+electrical["turn"]
-        duration = 2*v("traversal_time_one_way")+turn_time
+        duration = plan["travel_time"]+turn_time
         outputs["mobility_energy"] = 4*sum(p["energy"] for p in all_electrical)+idle*duration
         outputs["drive_peak_power"] = 4*max(p["peak"] for p in electrical["straight"])+idle
         outputs["turn_peak_power"] = 4*max(p["peak"] for p in electrical["turn"])+idle

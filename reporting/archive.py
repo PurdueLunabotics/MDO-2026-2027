@@ -29,6 +29,8 @@ def archive_cases(baseline, optimized, destination, *, baseline_inputs, optimize
     # Prevent archiving stale or unrelated studies as a baseline/optimization pair.
     if cases[0][2]["final"]["design"] != cases[1][2]["baseline"]["design"] or cases[0][2]["final"]["assumptions"] != cases[1][2]["baseline"]["assumptions"]:
         raise ValueError("The optimization must start from the evaluated baseline inputs.")
+    if cases[0][2]["model_metadata"].get("traversal_mode", "fixed") != cases[1][2]["model_metadata"].get("traversal_mode", "fixed"):
+        raise ValueError("The archived baseline and optimization must use the same traversal mode.")
     baseline_inputs, optimized_inputs = Path(baseline_inputs), Path(optimized_inputs)
     supplied, source = read_case(baseline_inputs)
     actual = {n: item['value'] for group in ('design', 'assumptions')
@@ -51,6 +53,8 @@ def archive_cases(baseline, optimized, destination, *, baseline_inputs, optimize
                   for n, item in record["final"][group].items()}
         effective = {"name": context.get("name", name), "revision": context.get("revision", "Not specified"),
                      "structure": metadata["structure_profile"], "motors": metadata["motor_profile"],
+                     "traversal_mode": metadata.get("traversal_mode", "fixed"),
+                     "attachment_max": metadata.get("attachment_max",1.),
                      "inputs": inputs,
                      "notes": {"source_baseline_sha256": source['sha256'],
                                "analysis_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),

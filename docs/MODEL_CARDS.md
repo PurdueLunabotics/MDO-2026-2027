@@ -19,6 +19,7 @@ needs a card with provenance, domain, held-out validation error and reproduction
 | Mobility (legacy route/turn base) | Fixed-time level route, prescribed profiles, equal wheel torque | Validated slip/sinkage and controller tracking, wheel rotational inertia | Loaded route tests or validated Chrono |
 | BekkerWongReeceMobility (default, revision 2) | Rigid smooth wheel; integrated normal/shear stress, normal-equilibrium sinkage, force-equilibrium slip and wheel torque; straight route only | Published 14% density GRC-1 proxy, generic stress shape, no compliance/grousers, slope weakening, multipass, speed law or per-wheel load transfer; conservatism is a student design assumption; stock-Husky MAE 12.1 points and missed 15-degree rigid-wheel climb fail gate | Versioned independent soil-fit manifest, source hashes, no rover refit; larger-rover benchmark with failures and sensitivities; independent force integration, power conservation and domain tests; Default selected by student as a conservative design assumption, without coefficient fitting. See BEKKER_WONG_REECE.md |
 | SiteRelocation | Empty move to a fresh lane with two turns | Trench exit, slip/sinkage and site topology | Timed relocation and power tests/Chrono |
+| CalculatedTraversalMobility (optional, revision 1) | Separate loaded/empty route durations from bounded BWR/motor-limited profiles; existing speed/acceleration inputs become upper bounds | Same uncalibrated GRC-1 proxy and failed independent BWR gate; empirical point turns and equal-torque traction screen retained; no combined slip, controller/thermal or braking dynamics; deposition/relocation timing unchanged; fastest found profile is not a global optimum | Independent unlimited-motor and distance limits, motor envelope, energy conservation, no-drive/domain failures, fixed regressions, explicit dependencies and smooth derivatives; no new data fit or hardware validation. See CALCULATED_TRAVERSAL.md |
 | TrenchTraversal | Wheel diameter >= stationary trench depth | Slip, sinkage, edge collapse and vehicle dynamics | SCM/Chrono runs and held-out physical exit tests |
 | TipStability | Level-ground center of gravity within wheel-center rectangle for one full pair and one empty pair, both fully extended | Other half-loaded arm poses need a software interlock; soil motion, dumping reaction, slopes, individual wheel lift/contact and compliance omitted | Asymmetric-load balance tests; validated multibody and terrain simulations |
 | ObstacleStability | Fully loaded travel pose, each wheel raised 0.40 m; centered rockers with average-angle differential; geometric reach and projected gravity support | Estimated +0.10 m pivot offset; point contacts, no joint stops/load equilibrium, climb path, traction, collisions, soil or dynamics; 0.50 m ditch unverified | CAD geometry/CG and loaded articulation/balance tests; full crossing trials |
@@ -30,9 +31,26 @@ needs a card with provenance, domain, held-out validation error and reproduction
 
 ## Assumptions requiring particular attention
 
+- ExtendedAttachment revision 1 (optional): `--attachment-max 1.5` selects
+  coordinated plate-frame box-arm factories in `rover/alternatives/extended_attachment.py`.
+  The same uniform tube continues past the drum shaft to the pin for f>1;
+  added two-arm mass, gravity moment/work, tail CG/yaw inertia, whole-length
+  beam screening, stowed/deployed extent and pit-floor checks are included.
+  Existing port meanings and reference defaults remain; optional diagnostics
+  are physical per-arm length in metres and combined tail mass in kilograms.
+  Domain: positive finite dimensions, selected fraction bound <=1.5, existing
+  material/geometry bounds. No calibration or fitted data are introduced.
+  Independent beam/equilibrium, work/mass/inertia, closure, invalid-domain,
+  reference-equivalence and smooth-derivative checks are in
+  `tests/test_extended_attachment.py`. No experimental error metric is available.
+  Core linkage placement remains approximate; brackets, interference and tail
+  soil interaction require CAD and tests. See [equations and reproduction](EXTENDED_ATTACHMENT.md).
+
 - Arm attachment revision: `actuator_attachment_fraction` selects the pin along
   the straight arm, measured from the chassis pivot (default 1; domain 0<f<=1).
-  It is fixed in ASSUMPTIONS by default; moving it into DESIGN makes it optimizable.
+  It is fixed in ASSUMPTIONS by default; `--optimize-attachment` makes it a
+  per-problem design variable in [0.001, 1] without changing the equations or
+  reference defaults. These bounds are exploratory, not selected hardware.
   Geometry intersects circles at that pin and extends to the drum tip. Loads use
   virtual work at the pin; gravity energy remains based on drum lift. MassProperties
   retains an equivalent rod between mean proximal and distal link endpoints.

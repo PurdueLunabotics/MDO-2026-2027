@@ -26,7 +26,17 @@ def main():
                         help="Select reference tubes or the preliminary CF/plate/box-rocker frame")
     parser.add_argument("--motors", choices=["reference", "x44-standard"],
                         help="Generic scalable motors or fixed standard X44s at 12 V, drive gearing 100:1")
+    parser.add_argument("--traversal-mode", choices=["fixed", "calculated"],
+                        help="Fixed one-way schedule (default) or optional BWR/motor-limited route timing")
     parser.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="Override a config value in its stated units")
+    parser.add_argument("--freeze", action="extend", nargs="+", default=[], metavar="NAME",
+                        help="Hold design variables at their resolved input values; accepts multiple names and may be repeated")
+    parser.add_argument("--optimize-attachment", action="store_true",
+                        help="Optimize actuator_attachment_fraction within [0.001, attachment-max]; default keeps it fixed")
+    parser.add_argument("--attachment-max",type=float,
+                        help="Attachment-fraction upper bound, 1 to 1.5; >1 enables the optional box-arm overhang model")
+    parser.add_argument("--ignore-constraint", action="extend", nargs="+", default=[], metavar="MARGIN",
+                        help="Exclude named margin constraints from the optimizer only; keep full feasibility checks and reports (repeatable)")
     parser.add_argument("--optimizer", choices=["SLSQP", "COBYLA"],
                         help="Default: COBYLA for plate-frame, SLSQP for reference")
     parser.add_argument("--maxiter", type=int,
@@ -46,6 +56,8 @@ def main():
         overrides = {**case_values, **cli_values}
         structure = args.structure or source.get("structure", "reference")
         motors = args.motors or source.get("motors", "reference")
+        traversal_mode = args.traversal_mode or source.get("traversal_mode", "fixed")
+        attachment_max = args.attachment_max if args.attachment_max is not None else source.get('attachment_max',1.)
         baseline_mode = args.baseline or (args.inputs is not None and not args.optimize)
         output = args.output or Path("results") / ("baseline.json" if baseline_mode else "optimization.json")
         artifacts = [output, output.with_suffix(".html"), output.with_suffix(".sql"),
@@ -54,7 +66,7 @@ def main():
                       for part in ("retracted", "travel", "extended", "frame", "stability", "top", "obstacle")]
         if args.inputs and args.inputs.resolve() in {path.resolve() for path in artifacts}:
             raise ValueError("Output artifacts would overwrite the source baseline. Choose --output with a different filename.")
-        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=structure, cobyla_radius=args.cobyla_radius, motors=motors, solver_tol=args.solver_tol)
+        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=structure, cobyla_radius=args.cobyla_radius, motors=motors, solver_tol=args.solver_tol, freeze=args.freeze, ignore_constraints=args.ignore_constraint, traversal_mode=traversal_mode, optimize_attachment=args.optimize_attachment,attachment_max=attachment_max)
         context = {
             "name": args.design_name or source.get("name", "Configured design — example"),
             "revision": args.revision or source.get("revision", "Not specified"),

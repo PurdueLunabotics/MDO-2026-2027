@@ -14,7 +14,7 @@ def chassis_members(values):
         fraction = values.get('actuator_attachment_fraction', 1.)
         pin = tuple(a+fraction*(b-a) for a,b in zip(base,end))
         upper = (sign*values['actuator_pivot_x'], 0., values['top_pivot_height'])
-        members += [dict(kind='arm', station=station, start=base, end=end,
+        members += [dict(kind='arm', station=station, start=base, end=pin if fraction>1 else end,
                          width=values.get('arm_box_width', values.get('arm_tube_diameter'))),
                     dict(kind='actuator', station=station, start=upper, end=pin, width=None)]
         if 'cf_tube_span' in values:

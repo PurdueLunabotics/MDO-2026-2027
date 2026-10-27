@@ -97,7 +97,7 @@ def run_attempt(job, seed_name, seed_design):
                                  'source_notes': {'study': 'traversal_fill', 'start': seed_name,
                                                   'study_fingerprint': job['fingerprint']}}}
     try:
-        p = build_problem(values, structure=job['structure'], motors=job['motors'],
+        p = build_problem(values, structure=job['structure'], motors=job['motors'], traversal_mode="fixed",
                           maxiter=job['maxiter'], display=False)
         record['model_metadata'] = p.model_metadata
         assert not {'traversal_time_one_way', 'fill_fraction'} & set(p.design_specs)

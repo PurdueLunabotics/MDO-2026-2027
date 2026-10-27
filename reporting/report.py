@@ -51,6 +51,12 @@ def snapshot(problem, configuration=None):
     assumptions = specs.get("assumptions", ASSUMPTIONS)
     margins = specs.get("margins", MARGINS)
     output_units = dict(OUTPUTS)
+    if specs.get('attachment_max',1.)>1:
+        from rover.alternatives.extended_attachment import EXTRA_OUTPUTS
+        output_units.update(EXTRA_OUTPUTS)
+    if specs.get("traversal_mode", "fixed") == "calculated":
+        from rover.alternatives.calculated_traversal import TIMING_OUTPUTS
+        output_units.update(TIMING_OUTPUTS)
     if getattr(problem, "model_metadata", {}).get("structure_profile") == "plate-frame" or "plate_thickness" in assumptions:
         from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
         output_units.update(PlateStructureGeometry.OUTPUT_UNITS)
@@ -66,10 +72,12 @@ def snapshot(problem, configuration=None):
             constraints[name].update(passed=bool(get(state+"_slope_solution_valid") == 1
                 and 0 <= get(state+"_slope_slip") < 1 and get(name) > 0),
                 criterion="Solved BWR driving slip < 1 (strict; failed-solution sentinel is not a prediction)")
-    for name, (_, low, high, units) in design.items():
+    for name, (_, low, high, units) in {**design, **specs.get("frozen_design", {})}.items():
         margin = min(get(name) - low, high - get(name))
         constraints[name + "_bounds"] = {"margin": margin, "units": units,
                                         "passed": margin >= -1e-6 * (high - low)}
+    for name in specs.get("ignored_optimizer_constraints", ()):
+        constraints[name]["enforced_in_optimization"] = False
     cycles = math.floor(get("cycles"))
     idle_time = get("run_time") - cycles * get("cycle_time")
     whole_volume = cycles * get("payload_mass") * get("delivery_efficiency") / get("berm_density")
@@ -94,6 +102,26 @@ def snapshot(problem, configuration=None):
 
 def print_report(label, report):
     print(f"\n{label}: {'FEASIBLE' if report['feasible'] else 'INFEASIBLE'} (modeled constraints only)")
+    timing_mode = report.get("model_metadata", {}).get("traversal_mode", "fixed")
+    print(f"Traversal timing: {timing_mode}")
+    if timing_mode == "calculated":
+        out = report["outputs"]
+        print(f"  Outbound {out['outbound_travel_time']['value']:.4f} s; return {out['return_travel_time']['value']:.4f} s")
+        print("  traversal_time_one_way is inactive; point-turn physics, deposition and relocation timing retain reference assumptions.")
+        for prefix in ("outbound", "return"):
+            count = out[prefix+"_bwr_transfer_flag_count"]["value"]
+            if count:
+                print(f"  BWR {prefix}: {count:g} source-range transfer flags; see model evidence.")
+    ignored = [name for name, item in report["constraints"].items()
+               if item.get("enforced_in_optimization") is False]
+    if ignored:
+        print("Excluded from optimizer (still checked in full feasibility): "+", ".join(ignored))
+    frozen = report.get("model_metadata", {}).get("configuration", {}).get("frozen_design", {})
+    if frozen:
+        print("Frozen design variables (held fixed):")
+        for name in frozen:
+            item = report["assumptions"][name]
+            print(f"  {name:25s} {item['value']:10.4f} {item['units'] or ''}")
     print("Design variables:")
     for name, item in report["design"].items():
         print(f"  {name:25s} {item['value']:10.4f} {item['units'] or ''}")

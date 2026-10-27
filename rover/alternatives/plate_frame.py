@@ -258,7 +258,7 @@ def arm_beam_screen(length, fraction, direction, actuator, pair_weight, arm_weig
     return max(stresses), abs(tip), max(moments), max(compression)
 
 
-def evaluate_frame_loads(values, arm_section=round_arm_section):
+def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=None):
     """All four drums fully loaded, equal front/rear poses; gravity cases only."""
     v = values.__getitem__
     g = geometry_inventory(values, arm_section=arm_section)
@@ -283,14 +283,17 @@ def evaluate_frame_loads(values, arm_section=round_arm_section):
                       v("actuator_pivot_x"), v("top_pivot_height"), v("actuator_retracted_length"),
                       v("actuator_attachment_fraction")), *poses]
     pair_weight = (v("drum_mass")+v("payload_mass"))/2*grav*factor
-    arm_weight = g["arm_linear_mass"]*v("arm_length")*grav*factor
+    physical_arm_length = v("arm_length") if arm_mechanics is None else arm_mechanics.physical_length(v("arm_length"), v("actuator_attachment_fraction"))
+    arm_weight = g["arm_linear_mass"]*physical_arm_length*grav*factor
+    mount_model = arm_mount_loads if arm_mechanics is None else arm_mechanics.mount_loads
+    beam_model = arm_beam_screen if arm_mechanics is None else arm_mechanics.beam_screen
     b, a = g["nodes"][2], g["nodes"][1]
     loads, actuator_forces = [], []
     cf_stress, arm_stress, arm_deflection, arm_compression, tube_motion = [], [], [], [], []
     span, half = v("cf_tube_span"), v("cf_tube_span")/2
     distributed = np.array([0., -ac*v("cf_density")*grav*factor])
     for c in poses:
-        upper, lower, actuator = arm_mount_loads(b, a, c, pair_weight, arm_weight, v("actuator_attachment_fraction"))
+        upper, lower, actuator = mount_model(b, a, c, pair_weight, arm_weight, v("actuator_attachment_fraction"))
         actuator_forces.append(float(np.linalg.norm(actuator)))
         f = np.zeros((5, 2))
         f[1], f[2] = upper/2+distributed*span/2, lower/2+distributed*span/2
@@ -308,7 +311,7 @@ def evaluate_frame_loads(values, arm_section=round_arm_section):
             cf_stress.append(np.linalg.norm(moment)*g["cf_od"]/(2*ic))
             displacements.append((force*half**3/6+distributed*half**4/8)/(v("cf_flexural_modulus")*ic))
         tube_motion.append(displacements)
-        sigma, delta, _, compressive = arm_beam_screen(v("arm_length"), v("actuator_attachment_fraction"),
+        sigma, delta, _, compressive = beam_model(v("arm_length"), v("actuator_attachment_fraction"),
                                         np.asarray(c)-b, actuator, pair_weight, arm_weight,
                                         aa, ia, arm['depth'], e)
         arm_stress.append(sigma)
@@ -339,7 +342,7 @@ def evaluate_frame_loads(values, arm_section=round_arm_section):
     rocker_sigma = rocker_axial/ar+abs(rocker_moment)*v("rocker_box_height")/(2*ir)
     rocker_delta = abs(end_force*cos*half_length**3/3-own_weight*cos*half_length**3/8)/(e*ir)
     rocker_buckling = math.pi**2*e*min(ir, iw)/(2*half_length)**2/sf-rocker_axial
-    arm_buckling = math.pi**2*e*arm['buckling_inertia']/(2*v("arm_length"))**2/sf-max(arm_compression)
+    arm_buckling = math.pi**2*e*arm['buckling_inertia']/(2*physical_arm_length)**2/sf-max(arm_compression)
     # Axle overhang screen: plate-to-rocker bearing span, not wheel-center span.
     overhang = max((g["rocker_span"]-span)/2, 0.)
     sprung_side_force = max(total_weight-(v("wheel_mass")+v("drive_mass")+g["rocker_mass"])*grav*factor, 0.)/2
@@ -398,6 +401,7 @@ class PlateStructureGeometry(Discipline):
 
 class PlateStructureLoads(Discipline):
     ARM_SECTION = staticmethod(round_arm_section)
+    ARM_MECHANICS = None
     CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cf_flexural_modulus cf_flexural_strength plate_buckling_k allowable_deflection actuator_attachment_fraction actuator_retracted_length travel_actuator_length actuator_extended_length")))
     COUPLED_INPUTS = {"dry_mass": "kg", "payload_mass": "kg", "drum_mass": "kg", "wheel_mass": "kg", "drive_mass": "kg"}
     OUTPUT_UNITS = {**StructureLoads.OUTPUT_UNITS,
@@ -413,7 +417,7 @@ class PlateStructureLoads(Discipline):
     def compute(self, inputs, outputs):
         values = {n: scalar(inputs, n) for n in inputs}
         try:
-            result = evaluate_frame_loads(values, arm_section=self.ARM_SECTION)
+            result = evaluate_frame_loads(values, arm_section=self.ARM_SECTION, arm_mechanics=self.ARM_MECHANICS)
         except (ValueError, np.linalg.LinAlgError):
             # Explicit failed arithmetic guard for driver trials at mechanisms or
             # toggles. Never substitute a different feasible frame/physics model.

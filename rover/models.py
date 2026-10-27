@@ -6,7 +6,7 @@ Replacements must preserve required output names, units, meanings and margins.
 Keep external EDEM/Chrono jobs offline; evaluate validated deterministic responses
 inside OpenMDAO. See docs/MODEL_DEVELOPMENT.md and examples/empirical_excavation.py.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 from .excavation import Excavation
 from .structure import StructureGeometry, StructureLoads
@@ -58,3 +58,31 @@ def plate_frame_models():
     return ModelSet(structure_geometry=BoxArmPlateStructureGeometry, structure_loads=BoxArmPlateStructureLoads,
                     mass_properties=PlateMassProperties, obstacle_stability=PlateObstacleStability,
                     traversal_stability=PlateTraversalStability)
+
+
+def traversal_models(models, mode):
+    """Select optional timing through factories without replacing student models."""
+    if mode not in ("fixed", "calculated"):
+        raise ValueError("traversal_mode must be fixed or calculated")
+    selected = getattr(models.mobility, "TRAVERSAL_MODE", "fixed")
+    if mode == selected:
+        return models
+    if mode == "calculated" and models.mobility is BekkerWongReeceMobility:
+        from .alternatives.calculated_traversal import CalculatedTraversalMobility
+        return replace(models, mobility=CalculatedTraversalMobility)
+    raise ValueError("The selected mobility factory does not support this traversal mode; "
+                     "select a compatible ModelSet explicitly. Student components were not replaced.")
+
+
+def extended_attachment_models(models):
+    """Coordinated box-arm extension factories; never override student models."""
+    from .alternatives.aluminum_box_arm import BoxArmPlateStructureLoads
+    from .alternatives.plate_frame import PlateMassProperties
+    from .alternatives.extended_attachment import (
+        ExtendedLinkageGeometry,ExtendedLinkageLoads,ExtendedPlateStructureLoads,ExtendedPlateMassProperties)
+    expected={'linkage':LinkageGeometry,'linkage_loads':LinkageLoads,
+              'structure_loads':BoxArmPlateStructureLoads,'mass_properties':PlateMassProperties}
+    if any(getattr(models,n) is not cls for n,cls in expected.items()):
+        raise ValueError('Attachment beyond the drum requires the coordinated plate/box-arm factories; student models were not replaced')
+    return replace(models,linkage=ExtendedLinkageGeometry,linkage_loads=ExtendedLinkageLoads,
+                   structure_loads=ExtendedPlateStructureLoads,mass_properties=ExtendedPlateMassProperties)

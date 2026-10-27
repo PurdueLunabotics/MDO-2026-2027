@@ -6,7 +6,7 @@ from pathlib import Path
 import openmdao.api as om
 from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS, ROUTE, configuration
 from .components import Mission
-from .models import ModelSet, plate_frame_models
+from .models import ModelSet, plate_frame_models, traversal_models, extended_attachment_models
 from .contracts import validate_interfaces
 
 # Every margin must be >= 0. Values below are scales, not additional limits.
@@ -71,7 +71,7 @@ PLATE_FRAME_MARGINS = {"plate_geometry_margin": (0.1, "m"), "frame_packing_margi
                       "cf_bending_margin": (1e8, "Pa")}
 
 
-def validate(values, design=None, assumptions=None):
+def validate(values, design=None, assumptions=None, attachment_max=1.):
     """Catch invalid inputs before they become division errors or NaNs in a driver."""
     design = DESIGN if design is None else design
     assumptions = ASSUMPTIONS if assumptions is None else assumptions
@@ -86,7 +86,9 @@ def validate(values, design=None, assumptions=None):
     for name, value in values.items():
         if not math.isfinite(value) or (value < 0 and name != "rocker_pivot_offset") or (value == 0 and name not in zero_allowed):
             raise ValueError(f"{name} must be finite and {'nonnegative' if name in zero_allowed else 'positive'}.")
-        if name in fractions and value > 1:
+        if name == 'actuator_attachment_fraction' and value > attachment_max:
+            raise ValueError(f'actuator_attachment_fraction must be <= {attachment_max}.')
+        if name in fractions and name != 'actuator_attachment_fraction' and value > 1:
             raise ValueError(f"{name} must be <= 1.")
     minimum_wheelbase = design["wheelbase"][1] if "wheelbase" in design else values["wheelbase"]
     if abs(values["rocker_pivot_offset"]) >= minimum_wheelbase/2:
@@ -114,7 +116,7 @@ def validate(values, design=None, assumptions=None):
         raise ValueError("ROUTE needs finite nonnegative distances and nonzero total travel.")
 
 
-def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", solver_tol=None):
+def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", solver_tol=None, freeze=None, ignore_constraints=None, traversal_mode="fixed", optimize_attachment=False, attachment_max=1.):
     # Plate envelopes contain min/max/contact branches. Use a small-step
     # derivative-free solve for that profile; keep explicit SLSQP available.
     optimizer = optimizer or ("COBYLA" if structure == "plate-frame" else "SLSQP")
@@ -133,6 +135,22 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     if cobyla_radius is not None and (optimizer != "COBYLA" or not math.isfinite(cobyla_radius) or cobyla_radius <= 0):
         raise ValueError("cobyla_radius needs a positive finite value and optimizer='COBYLA'.")
     design, assumptions = configuration(structure, motors)
+    if isinstance(attachment_max,bool) or not math.isfinite(attachment_max) or not 1 <= attachment_max <= 1.5:
+        raise ValueError('attachment_max must be finite and between 1 and 1.5')
+    if attachment_max>1 and structure!='plate-frame':
+        raise ValueError('attachment_max > 1 currently requires the plate-frame box-arm profile')
+    if not isinstance(optimize_attachment, bool):
+        raise ValueError("optimize_attachment must be a boolean")
+    if optimize_attachment:
+        initial, units = assumptions.pop("actuator_attachment_fraction")
+        design["actuator_attachment_fraction"] = (initial, .001, attachment_max, units)
+    frozen_names = set([freeze] if isinstance(freeze, str) else freeze or ())
+    unknown = frozen_names - set(design)
+    if unknown:
+        raise ValueError("--freeze requires active design-variable names for this profile; "
+                         f"unknown or already fixed: {', '.join(sorted(unknown))}")
+    if frozen_names == set(design):
+        raise ValueError("Cannot freeze every design variable; use --baseline for a fixed evaluation.")
     margins = {**MARGINS, **(PLATE_FRAME_MARGINS if structure == "plate-frame" else {})}
     diagnostic_screens = {
         "dig_froude_margin": "User removed the uncalibrated speed cap; constant capture/lift response assumes no additional high-speed loss.",
@@ -142,7 +160,16 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         margins.pop("chassis_clearance_margin")
         diagnostic_screens["chassis_clearance_margin"] = (
             "Legacy filled rectangular envelope does not represent the open plate frame; actual frame/equipment interference remains unverified.")
+    ignored_constraints = set([ignore_constraints] if isinstance(ignore_constraints, str) else ignore_constraints or ())
+    unknown = ignored_constraints - set(margins)
+    if unknown:
+        raise ValueError("--ignore-constraint requires an active margin name; "
+                         f"unknown or unavailable: {', '.join(sorted(unknown))}. "
+                         "Mass/dimension limits and design bounds cannot be excluded.")
     models = models or (plate_frame_models() if structure == "plate-frame" else ModelSet())
+    models = traversal_models(models, traversal_mode)
+    if attachment_max>1:
+        models = extended_attachment_models(models)
     # A round outside diameter is not a box width/height specification. Require
     # explicit case migration rather than silently ignoring old arm geometry.
     if (structure == 'plate-frame' and 'arm_tube_diameter' in (overrides or {})
@@ -158,13 +185,26 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         if name not in values:
             raise ValueError(f"Unknown input {name!r}. See rover/config.py.")
         values[name] = float(value)
-    validate(values, design, assumptions)
+    validate(values, design, assumptions, attachment_max=attachment_max)
+    # Validate against the original search bounds before converting selected
+    # variables into fixed inputs. Preserve those bounds for report auditing.
+    frozen_design = {}
+    for name in sorted(frozen_names):
+        _, lower, upper, units = design.pop(name)
+        frozen_design[name] = (values[name], lower, upper, units)
+        assumptions[name] = (values[name], units)
     if motors == "x44-standard" and (values["motor_bus_voltage"] != 12 or values["drive_gear_ratio"] != 100):
         raise ValueError("The selected hardware profile requires 12 V and a fixed 100:1 drive ratio.")
     problem = om.Problem(reports=False)
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
     problem.model_metadata = {"schema_version": 2, "structure_profile": structure, "motor_profile": motors,
-                              "configuration": {"design": design, "assumptions": assumptions, "margins": margins},
+                              "traversal_mode": traversal_mode,
+                              "optimize_attachment": optimize_attachment,
+                              "attachment_max": attachment_max,
+                              "configuration": {"design": design, "assumptions": assumptions, "margins": margins,
+                                                "frozen_design": frozen_design,
+                                                "ignored_optimizer_constraints": sorted(ignored_constraints),
+                                                "traversal_mode": traversal_mode, "attachment_max": attachment_max},
                               "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": solver_tol, "cobyla_radius": cobyla_radius},
                               "diagnostic_only_screens": diagnostic_screens,
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
@@ -228,7 +268,8 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     for name, (upper, _) in REQUIREMENTS.items():
         model.add_constraint(name, upper=upper*(1-1e-3), ref=upper)
     for name, (scale, _) in margins.items():
-        model.add_constraint(name, lower=0. if name in STRICT_SLOPE_MARGINS else 1e-3*scale, ref=scale)
+        if name not in ignored_constraints:
+            model.add_constraint(name, lower=0. if name in STRICT_SLOPE_MARGINS else 1e-3*scale, ref=scale)
     # V2 finite-soil scores are typically tens to hundreds, not the old thousands.
     model.add_objective("construction_points", scaler=-1 / 100.0)  # maximize
     # Deliberately recompute the full model for perturbations: easy to replace models.

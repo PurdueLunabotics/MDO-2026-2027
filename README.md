@@ -277,6 +277,75 @@ bounds; **assumptions** remain fixed. `--set` changes an input or starting value
 not whether it is optimized. These runs leave both maintained design files unchanged.
 The report-publishing command deliberately updates only the candidate JSON.
 
+Traversal timing is optional. Fixed timing remains the default (45 seconds each
+way unless overridden). Calculated timing selects separate BWR/motor-limited
+outbound and return profiles, treating `travel_speed` and `acceleration` as upper
+bounds and leaving `traversal_time_one_way` inactive:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --traversal-mode calculated --output results/calculated_timing.json
+```
+
+Use `--traversal-mode fixed` to switch back; add `--optimize` for an optimization.
+Named cases can save `"traversal_mode": "calculated"` beside `structure`/`motors`.
+Reports identify the mode and actual leg times. This does not introduce BWR
+turning physics: legacy turn traction/stability checks remain, and deposition
+and fresh-site relocation retain reference timing. See
+[timing equations, diagnostics and limitations](docs/CALCULATED_TRAVERSAL.md).
+
+Use `--freeze` to hold selected design variables at their input values while
+optimizing the rest. For example, keep wheel diameter/width and all three
+actuator lengths fixed:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --optimize --freeze wheel_diameter wheel_width travel_actuator_length actuator_retracted_length actuator_extended_length --output results/fixed_hardware_optimization.json
+```
+
+Values resolve from profile defaults, then the input JSON, then any `--set`
+overrides (`--set` wins). For example, add
+`--set wheel_diameter=0.33` to freeze that diameter at 330 mm. The option can be
+repeated. Reports identify frozen variables as fixed inputs and retain their
+original bound checks. Physical constraints still apply; freezing dimensions
+does not establish feasibility or prevent other variables from leaving the
+model's valid domain during an optimizer trial.
+
+`--optimize-attachment` also makes `actuator_attachment_fraction` adjustable in
+the documented exploratory range [0.001, 1]. Without this option it remains a
+fixed assumption. To explore actuator and pivot alternatives across several
+starting geometries, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m studies.linkage_multistart --workers 3
+```
+
+For the plate-frame box arms, add `--attachment-max 1.5` to either `main.py`
+(with `--optimize-attachment`) or the study runner to explore pins beyond the
+drum shaft. This selects the optional uniform arm continuation model with
+extra mass, gravity work, inertia, beam loads and physical envelope checks.
+The default maximum remains 1. See [the model and its limits](docs/EXTENDED_ATTACHMENT.md).
+
+The study uses the saved `results/fixed_hardware_optimization.json` result as its
+reference, freezes only wheel diameter/width, sets both climb angles to zero,
+uses calculated timing and excludes turn traction from the optimizer. It varies
+actuator lengths, pivots and pin fraction within existing model limits. Reports,
+logs and reproducible input snapshots are saved under
+`results/actuator_pivot_study_2026_10_27/index.html`. Ranking requires solver
+success and every selected check to pass; excluded failures remain visible in
+the full model status. This is a search for alternative local optima, not
+hardware validation or proof of a global optimum. No maintained design file is
+rewritten. Use a new output folder after changing study inputs, code or settings.
+
+For an exploratory study, exclude a particular margin from the optimizer with
+`--ignore-constraint turn_traction_margin`. Add it to the optimization command
+above to retain the same frozen hardware. Multiple names and repeated options
+are supported. The model still calculates each excluded margin and reports its
+actual pass/fail result; reports label the exclusion. Full feasibility, saved
+status and the CLI exit code still require every modeled check to pass, so an
+excluded failure remains `failed_or_infeasible` even if the optimizer succeeds.
+Mass/dimension limits and design bounds cannot be excluded with this option.
+This changes which designs the optimizer searches, without changing friction,
+scrub, soil coefficients or the underlying equations.
+
 With `--inputs`, evaluation is the default and optimization requires `--optimize`.
 Without `--inputs`, `--baseline` evaluates the generic reference defaults, while
 plain `main.py` optimizes those defaults. That reference cold start is known to
