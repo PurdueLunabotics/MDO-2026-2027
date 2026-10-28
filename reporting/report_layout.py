@@ -111,9 +111,16 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     context = record.get("report_context", {})
     fixed = record.get("status") == "baseline"
     inputs = {**final["design"], **final["assumptions"]}
+    bounds_inputs = dict(final["design"])
+    for n, (_, lower, upper, units) in metadata.get("configuration", {}).get("frozen_design", {}).items():
+        bounds_inputs[n] = {**inputs[n], "lower": lower, "upper": upper, "units": units}
     outputs = final["outputs"]
     values = {n: i["value"] for group in (inputs, outputs) for n, i in group.items()}
     val = lambda n, default=0: values.get(n, default)
+    timing_mode = metadata.get("traversal_mode", "fixed")
+    outbound_time = val("outbound_travel_time", val("traversal_time_one_way"))
+    return_time = val("return_travel_time", val("traversal_time_one_way"))
+    route_schedule = f"{outbound_time:g} s outbound + {return_time:g} s return"
     q = lambda n: escape(quantity(values.get(n), (outputs.get(n) or inputs.get(n) or {}).get("units"), n))
     prefix = escape(output.stem, quote=True)
     name = context.get("name", "Configured design — example" if fixed else "Rover optimization study")
@@ -163,7 +170,7 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
             op = "≥" if check == "obstacle_drum_wheel_margin" else "≤"
             limit = op+" "+escape(quantity(b, bu, check))
         if bounds:
-            variable = final["design"][check[:-7]]
+            variable = bounds_inputs[check[:-7]]
             actual = escape(quantity(variable["value"], variable["units"], check))
             limit = escape(quantity(variable["lower"], variable["units"], check))+" to "+escape(quantity(variable["upper"], variable["units"], check))
         display_name = label(check[:-7])+" search range" if bounds else label(check)
@@ -174,6 +181,8 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
                       'No climbing solution<small>Slip = 1 is a failure sentinel</small>')
             limit = "Slip &lt; 1 (strict)"
         status = "Pass" if item["passed"] else "Fail"
+        if item.get("enforced_in_optimization") is False:
+            display_name += " (excluded from optimizer)"
         check_rows.append(row([f'<strong>{escape(display_name)}</strong><small>{escape(check)}</small>', actual, limit,
                                escape(quantity(item["margin"], item["units"], check)), badge(status)],
                               f'data-port="{escape(check, quote=True)}" data-check="{status.lower()}" data-kind="{"bounds" if bounds else "physical"}"'))
@@ -202,7 +211,10 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
         row(["Mission energy · continuous estimate", q("run_energy"), "Used by the existing battery constraint and MDO objective."]),
         row(["Peak electrical power", q("peak_power"), "Largest modeled simultaneous demand; not an average power rating."]),
         row(["Loaded mass", escape(quantity(val("dry_mass")+val("payload_mass"), "kg")), "Dry mass + all four drums' regolith payload."]),
-        row(["Actual route peak speed", q("actual_travel_speed"), "Prescribed motion, not measured vehicle performance."]),
+        row(["Traversal timing mode", escape(timing_mode), "Fixed schedule" if timing_mode == "fixed" else "BWR/motor-limited candidate profiles; legacy turn screens remain enforced."]),
+        row(["Loaded outbound route", escape(quantity(outbound_time, "s")), "Includes route turns; excludes deposition and relocation."]),
+        row(["Empty return route", escape(quantity(return_time, "s")), "Includes route turns; excludes deposition and relocation."]),
+        row(["Actual route peak speed", q("actual_travel_speed"), "Prescribed motion, not measured vehicle performance." if timing_mode == "fixed" else "Calculated profile, not measured vehicle performance."]),
         row(["Score · complete-cycle estimate", f'{whole["construction_points"]:,.2f} points', "Uses complete deliveries and idle remainder; separate from the continuous MDO objective."]),
     ]
     for state in ("empty", "loaded"):
@@ -251,7 +263,7 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
 
     raw_inputs = table(["Input port", "Effective value", "Native units"], [row([escape(n), f'{i["value"]:.8g}', escape(i["units"] or "—")]) for n, i in inputs.items()])
     raw_outputs = table(["Output port", "Value", "Native units"], [row([escape(n), f'{i["value"]:.8g}', escape(i["units"] or "—")]) for n, i in outputs.items()])
-    bounds_rows = [row([escape(n), f'{i["lower"]:.6g}', f'{i["value"]:.6g}', f'{i["upper"]:.6g}', escape(i["units"] or "—")]) for n, i in final["design"].items()]
+    bounds_rows = [row([escape(n)+(" (fixed)" if n not in final["design"] else ""), f'{i["lower"]:.6g}', f'{i["value"]:.6g}', f'{i["upper"]:.6g}', escape(i["units"] or "—")]) for n, i in bounds_inputs.items()]
     diagnostics = metadata.get("diagnostic_only_screens", {})
     diagnostic_list = ''.join(f'<li><code>{escape(n)}</code>: {escape(reason)}</li>' for n, reason in diagnostics.items())
     motor_note = ""
@@ -286,9 +298,21 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     mobility_evidence = metadata.get("evidence", {}).get("mobility", {})
     mobility_notice = ('<article class="panel"><strong>'+escape(mobility_evidence["notice"])+
                        '</strong></article>') if mobility_evidence.get("exploratory") and mobility_evidence.get("notice") else ''
+    if timing_mode == "calculated":
+        flags = val("outbound_bwr_transfer_flag_count")+val("return_bwr_transfer_flag_count")
+        mobility_notice += '<p class="callout">Calculated route timing: traversal_time_one_way is inactive. Speed and acceleration inputs are upper bounds. Deposition and fresh-site relocation retain reference timing.</p>'
+        if flags:
+            mobility_notice += f'<p class="callout">BWR soil source-range transfer flags: {flags:g} across the two route legs. The published soil proxy is uncalibrated for this rover; see model provenance and the BWR documentation.</p>'
+    ignored = metadata.get("configuration", {}).get("ignored_optimizer_constraints", [])
+    optimizer_notice = ('<article class="panel"><strong>Constraints excluded from optimizer: '+
+                        escape(', '.join(ignored))+'.</strong><p>These checks are still calculated and included in full model feasibility. '
+                        'Optimizer success with a failed excluded check is not a feasible design.</p></article>') if ignored else ''
     input_hint = f'{len(context.get("input_file_names", []))} inputs supplied by file; {len(context.get("cli_override_names", []))} CLI overrides; {len(default_names)} remaining inputs use model defaults.' if context else 'Effective values are captured below. Original input source was not recorded.'
     if not fixed:
         input_hint += ' Optimizer-selected design values appear in the bounds table.'
+    frozen_design = metadata.get("configuration", {}).get("frozen_design", {})
+    if frozen_design:
+        input_hint += ' Frozen design variables (held fixed): '+', '.join(sorted(frozen_design))+'.'
     extra_geometry = ''
     if obstacle_drawing:
         extra_geometry += '<article class="panel geometry-extra">'+obstacle_drawing+f'<p class="screen-only"><a href="{prefix}_obstacle.svg">Wheel-on-rock SVG</a></p></article>'
@@ -307,10 +331,10 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     analysis_json = json.dumps(record, ensure_ascii=True, allow_nan=False).replace("<", "\\u003c")
     html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(name)} · rover design review</title><style>{CSS}{PRINT_CSS}</style></head><body>
 <aside class="sidebar"><div class="brand">LUNABOTICS<span>Engineering design report</span></div><nav aria-label="Report sections">{nav_html}</nav><div class="sidebar-foot">Fixed inputs → model predictions<br>Constraints remain visible<br><b>Uncalibrated conceptual model</b></div></aside>
-<main><header><div class="eyebrow">{mode}</div><h1>{escape(name)}</h1><p class="subtitle">Revision {escape(revision)} · {escape(metadata.get("structure_profile", "reference"))} frame · {escape(metadata.get("motor_profile", "reference"))} motors</p><div class="header-bottom">{warning}<span class="muted">{escape(context.get("generated_utc", "Saved analysis"))}</span></div></header>{mobility_notice}
+<main><header><div class="eyebrow">{mode}</div><h1>{escape(name)}</h1><p class="subtitle">Revision {escape(revision)} · {escape(metadata.get("structure_profile", "reference"))} frame · {escape(metadata.get("motor_profile", "reference"))} motors</p><div class="header-bottom">{warning}<span class="muted">{escape(context.get("generated_utc", "Saved analysis"))}</span></div></header>{mobility_notice}{optimizer_notice}
 <section id="overview"><div class="verdict {overall}"><div><strong>{title_status}</strong><p>{len(physical)-sum(not c["passed"] for c in physical.values())} / {len(physical)} physical model checks pass · {len(UNASSESSED)} capabilities not assessed</p></div><a class="button" href="#requirements">Review checks ↓</a></div><p class="muted">{conditional} These are predictions from the stated inputs, not measured performance.</p>{guard_note}<div class="metrics">{metrics}</div><div class="score-summary"><h2>Construction score</h2><p class="muted">Continuous mission estimate using the configured mass and energy weights. The complete-cycle estimate is reported in Performance &amp; mass.</p><div class="metrics score-metrics">{score_metrics}</div></div></section>
 <section id="geometry"><div class="section-heading"><span>01 / Rover configuration</span><h2>Geometry at the evaluated inputs</h2><p>Level-ground schematics and one prescribed obstacle pose. Check statuses below determine whether envelopes and clearance requirements are satisfied.</p></div><article class="panel geometry-top">{top_drawing}<p class="muted">Travel-pose plan view. Four wheels and four drums are shown at their model stations. <a href="{prefix}_top.svg">Top-down SVG</a></p></article><article class="panel geometry-sides"><div class="pose-controls" role="group" aria-label="Linkage pose"><button data-pose="travel" aria-pressed="true">Travel</button><button data-pose="retracted" aria-pressed="false">Compact</button><button data-pose="extended" aria-pressed="false">Digging</button></div><div id="pose-travel" class="pose">{drawings[1]}</div><div id="pose-retracted" class="pose" hidden>{drawings[0]}</div><div id="pose-extended" class="pose" hidden>{drawings[2]}</div><p class="muted">Blue: arm · orange: actuator. Each visible drum represents a shaft-linked pair. Drawings are not CAD.</p><p class="screen-only"><a href="{prefix}_travel.svg">Travel SVG</a> · <a href="{prefix}_retracted.svg">Compact SVG</a> · <a href="{prefix}_extended.svg">Digging SVG</a></p></article>{extra_geometry}</section>
-<section id="performance"><div class="section-heading"><span>02 / Predicted output</span><h2>Performance & mass</h2><p>Complete-cycle estimates and continuous MDO estimates are labeled separately.</p></div><article class="panel">{table(["Prediction", "Value", "Meaning"], performance_rows)}</article><div class="two-col"><article class="panel"><h3>Dry mass breakdown</h3><p class="muted">Each assembly is counted once.</p>{mass_bars}</article><article class="panel"><h3>Electrical energy per cycle</h3><p class="muted">Work / provisional efficiency, plus auxiliaries.</p>{energy_bars}</article></div><details class="panel"><summary>Route & cycle accounting</summary><div class="two-col">{route_drawing}<div><h3>{val("traversal_time_one_way"):g} s outbound + {val("traversal_time_one_way"):g} s return</h3><p>Dig and lower concurrently → raise loaded drums → outbound → dump one pair → turn → dump second pair → return → relocate to fresh ground.</p><p>Lowering overlap is subtracted once. The deposition turn and fresh-site relocation are additional to the timed route. Modeled full cycle: {q("cycle_time")}.</p></div></div></details></section>
+<section id="performance"><div class="section-heading"><span>02 / Predicted output</span><h2>Performance & mass</h2><p>Complete-cycle estimates and continuous MDO estimates are labeled separately.</p></div><article class="panel">{table(["Prediction", "Value", "Meaning"], performance_rows)}</article><div class="two-col"><article class="panel"><h3>Dry mass breakdown</h3><p class="muted">Each assembly is counted once.</p>{mass_bars}</article><article class="panel"><h3>Electrical energy per cycle</h3><p class="muted">Work / provisional efficiency, plus auxiliaries.</p>{energy_bars}</article></div><details class="panel"><summary>Route & cycle accounting</summary><div class="two-col">{route_drawing}<div><h3>{route_schedule}</h3><p>Dig and lower concurrently → raise loaded drums → outbound → dump one pair → turn → dump second pair → return → relocate to fresh ground.</p><p>Lowering overlap is subtracted once. The deposition turn and fresh-site relocation are additional to the timed route. Modeled full cycle: {q("cycle_time")}.</p></div></div></details></section>
 <section id="requirements"><div class="section-heading"><span>03 / Gaps to resolve</span><h2>Requirements & model checks</h2><p>Failures are listed first. “Not assessed” means the model does not verify that capability.</p></div><article class="panel"><div class="toolbar"><label>Show <select id="check-filter"><option value="attention">Needs attention</option><option value="all">All checks & gaps</option><option value="fail">Failed checks</option><option value="pass">Passed checks</option><option value="not-assessed">Not assessed</option><option value="bounds">Optimizer search ranges</option></select></label><label class="search-label">Search checks <input id="check-search" type="search" placeholder="e.g. actuator, slope, clearance"></label><span id="check-count" aria-live="polite"></span></div>{table(["Check", "Prediction / reserve", "Limit / criterion", "Signed margin", "Status"], check_rows, "checks")}<p class="muted">Positive margins satisfy the modeled criterion. Status uses the saved model's numerical tolerance. Search ranges are hidden by default and available in the filter; they remain part of saved feasibility. Margins use their own units and cannot be ranked directly across unlike checks.</p><p id="empty-checks" hidden>No matching checks.</p></article></section>
 <section id="loads"><div class="section-heading"><span>04 / Engineering loads</span><h2>Loads & structural response</h2><p>Values identify their load case and whether they apply per component or to the whole rover.</p></div><article class="panel"><p class="muted">{escape(load_note)} Structural load factor: {val("structure_load_factor"):g}; structural safety factor: {val("structure_safety_factor"):g}.</p>{table(["Quantity / scope", "Prediction", "Load case / interpretation"], load_rows)}</article></section>
 <section id="notes"><div class="section-heading"><span>05 / Scope & traceability</span><h2>Model notes & engineering data</h2><p>Keep assumptions and validity limits attached to the predictions.</p></div><article class="panel"><details open><summary>Obstacle and structural interpretation</summary><p>{escape(obstacle_note)}</p><h3>Obstacle drum–wheel clearance</h3><p>{escape(clearance_note)}</p><p>Ditch requirement remains unverified. Static slope tipping assumes adequate friction; it does not verify climbing. The {val("allowable_deflection")*1000:g} mm structural limit applies to the modeled envelope of local deflections, not one assembled-frame displacement.</p><p>For the plate frame, CF tube stiffness/strength are PROVISIONAL. Connections, dynamic obstacle loads, cutting/recovery frame cases and whole-plate buckling need separate verification.</p></details>{motor_note}<details><summary>Removed screens: diagnostics only</summary><ul>{diagnostic_list or '<li>No removed screens recorded.</li>'}</ul></details><details class="screen-only"><summary>Baseline source & revision</summary><pre>{escape(json.dumps(context, indent=2))}</pre></details><details class="screen-only"><summary>Model provenance and evidence</summary><pre>{escape(json.dumps(metadata, indent=2))}</pre></details><div class="downloads">{downloads}<button class="print-button" onclick="window.print()">Print / save PDF</button></div></article></section>

@@ -8,7 +8,7 @@ Four wheels with side rockers and skid steering; four bucket drums on front/rear
 
 The supplied 9/17/26 Lunabotics Guidebook sections 13.3/13.4/13.9 supplied the 1.50 x 0.75 x 0.75 m stowed envelope, 80 kg inspection mass (without regolith), 2.50 m deployed height and penetration-force requirement. Section 17.1 supplies the 4.4 and 1.5 score multipliers. Section 11.1 describes BP-1 and an approximately 0.45 m pit. The supplied requirements CSV identifies additional manual checks. Confirm current event interpretations independently.
 
-The one-way route is 2/3/3/1 m with 90/45/45-degree turns, `traversal_time_one_way` seconds each way (45 s by default). Outbound turns are assumed left; return reverses sequence and yaw signs. A separate 180-degree deposition turn carries only the front pair's remaining payload.
+The one-way route is 2/3/3/1 m with 90/45/45-degree turns, `traversal_time_one_way` seconds each way in default fixed mode (45 s by default). Optional calculated mode predicts separate loaded outbound and empty return times from bounded BWR/motor profiles; the fixed-time input is inactive. Outbound turns are assumed left; return reverses sequence and yaw signs. A separate 180-degree deposition turn carries only the front pair's remaining payload.
 
 ## Data flow and interfaces
 
@@ -48,15 +48,30 @@ C=B+(D-B)/f
 
 D is the actuator pin; C remains the drum shaft at full arm length L.
 The dimensionless input f defaults to 1 (the previous tip attachment), with
-physical domain 0<f<=1. Zero cannot generate an arm moment. It is fixed in
+reference domain 0<f<=1. Zero cannot generate an arm moment. It is fixed in
 ASSUMPTIONS during optimization by default, preserving the reference design
-space. To optimize it, move it into DESIGN with `(1.0, 0.001, 1.0, None)`; those
+space. `--optimize-attachment` (or `build_problem(optimize_attachment=True)`)
+moves it into that problem's design variables with `(1.0, 0.001, 1.0, None)`; those
 positive lower bounds are exploratory numerical bounds, not hardware data.
 The output actuator_attachment_distance=r is in metres from B, not from C.
 Triangle closure uses r, not L; actuator lengths generally need to change when
 moving the pin. The existing clearance screens concern the drum envelope, not
 actuator-to-arm interference or the actuator body; check those in a CAD sweep.
 Historical report snapshots without f are drawn with the original f=1 geometry.
+The option changes only the search space; it does not alter equations, units or
+defaults in other problems. The offline `studies.linkage_multistart` runner
+generates matched-angle starting geometries and actual pin-to-mount actuator
+lengths, then reoptimizes with explicit constraint exclusions recorded per run.
+
+For the plate-frame box arms, `--attachment-max 1.5` opts into a uniform tube
+continuation beyond the drum shaft, with physical arm length max(1,f)*L.
+Together with `--optimize-attachment`, this raises the search bound to 1.5.
+The coordinated alternative factories include extra two-arm mass, gravity
+moment/work, tail CG/yaw inertia, full-length beam screening and tail envelopes.
+Existing names retain their meanings: arm_length is still B-to-drum distance.
+New optional diagnostics are arm_physical_length (m per arm) and
+arm_extension_mass (kg for both tails). Default models remain unchanged.
+See [equations, verification and remaining collision/soil limitations](docs/EXTENDED_ATTACHMENT.md).
 
 The outward branch is sampled at 81 equally spaced arm angles. The compact starting pose uses actuator_retracted_length; after startup the shorter travel_actuator_length raises the drum, then actuator_extended_length lowers it to dig. Wheelbase is a design variable. The compact pose must fit the starting envelope. The travel drum bottom must clear a step equal to wheel diameter, rather than a fixed 0.50 m rock; this is a provisional wheel-first screen for drums ahead of the wheels, not a measured obstacle capability. Its loaded center of gravity enters the level-ground mobility stability screen, while mechanism self-clearance is checked across the travel-to-dig sweep. Triangle closure, positive spacing, stroke/body packaging, toggle reserve, pit floor, mounting and envelope constraints remain. Full drum submergence is not required. The provisional trench screen is wheel_diameter >= trench_depth. Guarded arithmetic only keeps infeasible trials finite; signed margins reject them.
 
@@ -165,6 +180,17 @@ Each reference segment stops/starts: peak=min(requested_speed,sqrt(distance*acce
 
 Half-loaded turns reserve traction for tangential/centripetal CG acceleration. Axle transfer limits equal-wheel-torque traction through the lighter axle; pressure uses the heavier axle and a rocker factor. Pitch/roll support reserves are checked. Rolling/contact-pressure and scrub laws are uncalibrated. No terrain/controller simulation, detailed per-wheel friction circle or wheel rotational kinetic energy is claimed.
 
+`--traversal-mode calculated` selects an optional `ModelSet.mobility` factory.
+It searches a fast common-acceleration profile for each loading state, with
+straight BWR slip/torque and motor speed/power limiting peak speed. Existing
+speed/acceleration inputs are upper bounds. The same profiles determine route
+time, work and peak power; there is no post-hoc timing rescale. Point turns
+retain the empirical rolling/scrub/yaw law and their existing traction/support
+screens. Deposition and relocation timing remain reference calculations. No
+physical constraint is automatically waived. The current GRC-1 transfer and
+calibration limitations remain, and predicted timing is not hardware validation.
+See [the full algorithm and optional output schema](docs/CALCULATED_TRAVERSAL.md).
+
 The default [rigid-wheel Bekker-Wong-Reece model](docs/BEKKER_WONG_REECE.md)
 integrates Bekker normal pressure and Janosi-Hanamoto shear with a continuous
 Wong-Reece contact distribution. It solves normal equilibrium for sinkage and
@@ -242,7 +268,7 @@ are additive to the endpoint obstacle and uneven-dump contracts. Slope and rock
 are separate cases; failed four-contact poses are not replaced with invented
 three-wheel poses. See [traversal equations](docs/OBSTACLE_TRAVERSAL.md#slope-and-intermediate-height-stability).
 
-Cycle sums dig, dump, 2*traversal_time_one_way travel, deposition turn, nominal actuator strokes, relocation and alignment, minus lowering/cutting overlap. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
+Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, nominal actuator strokes, relocation and alignment, minus lowering/cutting overlap. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
 
 Central whole-model FD supports deterministic replacement components. Tests audit omitted dependencies, geometry/conservation limits, mass properties, drive limits, invalid domains and complete optimization. Nonsmooth branches still exist; SLSQP is local and COBYLA is available. Failed final iterates remain labeled failed; numerical consistency/convergence is not empirical validation. Reports identify component factories. Old outputs must be rerun before comparison. Manual inspection still covers 3D packaging, E-stop, radio, materials, autonomy, dust, berm placement and legal zones.
 

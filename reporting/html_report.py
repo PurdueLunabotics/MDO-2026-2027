@@ -64,9 +64,14 @@ def geometry_svg(values, extended=False, title=None, travel=False):
     fraction = values.get("actuator_attachment_fraction", 1.0)
     jx, jy = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, fraction)
     rd, rw = v("drum_diameter") / 2, v("wheel_diameter") / 2
+    arm_ends=[attachment_point(v('pivot_x'),v('bottom_pivot_height'),x,y,max(1.,fraction)) for x,y in [*poses,(cx,cy)]]
     xlim = max(1.05, max(p[0] for p in poses) + rd + .12)
     yhi = max(.85, v("top_pivot_height") + .12, max(p[1] for p in poses) + rd + .12)
     ylo = min(-.55, min(p[1] for p in poses) - rd - .12)
+    if fraction>1:
+        xlim=max(xlim,max(abs(x) for x,y in arm_ends)+.12)
+        yhi=max(yhi,max(y for x,y in arm_ends)+.12)
+        ylo=min(ylo,min(y for x,y in arm_ends)-.12)
     scale = min(1060 / (2 * xlim), 540 / (yhi - ylo))
     ox, oy = 600, 95 + yhi * scale
     def point(x, y):
@@ -109,7 +114,7 @@ def geometry_svg(values, extended=False, title=None, travel=False):
         svg += [circle(sign*v("wheelbase")/2,rw,rw,"#354657","#cbd6df",3)]
         path=" ".join(f'{point(sign*x,y)[0]:.2f},{point(sign*x,y)[1]:.2f}' for x,y in poses)
         svg += [f'<polyline points="{path}" fill="none" stroke="#9aafba" stroke-width="2" stroke-dasharray="3 5"/>',
-                line(sign*v("pivot_x"),v("bottom_pivot_height"),sign*cx,cy,"#246f99",7),
+                line(sign*v("pivot_x"),v("bottom_pivot_height"),sign*(jx if fraction>1 else cx),jy if fraction>1 else cy,"#246f99",7),
                 line(sign*v("actuator_pivot_x"),v("top_pivot_height"),sign*jx,jy,"#d77422",7),
                 circle(sign*cx,cy,rd,"#a54b1e","#e6b68e",3),
                 circle(sign*cx,cy,.009,"#172e45","#172e45"),
@@ -121,7 +126,7 @@ def geometry_svg(values, extended=False, title=None, travel=False):
             label(cx,cy,"C",12,-10), label(-.74,.75,"1.50 m × 0.75 m stowed envelope",8,-10),
             label(-xlim+.03,0,"Ground level",0,-10),
             label(-xlim+.03,-v("pit_depth"),f'Pit floor: −{v("pit_depth"):.2f} m',0,22)]
-    if fraction < 1:
+    if fraction != 1:
         svg.append(label(jx,jy,"D",12,18))
     top = cy + rd; bottom = cy - rd
     svg += [f'<text x="35" y="672" font-size="18" fill="#24354b">Actuator: {actuator_length*1000:.1f} mm · Fixed arm: {v("arm_length")*1000:.1f} mm · Drum Ø {2*rd*1000:.1f} mm</text>',
@@ -278,7 +283,8 @@ def stability_svg(values):
     return ''.join(parts)
 
 
-def route_svg(one_way_time=45.0):
+def route_svg(one_way_time=45.0, return_time=None):
+    return_time = one_way_time if return_time is None else return_time
     points=[(0.,0.)]; heading=0.
     for d, degrees in ROUTE:
         x,y=points[-1]
@@ -296,7 +302,7 @@ def route_svg(one_way_time=45.0):
             labels.append(f'<text x="{x+12:.1f}" y="{y+18:.1f}" font-size="14">{deg:g}° left</text>')
     x,y=coords(points[-1])
     start_x,start_y=coords(points[0])
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 550" role="img" aria-label="Traversal route"><rect width="630" height="550" fill="#f7fafc"/><g font-family="sans-serif" fill="#24354b"><text x="25" y="35" font-size="22">{one_way_time:g} s outbound + {one_way_time:g} s return</text><polyline points="{line}" stroke="#246f99" stroke-width="5" fill="none"/><circle cx="{start_x:.1f}" cy="{start_y:.1f}" r="7" fill="#246f99"/><text x="{start_x-15:.1f}" y="{start_y+35:.1f}" font-size="16">Excavate</text><circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="#d77422"/><text x="{x-45:.1f}" y="{y+40:.1f}" font-size="16">Deposit</text>{"".join(labels)}<text x="25" y="535" font-size="15">Return follows the same path in reverse order; yaw signs reverse.</text></g></svg>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630 550" role="img" aria-label="Traversal route"><rect width="630" height="550" fill="#f7fafc"/><g font-family="sans-serif" fill="#24354b"><text x="25" y="35" font-size="22">{one_way_time:g} s outbound + {return_time:g} s return</text><polyline points="{line}" stroke="#246f99" stroke-width="5" fill="none"/><circle cx="{start_x:.1f}" cy="{start_y:.1f}" r="7" fill="#246f99"/><text x="{start_x-15:.1f}" y="{start_y+35:.1f}" font-size="16">Excavate</text><circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="#d77422"/><text x="{x-45:.1f}" y="{y+40:.1f}" font-size="16">Deposit</text>{"".join(labels)}<text x="25" y="535" font-size="15">Return follows the same path in reverse order; yaw signs reverse.</text></g></svg>'
 
 
 def write_report(record, output, iterations=(), *, download_links=None):
@@ -330,6 +336,7 @@ def write_report(record, output, iterations=(), *, download_links=None):
                            "points": snap["outputs"]["construction_points"]["value"],
                            "retracted": geometry_svg(vals), "extended": geometry_svg(vals, True)})
     html = render_report(record, output, drawings, frame, stability,
-                         route_svg(values["traversal_time_one_way"]), frames, top_drawing=top,
+                         route_svg(values.get("outbound_travel_time", values["traversal_time_one_way"]),
+                                   values.get("return_travel_time", values["traversal_time_one_way"])), frames, top_drawing=top,
                          download_links=download_links, obstacle_drawing=obstacle)
     output.with_suffix(".html").write_text(html, encoding="utf-8")

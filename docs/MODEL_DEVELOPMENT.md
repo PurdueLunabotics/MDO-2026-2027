@@ -74,7 +74,7 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 | `cut_depth` | Scoop protrusion / maximum bite, distinct from total trench depth |
 | `payload_mass` | Retained soil across all FOUR drums |
 | `fill_fraction` | Storage ceiling; actual payload also depends on reachable soil |
-| `actuator_attachment_fraction` | Chassis-pivot-to-pin distance / arm length; 0 < f <= 1 |
+| `actuator_attachment_fraction` | Chassis-pivot-to-pin distance / B-to-drum arm length; default 0 < f <= 1; optional box-arm extension up to 1.5, see EXTENDED_ATTACHMENT.md |
 | `dig_energy`, `dump_energy` | Electrical phase energy in J, including startup/idle |
 | `dig_power`, `dump_power` | Peak electrical W; peak × duration is not phase energy |
 | `*_yaw_inertia` | About the chassis-center yaw axis, not the displaced CG |
@@ -107,6 +107,16 @@ simulation are numerical evidence, not experimental validation.
 
 ## Solver settings
 
+`build_problem(traversal_mode="calculated")` or `--traversal-mode calculated`
+selects the optional calculated route component through `ModelSet`; default
+`fixed` retains the prescribed schedule. Required scalar outputs and Mission's
+time/energy interface are preserved. Custom mobility factories are not silently
+replaced. Dependency declarations include the selected hardware and timing
+physics; the fixed-time input has no calculated-mode dependencies. Reports use
+actual leg times, and saved cases/archives preserve the mode. The traversal/fill
+study remains explicitly fixed. See [calculated traversal](CALCULATED_TRAVERSAL.md)
+for search policy, equations, optional diagnostics and calibration limitations.
+
 | Profile | Default solver | Stopping accuracy | Limit | COBYLA radius |
 | --- | --- | --- | --- | --- |
 | Generic reference | SLSQP | 1e-3 | 200 iterations | n/a |
@@ -121,10 +131,30 @@ starts for design decisions; keep failed final iterates labeled failed.
 
 In `rover/config.py`, design entries are `(initial, lower, upper, units)`;
 assumption entries are `(value, units)`. Profile-specific dictionaries determine
-which inputs are active. To hold a design variable fixed during optimization,
-move it into the selected assumptions configuration and verify its consumers;
-`--set` alone does not freeze it. Preserve competition limits and documented
-physical constraints when changing the search space.
+which inputs are active. To hold a design variable fixed for one run, use
+`--freeze NAME [NAME ...]` (repeatable), or pass `freeze=["wheel_diameter"]`
+to `build_problem`. Values resolve from defaults, the input file, then `--set`.
+The selected inputs are validated against their original bounds, removed from
+the optimizer's design variables, and recorded as assumptions. JSON metadata
+`configuration.frozen_design` retains their values, original bounds and units;
+reports still audit those bounds. Other constraints remain enforced and
+derivative checks use only the remaining active variables. Unknown names and
+inputs already fixed by the selected profile are errors. Use `--baseline`
+instead of freezing every variable. `--set` alone does not freeze a variable.
+For a permanent profile change, move it into the selected assumptions
+configuration and verify its consumers. Preserve competition limits and
+documented physical constraints when changing the search space.
+
+An explicitly relaxed study can use `--ignore-constraint MARGIN [MARGIN ...]`
+(repeatable), or `build_problem(ignore_constraints=["turn_traction_margin"])`.
+Only active margin names are accepted, not mass/dimension limits or variable
+bounds. The margin is omitted from the driver, while its component, equations,
+dependencies, numerical derivative checks and report pass/fail calculation remain
+unchanged. `configuration.ignored_optimizer_constraints` records the selection;
+excluded snapshot entries carry `enforced_in_optimization: false`. Full
+`feasible`, saved status and CLI success still include excluded checks. An
+optimizer success with any failed check remains `failed_or_infeasible` and
+returns exit 1. Such a study is not evidence of full design feasibility.
 
 ## Verify and submit a change
 

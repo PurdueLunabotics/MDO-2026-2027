@@ -2,7 +2,9 @@
 
 Lower chassis pivot B carries a fixed arm; upper pivot A carries the actuator.
 The actuator meets the arm at D=B+f(C-B), where C is the drum center and
-0<f<=1. Extending A-D lowers C on the outward branch; f=1 is the reference.
+0<f<=1 in the reference model. The optional extended-attachment factories
+account for a tube continuing beyond C when f>1. Extending A-D lowers C
+on the outward branch; f=1 is the reference.
 The startup pose is compact; the shorter travel setting raises the drum for
 driving after deployment, and the longest setting digs.
 """
