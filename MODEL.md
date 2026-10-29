@@ -94,6 +94,39 @@ Drum gear ratio is independent of operating RPM. Continuous output torque=P_rate
 
 Digging uses all drums; dumping uses one pair at a time. Conservative ring spin inertia is (drum assembly mass+payload)*R^2. Startup has duration, I*omega/time torque and I*omega^2/2 energy. No regenerative braking is credited. Peak uses full internal load. Dig energy uses a simple half-full mean internal torque through cutting; unloading uses a linear emptying approximation. dig_energy/dump_energy are electrical J including startup and idle. dig_power/dump_power are PEAK electrical W; do not multiply them by duration to estimate energy. Apply drivetrain efficiency exactly once.
 
+## Level-ground ground clearance
+
+The user requires 6 inches (0.1524 m) after 20% wheel-radius compression and a
+1-inch (0.0254 m) differential-bar allowance below the lower axle. With nominal
+wheel radius R, the existing bottom-pivot height is already above ground;
+the rocker axle is at R + rocker_pivot_offset. Each height locates the axle
+center, so its own outer radius must be subtracted to locate its underside:
+
+```text
+bottom_axle_radius = cf_tube_inner_diameter/2 + cf_tube_wall
+rocker_axle_radius = axle_outer_diameter/2
+bottom_clearance = bottom_pivot_height - bottom_axle_radius - 0.20*R - 0.0254
+rocker_clearance = R + rocker_pivot_offset - rocker_axle_radius - 0.20*R - 0.0254
+ground_clearance = min(bottom_clearance, rocker_clearance)
+ground_clearance_margin = ground_clearance - 0.1524
+```
+
+Equivalently, subtract R from the bottom height before applying the user's
+offset formula `min(bottom_offset-bottom_axle_radius, rocker_offset-rocker_axle_radius)
++ 0.8*R - 1 inch`. Subtract the respective radii before choosing the lower surface.
+The wheel radius is counted once and both existing coordinate definitions are retained.
+`GroundClearance` is selected through `ModelSet.ground_clearance` for both frame
+profiles. Reports include both axle radii and underside clearances, their minimum,
+and the active signed margin. Plate-frame radii follow the existing CF wall and
+axle diameter design variables. The reference profile exposes the same nominal
+shaft dimension defaults as fixed clearance inputs, without changing its mass
+model. The three allowances/requirement remain fixed configuration inputs.
+This is a level-ground screen using user-specified assumptions, without hardware
+calibration. The radial deflection applies only here; the existing diameter-based
+contact-pressure deflection input, nominal drawings and terrain/stability models
+are unchanged. Slope/rock clearance, unequal wheel compression and actual bar
+shape are not predicted by this screen.
+
 ## Structure and mass
 
 The optional `--structure plate-frame` profile replaces the following reference

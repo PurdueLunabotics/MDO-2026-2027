@@ -6,6 +6,7 @@ needs a card with provenance, domain, held-out validation error and reproduction
 
 | Component | Intended use | Important omissions | Replacement evidence |
 | --- | --- | --- | --- |
+| GroundClearance (revision 2) | Each axle center minus its own outer radius, 20% wheel-radius compression and 25.4 mm differential allowance; require the lower underside clearance to be at least 152.4 mm. Bottom radius uses CF ID/2+wall; rocker radius uses suspension axle OD/2 | User-specified allowances; no terrain articulation, bearings/brackets, unequal compression, actual bar shape or measured wheel stiffness. Reference shaft sizes are fixed nominal assumptions; plate-frame sizes follow design variables | Independent inch boundary, unequal-radius branch reversal, zero-radius/translation limits, signed/invalid failures, source/dependency and smooth size-derivative tests. No fitted data or calibration |
 | WheelMass | Four closed cylindrical wheels from one effective areal-mass coefficient | Spokes/open sides, grousers, hubs, fasteners, strength-based thickness | Parametric CAD/BOM and weighed wheels at multiple sizes |
 | DrumMass | Four closed cylindrical shells plus two motor/gear assemblies | Architecture-specific scoops, helix/baffles, shafts, hubs, joints and actual part ratings | Component-level CAD/BOM and weighed drums with a clear motor/gear boundary |
 | GeometryMass | Sum wheel, drum, linkage, structure, drive, battery and fixed mass; stowed envelope | Detailed drive/gear catalog and mounting mass | Measured assembly mass and packaging CAD |

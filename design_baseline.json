@@ -27,7 +27,7 @@
     "lin_act_top_arm_offset": 0.0508,
     "top_pivot_height": 0.42,
     "actuator_pivot_x": 0.0381,
-    "bottom_pivot_height": 0.0762,
+    "bottom_pivot_height": 0.18,
     "arm_length": 0.5588,
     "pivot_x": 0.1397,
     "wheelbase": 0.6,

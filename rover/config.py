@@ -43,6 +43,9 @@ DESIGN = {
 
 # name: (value, units). These are fixed during one optimization, but editable.
 ASSUMPTIONS = {
+    "minimum_ground_clearance": (0.1524, "m"),  # USER: 6 inches after deductions
+    "clearance_radius_deflection_fraction": (0.20, None),  # USER: radial compression, clearance screen only
+    "differential_bar_clearance_allowance": (0.0254, "m"),  # USER: 1 inch below the lower axle
     # Fixed for each solve; CLI --set accepts degrees. Separate from static slope_angle.
     "empty_slope_degrees": (30.0, "deg"),
     "loaded_slope_degrees": (20.0, "deg"),
@@ -190,6 +193,12 @@ def configuration(structure="reference", motors="reference", actuators="referenc
     if structure not in ("reference", "plate-frame"):
         raise ValueError(f"Unknown structure profile {structure!r}")
     design, assumptions = dict(DESIGN), dict(ASSUMPTIONS)
+    if structure == "reference":
+        # Nominal shaft sizes for the underside-clearance screen only. The
+        # plate-frame profile below already exposes these dimensions directly.
+        for name in ("cf_tube_inner_diameter", "cf_tube_wall", "axle_outer_diameter"):
+            entry = PLATE_FRAME_ASSUMPTIONS.get(name, PLATE_FRAME_DESIGN.get(name))
+            assumptions[name] = (entry[0], entry[-1])
     if structure == "plate-frame":
         # Generic frame tubes are replaced by explicit rockers, CF rods and axle.
         for name in ("frame_tube_diameter", "frame_wall", "arm_tube_diameter"):

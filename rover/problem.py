@@ -14,6 +14,7 @@ from .contracts import validate_interfaces
 # Climb acceptance is strict: a zero reserve or failed solution does not pass.
 STRICT_SLOPE_MARGINS = {"empty_slope_traversal_margin": "empty", "loaded_slope_traversal_margin": "loaded"}
 MARGINS = {
+    "ground_clearance_margin": (0.1524, "m"),
     "empty_slope_traversal_margin": (1.0, None),
     "loaded_slope_traversal_margin": (1.0, None),
     "drum_power_margin": (200.0, "W"),
@@ -81,7 +82,8 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
                     "obstacle_height", "rocker_pivot_offset", "slope_angle",
                     "drive_stator_current_limit", "drum_stator_current_limit",
                     "empty_slope_degrees", "loaded_slope_degrees", "actuator_installation_allowance",
-                    "lin_act_side_arm_offset", "lin_act_top_arm_offset"}
+                    "lin_act_side_arm_offset", "lin_act_top_arm_offset",
+                    "clearance_radius_deflection_fraction", "differential_bar_clearance_allowance"}
     fractions = {name for name in assumptions if "fraction" in name or "efficiency" in name}
     fractions |= {"cut_engagement", "delivery_efficiency", "force_imbalance"}
     for name, value in values.items():
@@ -94,6 +96,8 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
         raise ValueError("Absolute rocker_pivot_offset must be smaller than half the minimum wheelbase.")
     if not 0 < values["wheel_deflection_fraction"] < 0.5:
         raise ValueError("wheel_deflection_fraction must be between 0 and 0.5.")
+    if not 0 <= values["clearance_radius_deflection_fraction"] < 1:
+        raise ValueError("clearance_radius_deflection_fraction must be in [0, 1).")
     if not 0 <= values["slope_angle"] < math.pi/2:
         raise ValueError("slope_angle must be in [0, pi/2) radians.")
     for name in ("empty_slope_degrees", "loaded_slope_degrees"):
@@ -295,7 +299,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     for slot in ("structure_geometry","linkage","wheel_mass","drum_mass","geometry",
                  "excavation","linkage_loads","mass_properties","structure_loads",
                  "relocation","trench_traversal","tip_stability","obstacle_stability",
-                 "obstacle_clearance","traversal_stability","mobility","slope_traversal"):
+                 "obstacle_clearance","traversal_stability","mobility","slope_traversal","ground_clearance"):
         add_discipline(slot)
     model.add_subsystem("mission", Mission(), promotes=["*"])
     for name, (_, lower, upper, _) in design.items():

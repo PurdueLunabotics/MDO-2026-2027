@@ -74,6 +74,7 @@ class RoverTests(unittest.TestCase):
         self.assertFalse(report["constraints"]["obstacle_pose_margin"]["passed"])
         self.assertFalse(report["constraints"]["obstacle_drum_wheel_margin"]["passed"])
         expected_failures = {"obstacle_pose_margin", "obstacle_tip_margin", "obstacle_drum_wheel_margin",
+                             "ground_clearance_margin",
                              "empty_slope_traversal_margin", "loaded_slope_traversal_margin",
                              "slope_tip_margin", "rock_sweep_tip_margin", "rock_sweep_wheel_load_margin"}
         self.assertEqual({n for n,c in report["constraints"].items() if not c["passed"]}, expected_failures)

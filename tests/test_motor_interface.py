@@ -95,8 +95,11 @@ class MotorInterfaceTests(unittest.TestCase):
                     retired_outputs = {n for n in c["outputs"]
                                        if "stator_current" in n or "required_voltage" in n}
                     if c["motors"] == "reference":
+                        # Historical acceptance predates climbing and ground-clearance
+                        # requirements; current requirements have independent tests.
                         old_checks = [v['passed'] for n,v in result['constraints'].items()
-                                      if n not in ('empty_slope_traversal_margin','loaded_slope_traversal_margin')]
+                                      if n not in ('empty_slope_traversal_margin','loaded_slope_traversal_margin',
+                                                   'ground_clearance_margin')]
                         self.assertEqual(all(old_checks),c['feasible'])
                     for n,expected in c['outputs'].items():
                         if c["motors"] == "x44-standard" and n in changed_outputs | retired_outputs:

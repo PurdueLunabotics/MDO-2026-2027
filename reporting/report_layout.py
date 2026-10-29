@@ -11,6 +11,15 @@ from rover.config import REQUIREMENTS
 
 
 LABELS = {
+    "ground_clearance_margin": "Ground clearance: lower axle after wheel/bar deductions",
+    "ground_clearance": "Minimum ground clearance",
+    "bottom_pivot_axle_radius": "Bottom pivot axle outer radius",
+    "rocker_pivot_axle_radius": "Rocker pivot axle outer radius",
+    "bottom_pivot_ground_clearance": "Arm-pivot clearance after deductions",
+    "rocker_pivot_ground_clearance": "Rocker-pivot clearance after deductions",
+    "minimum_ground_clearance": "Required ground clearance",
+    "clearance_radius_deflection_fraction": "Radial wheel deflection for clearance",
+    "differential_bar_clearance_allowance": "Differential-bar clearance allowance",
     "actuator_body_margin": "Actuator packaging reserve (diagnostic only)",
     "wheel_diameter": "Wheel diameter", "wheel_width": "Wheel width",
     "wheelbase": "Wheelbase", "track_width": "Wheel-center track",

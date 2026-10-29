@@ -23,6 +23,7 @@ from .wheels import WheelMass
 from .drums import DrumMass
 from .components import GeometryMass
 from .linkage import LinkageGeometry, LinkageLoads
+from .ground_clearance import GroundClearance
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class ModelSet:
     traversal_stability: Callable = TraversalStability
     mobility: Callable = BekkerWongReeceMobility
     slope_traversal: Callable = SlopeTraversal
+    ground_clearance: Callable = GroundClearance
 
     def metadata(self):
         return {name: f"{getattr(factory, '__module__', type(factory).__module__)}.{getattr(factory, '__qualname__', type(factory).__qualname__)}"

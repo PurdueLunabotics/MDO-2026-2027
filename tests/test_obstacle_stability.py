@@ -102,7 +102,8 @@ class ObstacleSupportTests(unittest.TestCase):
         self.assertAlmostEqual(v("obstacle_loaded_cg_z"),expected_z)
         self.assertAlmostEqual(v("obstacle_tip_margin"),min(v("wheelbase"),v("track_width"))/2)
         failed = {n for n,c in snapshot(p)["constraints"].items() if not c["passed"]}
-        self.assertEqual(failed, {"empty_slope_traversal_margin", "loaded_slope_traversal_margin"})
+        self.assertEqual(failed, {"empty_slope_traversal_margin", "loaded_slope_traversal_margin",
+                                  "ground_clearance_margin"})
 
     def test_invalid_reach_stays_failed_and_finite(self):
         p=build_problem()

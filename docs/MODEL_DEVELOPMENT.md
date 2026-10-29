@@ -10,6 +10,7 @@ discipline per change. Preserve the reference model for comparisons.
 | Question | Main files |
 | --- | --- |
 | Defaults, design bounds, fixed assumptions | `rover/config.py` |
+| Six-inch level-ground clearance after wheel/bar deductions | `rover/ground_clearance.py`, `ModelSet.ground_clearance` |
 | Model assembly, constraints, optimization | `rover/problem.py` |
 | Select or replace a discipline | `rover/models.py` (`ModelSet`) |
 | Kinematics and actuator loads | `rover/linkage.py` |
@@ -21,6 +22,13 @@ discipline per change. Preserve the reference model for comparisons.
 | Motor losses and hardware inventory | `rover/motors.py`, `rover/motor_inventory.py` |
 | Reports, input files, archive | `reporting/` |
 | Parameter sweeps | `studies/` |
+
+Ground-clearance outputs include each axle's radius and underside clearance.
+The bottom radius follows `cf_tube_inner_diameter/2 + cf_tube_wall`; the rocker
+radius follows `axle_outer_diameter/2`. These existing plate-frame dimensions
+remain active design variables where applicable. The reference configuration
+supplies their nominal defaults as fixed clearance-only inputs. They do not
+add mass or change the existing absolute bottom-pivot/relative rocker coordinates.
 
 ## Replace one component
 

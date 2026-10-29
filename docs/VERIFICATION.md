@@ -4,6 +4,117 @@ Checked locally using the repository's `.venv`. This page
 describes the current implementation; Git history retains earlier run notes.
 Software verification is separate from physical calibration and validation.
 
+## Axle underside radii in ground clearance (2026-10-29)
+
+The user confirmed subtracting each axle's outer radius before selecting the
+lowest surface. Bottom radius is `cf_tube_inner_diameter/2 + cf_tube_wall`;
+rocker radius is `axle_outer_diameter/2`. These existing plate-frame dimensions
+remain active where they are design variables, so resizing changes clearance
+without an independent duplicated radius input. Both radii are reported in m.
+Reference-frame clearance uses the existing nominal shaft dimension defaults
+as explicit fixed assumptions; its structural and mass models are unchanged.
+The six-inch requirement, 20% radial compression and one-inch bar allowance
+are unchanged. The model card is GroundClearance revision 2.
+
+All **191 tests passed in 475.486 s**, with the local `.venv` and ordinary
+local temporary-folder access. This supersedes the failed baseline-dependent
+run in the earlier section: the student's current saved bottom height is now
+0.18 m, within the existing bounds. The input edit was made by the student;
+no maintained baseline input was changed by this radius update.
+Six focused clearance tests pass, including distinct shaft radii at the exact
+six-inch boundary, a higher-center/lower-underside branch reversal, invalid
+radius domains, zero-radius limits and smooth sensitivities to both CF wall
+and suspension axle diameter. The full suite includes the reference drum/motor,
+dependency, N2, mass and energy checks. Logs: `results/ground_radius_tests.log`
+and `results/ground_clearance_radii_focused.log`.
+
+Fixed reference and student baseline evaluations completed, with their physical
+failures retained. Both total-derivative step-size checks passed. The student
+report `results/ground_radius_student_baseline.html` uses 14.7 mm bottom radius
+and 16.5 mm rocker radius. Its underside clearances are 104.0 and 177.9 mm:
+minimum 104.0 mm versus 152.4 mm required, margin −48.4 mm. Thus it remains
+infeasible; axle center height and underside clearance are not interchangeable.
+No calibration or hardware validation is implied by numerical consistency.
+
+The required reference optimization command was run, but manually stopped after more than 25 minutes without termination. Its starting total-derivative check passed. The full optimization check remains incomplete: there is no final JSON, convergence result or accepted feasible design. Intermediate recorded trials and the interruption note are retained under `results/ground_radius_optimization`; the last inspected trial passed ground clearance but still failed other constraints. No constraint or solver tolerance was relaxed.
+Reference outputs outside the clearance screen match the previous fixed run.
+The audit found 332 explicit reference connections, no automatic IVC sources,
+zero dry-mass residual and a cycle-energy residual below 1e-15 Wh. Audit:
+`results/ground_radius_audit.json`. Existing coordinate meanings, nominal
+drawings, wheel contact-pressure deflection and terrain models are unchanged.
+Bearings/brackets, nonuniform compression, real bar shape and terrain clearance
+remain outside this simple level-ground screen; no fitted data were added.
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe main.py --baseline --output results/ground_radius_reference_baseline.json
+.\.venv\Scripts\python.exe main.py --check-derivatives --output results/ground_radius_optimization.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --output results/ground_radius_student_baseline.json
+```
+
+## Six-inch ground clearance (2026-10-29)
+
+Added `ModelSet.ground_clearance` and the active `ground_clearance_margin` for
+both frame profiles. The user confirmed 152.4 mm clearance after uniform 20%
+radial wheel compression and a 25.4 mm differential-bar allowance, while
+preserving existing coordinate meanings. The equation is
+`min(bottom_pivot_height, wheel_diameter/2 + rocker_pivot_offset)
+- 0.20*wheel_diameter/2 - 0.0254`, with the 0.1524 m requirement subtracted
+for the signed margin. Each axle clearance and their minimum are reported in m.
+The standard small inward optimizer reserve is unchanged. The new fixed
+assumptions affect only this screen; no mass, energy, soil, contact-pressure,
+nominal drawing, geometry or stability equation was changed. Model equations,
+the card, explicit dependencies, native-unit outputs and report labels were
+updated. This is a user-specified level-ground assumption, without calibration
+or a claim about actual bar geometry, terrain clearance or wheel stiffness.
+
+All five new clearance tests pass: independent inch boundary and failing branch,
+zero-deduction/rigid-translation limits, invalid and negative-clearance domains,
+active model/report/source connections, and smooth derivatives on both min
+branches. Derivatives are not tested at the equal-height switch. Two old exact
+failure-set assertions were updated to include the newly required failing
+clearance margin, without changing any physical tolerance. Their focused
+reruns pass (13 obstacle tests and the drum regression). Historical motor-fixture
+acceptance explicitly excludes the new requirement; all its original numeric
+expectations remain. Reference drum/motor regressions passed in the full run.
+
+The required full suite ran 190 tests in 290.083 s and initially reported four
+failures and three errors. Two were the exact failure sets corrected and
+rerun above. The other five cases depend on the existing maintained baseline
+with `bottom_pivot_height=0.0762 m`, outside its unchanged [0.09, 0.30] m bounds:
+PA-04 baseline/domain and combined-CLI tests, plus three traversal/fill cases.
+They remain unresolved. No all-suite passing result is claimed, and neither
+the student's baseline nor its bounds was modified to make tests pass.
+The full log is `results/ground_clearance_tests.log`; focused reruns are
+`ground_clearance_focused.log`, `ground_clearance_obstacle_tests.log` and
+`ground_clearance_drum_regression.log` under `results/`.
+
+The reference fixed evaluation completed and reports 94.6 mm clearance, a
+−57.8 mm margin. Its report is `results/ground_clearance_reference_baseline.html`.
+All existing reference numeric outputs match the earlier run; the audit found
+329 explicit connections, no automatic IVC sources, zero dry-mass residual and
+a cycle-energy residual below 1e-15 Wh. See `results/ground_clearance_audit.json`.
+
+The required generic-reference derivative check passed. Its complete SLSQP run
+terminated with exit mode 8 and optimizer success false; the final iterate
+remains `failed_or_infeasible`. It passes the new clearance screen but still
+fails other physical checks. No failed iterate was accepted or copied into a
+maintained design. JSON, HTML, N2 and logs are saved under
+`results/ground_clearance_optimization`.
+
+The current student case was also attempted and still exits 2 during the
+existing bottom-pivot input validation. A separate clearance-helper evaluation
+of its supplied dimensions gives 14.9 mm bottom clearance, 194.4 mm rocker
+clearance, and a −137.5 mm margin. These are results of the new scalar screen,
+not a successful full-baseline evaluation or hardware validation.
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe main.py --baseline --output results/ground_clearance_reference_baseline.json
+.\.venv\Scripts\python.exe main.py --check-derivatives --output results/ground_clearance_optimization.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/ground_clearance_student_baseline.json
+```
+
 ## Publication input check (2026-10-29)
 
 The latest student baseline edits were preserved for publication to `main`.
@@ -124,11 +235,11 @@ Reproduction (ordinary local temporary-folder access; no limits relaxed):
 
 | Check | Result |
 | --- | --- |
-| Full combined unit suite | 185 tests passed, 353.602 s; actuator body constraint retired |
+| Full combined unit suite | 191 tests passed, 475.486 s; axle underside clearance |
 | Generic reference fixed evaluation | Completed; failed constraints remain visible |
 | Generic reference derivative step-size check | Passed at its starting design |
-| Generic reference cold-start SLSQP solve | Known failure; saved as failed/infeasible, exit 1 |
-| Current saved baseline | 8 remaining failures; actuator packaging reserve is diagnostic only |
+| Generic reference cold-start SLSQP solve | Latest axle-radius run stopped after 25+ minutes; incomplete. Earlier centerline-clearance run failed/infeasible, exit 1 |
+| Current saved baseline | Fixed evaluation completes with failures, including underside ground clearance; actuator packaging remains diagnostic only |
 | Initial PA-04 baseline derivative check / optimization | Historical pre-update geometry: derivatives passed; COBYLA exhausted 2000 evaluations and retained a failed/infeasible iterate |
 | Historical optimized candidates | Prior success statements predate BWR climb requirements; reevaluation required |
 | Historical sensitivity grid | 96 cells, 192 starts; 88 formerly feasible cells, before BWR climb requirements |
