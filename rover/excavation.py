@@ -36,7 +36,7 @@ class Excavation(Discipline):
         minimum_dig_depth minimum_payload actuator_idle_power actuator_speed
         travel_actuator_length actuator_extended_length
     """)))
-    COUPLED_INPUTS = {"dry_mass": "kg", "drum_mass": "kg", "extended_y": "m", "extended_x": "m"}
+    COUPLED_INPUTS = {"dry_mass": "kg", "drum_mass": "kg", "extended_y": "m", "extended_x": "m", "lowering_time": "s"}
     OUTPUT_UNITS = {
         "payload_mass": "kg", "payload_volume": "m**3", "fresh_volume": "m**3", "storage_capacity": "m**3",
         "reachable_soil_mass": "kg", "target_payload_mass": "kg",
@@ -54,7 +54,7 @@ class Excavation(Discipline):
     mass = captured | capacity | {"stored_soil_density"}
     force = geom | names("cut_depth cut_pressure cut_engagement")
     torque = mass | names("internal_lift_factor gravity drum_diameter")
-    lowering = names("actuator_extended_length travel_actuator_length actuator_speed")
+    lowering = {"lowering_time"}
     time = geom | lowering | names("scoops_per_revolution cut_depth scoop_opening drum_rpm drum_spinup_time")
     spin = names("drum_mass drum_diameter drum_rpm dump_rpm drum_spinup_time") | mass
     hardware = names("drum_motor_power motor_rated_rpm drum_gear_ratio drum_gear_efficiency drum_torque_service_factor")
@@ -116,7 +116,7 @@ class Excavation(Discipline):
         mass = min(target_mass, reachable_mass)
         # Rotate while lowering, dwell only if the scoops need more time, then
         # raise. Repeated revolutions do not add soil outside the endpoint cut.
-        lowering_time = max(v("actuator_extended_length")-v("travel_actuator_length"),0)/v("actuator_speed")
+        lowering_time = v("lowering_time")
         scoop_rate = width*v("cut_depth")*v("scoop_opening")*v("scoops_per_revolution")*v("drum_rpm")/60
         cutting_time = max(fresh/max(scoop_rate,1e-9),lowering_time)
         dig_time = cutting_time+v("drum_spinup_time")

@@ -3,6 +3,7 @@
 import math
 import hashlib
 from pathlib import Path
+from dataclasses import replace
 import openmdao.api as om
 from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS, ROUTE, configuration
 from .components import Mission
@@ -41,7 +42,6 @@ MARGINS = {
     "actuator_pivot_longitudinal_margin": (0.30, "m"),
     "bottom_mount_margin": (0.30, "m"),
     "stroke_margin": (0.50, "m"),
-    "actuator_body_margin": (0.50, "m"),
     "triangle_retracted_margin": (0.50, "m"),
     "triangle_extended_margin": (0.50, "m"),
     "toggle_margin": (0.50, "m"),
@@ -80,15 +80,14 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
                     "force_imbalance", "mass_score_weight", "energy_score_weight",
                     "obstacle_height", "rocker_pivot_offset", "slope_angle",
                     "drive_stator_current_limit", "drum_stator_current_limit",
-                    "empty_slope_degrees", "loaded_slope_degrees"}
+                    "empty_slope_degrees", "loaded_slope_degrees", "actuator_installation_allowance",
+                    "lin_act_side_arm_offset", "lin_act_top_arm_offset"}
     fractions = {name for name in assumptions if "fraction" in name or "efficiency" in name}
     fractions |= {"cut_engagement", "delivery_efficiency", "force_imbalance"}
     for name, value in values.items():
-        if not math.isfinite(value) or (value < 0 and name != "rocker_pivot_offset") or (value == 0 and name not in zero_allowed):
+        if not math.isfinite(value) or (value < 0 and name not in {"rocker_pivot_offset", "lin_act_side_arm_offset", "lin_act_top_arm_offset"}) or (value == 0 and name not in zero_allowed):
             raise ValueError(f"{name} must be finite and {'nonnegative' if name in zero_allowed else 'positive'}.")
-        if name == 'actuator_attachment_fraction' and value > attachment_max:
-            raise ValueError(f'actuator_attachment_fraction must be <= {attachment_max}.')
-        if name in fractions and name != 'actuator_attachment_fraction' and value > 1:
+        if name in fractions and value > 1:
             raise ValueError(f"{name} must be <= 1.")
     minimum_wheelbase = design["wheelbase"][1] if "wheelbase" in design else values["wheelbase"]
     if abs(values["rocker_pivot_offset"]) >= minimum_wheelbase/2:
@@ -105,7 +104,7 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
     if values["mass_score_weight"] + values["energy_score_weight"] == 0:
         raise ValueError("At least one score weight must be positive.")
     for name, (initial, lower, upper, _) in design.items():
-        if not 0 < lower < upper or not lower <= values[name] <= upper:
+        if not lower < upper or (name not in {"lin_act_side_arm_offset", "lin_act_top_arm_offset"} and lower <= 0) or not lower <= values[name] <= upper:
             raise ValueError(f"{name} must start within its positive bounds [{lower}, {upper}].")
     for name in ("wheel_diameter", "wheel_width", "drum_diameter", "drum_length"):
         if values[name] >= 0.36 or (name in design and design[name][2] >= 0.36):
@@ -116,7 +115,7 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
         raise ValueError("ROUTE needs finite nonnegative distances and nonzero total travel.")
 
 
-def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", solver_tol=None, freeze=None, ignore_constraints=None, traversal_mode="fixed", optimize_attachment=False, attachment_max=1.):
+def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", actuators="reference", solver_tol=None, freeze=None, ignore_constraints=None, traversal_mode="fixed", optimize_attachment=False, attachment_max=1.):
     # Plate envelopes contain min/max/contact branches. Use a small-step
     # derivative-free solve for that profile; keep explicit SLSQP available.
     optimizer = optimizer or ("COBYLA" if structure == "plate-frame" else "SLSQP")
@@ -134,16 +133,14 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         cobyla_radius = .02
     if cobyla_radius is not None and (optimizer != "COBYLA" or not math.isfinite(cobyla_radius) or cobyla_radius <= 0):
         raise ValueError("cobyla_radius needs a positive finite value and optimizer='COBYLA'.")
-    design, assumptions = configuration(structure, motors)
+    design, assumptions = configuration(structure, motors, actuators)
     if isinstance(attachment_max,bool) or not math.isfinite(attachment_max) or not 1 <= attachment_max <= 1.5:
         raise ValueError('attachment_max must be finite and between 1 and 1.5')
     if attachment_max>1 and structure!='plate-frame':
         raise ValueError('attachment_max > 1 currently requires the plate-frame box-arm profile')
     if not isinstance(optimize_attachment, bool):
         raise ValueError("optimize_attachment must be a boolean")
-    if optimize_attachment:
-        initial, units = assumptions.pop("actuator_attachment_fraction")
-        design["actuator_attachment_fraction"] = (initial, .001, attachment_max, units)
+    # Both signed offsets are ordinary design variables; legacy opt-in flag is redundant.
     frozen_names = set([freeze] if isinstance(freeze, str) else freeze or ())
     unknown = frozen_names - set(design)
     if unknown:
@@ -153,6 +150,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         raise ValueError("Cannot freeze every design variable; use --baseline for a fixed evaluation.")
     margins = {**MARGINS, **(PLATE_FRAME_MARGINS if structure == "plate-frame" else {})}
     diagnostic_screens = {
+        "actuator_body_margin": "User removed this constraint; the reserve is diagnostic only and does not affect optimization or feasibility. Actual actuator packaging remains unverified.",
         "dig_froude_margin": "User removed the uncalibrated speed cap; constant capture/lift response assumes no additional high-speed loss.",
         "dump_froude_margin": "User removed the uncalibrated speed cap; actual dumping/retention speed response remains unverified.",
     }
@@ -160,6 +158,8 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         margins.pop("chassis_clearance_margin")
         diagnostic_screens["chassis_clearance_margin"] = (
             "Legacy filled rectangular envelope does not represent the open plate frame; actual frame/equipment interference remains unverified.")
+    if actuators == "pa04-900":
+        margins.update(actuator_stroke_domain_margin=(.5, "m"), actuator_curve_margin=(4000., "N"))
     ignored_constraints = set([ignore_constraints] if isinstance(ignore_constraints, str) else ignore_constraints or ())
     unknown = ignored_constraints - set(margins)
     if unknown:
@@ -168,8 +168,13 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
                          "Mass/dimension limits and design bounds cannot be excluded.")
     models = models or (plate_frame_models() if structure == "plate-frame" else ModelSet())
     models = traversal_models(models, traversal_mode)
-    if attachment_max>1:
-        models = extended_attachment_models(models)
+    if actuators == "pa04-900":
+        from .linkage import LinkageGeometry, LinkageLoads
+        from .alternatives.pa04_actuator import PA04LinkageGeometry, PA04LinkageLoads, verify_source_data
+        verify_source_data()
+        if models.linkage not in (LinkageGeometry, PA04LinkageGeometry) or models.linkage_loads not in (LinkageLoads, PA04LinkageLoads):
+            raise ValueError("PA-04 profile needs PA04LinkageGeometry/Loads; a custom linkage was not replaced.")
+        models = replace(models, linkage=PA04LinkageGeometry, linkage_loads=PA04LinkageLoads)
     # A round outside diameter is not a box width/height specification. Require
     # explicit case migration rather than silently ignoring old arm geometry.
     if (structure == 'plate-frame' and 'arm_tube_diameter' in (overrides or {})
@@ -195,9 +200,16 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         assumptions[name] = (values[name], units)
     if motors == "x44-standard" and (values["motor_bus_voltage"] != 12 or values["drive_gear_ratio"] != 100):
         raise ValueError("The selected hardware profile requires 12 V and a fixed 100:1 drive ratio.")
+    if actuators == "pa04-900":
+        for name in ("actuator_force_rating", "actuator_speed"):
+            if not math.isclose(values[name], assumptions[name][0], rel_tol=1e-12, abs_tol=0.):
+                raise ValueError("PA-04 900 lbf profile freezes force rating and nominal lowering speed; remove reference force/speed overrides.")
+            values[name] = assumptions[name][0]
+    if values["arm_length"]+values["lin_act_side_arm_offset"] <= 0:
+        raise ValueError("Actuator pin axial station must be beyond the chassis pivot")
     problem = om.Problem(reports=False)
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
-    problem.model_metadata = {"schema_version": 2, "structure_profile": structure, "motor_profile": motors,
+    problem.model_metadata = {"schema_version": 5, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
                               "traversal_mode": traversal_mode,
                               "optimize_attachment": optimize_attachment,
                               "attachment_max": attachment_max,
@@ -210,6 +222,19 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
                               "source_files_sha256": {p.relative_to(Path(__file__).parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                                                        for p in sorted(Path(__file__).parent.rglob("*.py"))}}
+    if actuators == "pa04-900":
+        problem.model_metadata["actuator_performance"] = {
+            "manifest": "data/actuators/manifest.json", "voltage_V": 12,
+            "manifest_sha256": hashlib.sha256((Path(__file__).parent.parent/"data/actuators/manifest.json").read_bytes()).hexdigest(),
+            "rated_force_N": values["actuator_force_rating"],
+            "installation_allowance_m": values["actuator_installation_allowance"],
+            "stroke_domain_m": [.0508, 1.016], "load_domain_N": [0., values["actuator_force_rating"]],
+            "lowering_assumption": "Rated-load speed/current throughout lowering; gravity-assisted operation unmeasured.",
+            "raising_assumption": "Constant maximum sampled extraction force throughout raising, including breakout allowance.",
+            "energy_accounting": "Two actuators: 12 V * phase current * phase duration; no additional reference efficiency or idle loss.",
+            "validation": "Held-out catalog mass rows only; no independent hardware validation or thermal/duty-cycle qualification.",
+            "inactive_reference_inputs": ["actuator_efficiency", "actuator_fixed_mass", "actuator_mass_per_force", "actuator_mass_per_power", "actuator_mass_per_length", "actuator_housing_allowance"],
+        }
     if motors == "x44-standard":
         problem.model_metadata["motor_performance"] = {
             "curve": "data/motors/kraken_x44_standard_12v.csv",
@@ -224,6 +249,18 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
             "limitations": "Constant combined efficiencies are uncalibrated; no current/RMS/partial-duty electrical predictions, battery sag or thermal limits. Drum ratio is continuous exploratory; cartridge availability/ratings and motor adapter require verification.",
             "inactive_reference_inputs": ["drive_motor_power", "drum_motor_power", "motor_rated_rpm", "motor_mass_per_watt", "gear_mass_per_torque", "drive_fixed_mass", "drum_fixed_mass"],
             "power_margin_semantics": "Necessary instantaneous manufacturer peak-curve screen, not a continuous rating; torque-speed/current envelope also enforced."}
+    problem.model_metadata["actuator_packaging"] = {
+        "status": "Not enforced: actuator packaging reserve is diagnostic only at user request",
+        "catalog_endpoints": "Diagnostics only; commands are not checked against these endpoints",
+        "reference_allowance": "actuator_housing_allowance affects the generic diagnostic only; inactive for PA-04",
+    }
+    problem.model_metadata["attachment_coordinates"] = {
+        "revision": 2, "equation": "D=C+side*u+top*(-u_z,u_x)",
+        "side_positive": "past drum axle away from chassis pivot",
+        "top_positive": "above arm in local side elevation; rear mirrored",
+        "arm": "uniform tube continues to max(L,L+side); extension mass and gravity included",
+        "limitations": "Rigid normal bracket assumed massless; bracket mass, strength, actuator-body and member collisions require CAD/hardware data.",
+    }
     problem.model_metadata["traversal_requirements"] = {
         "obstacle_height_m": values["obstacle_height"],
         "obstacle_status": "posed gravity support, geometric reach and conservative drum/wheel envelope screens only",

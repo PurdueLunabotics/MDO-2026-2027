@@ -9,6 +9,8 @@ import math
 
 # name: (initial value, lower bound, upper bound, OpenMDAO units)
 DESIGN = {
+    "lin_act_side_arm_offset": (0.0, -0.15, 0.15, "m"),
+    "lin_act_top_arm_offset": (0.0, -0.15, 0.15, "m"),
     "wheel_diameter": (0.30, 0.18, 0.359, "m"),
     "wheel_width": (0.10, 0.05, 0.359, "m"),
     "drum_diameter": (0.28, 0.16, 0.359, "m"),
@@ -30,7 +32,7 @@ DESIGN = {
     "actuator_retracted_length": (0.45, 0.25, 0.65, "m"),  # compact starting pose
     "actuator_extended_length": (0.68, 0.45, 1.05, "m"),
     "top_pivot_height": (0.45, 0.35, 0.70, "m"),  # above level ground
-    "actuator_pivot_x": (0.15, 0.05, 0.30, "m"),  # actuator mount; independent of arm pivot_x
+    "actuator_pivot_x": (0.15, 0.02, 0.30, "m"),  # actuator mount; independent of arm pivot_x
     "bottom_pivot_height": (0.15, 0.09, 0.30, "m"),
     "arm_length": (0.60, 0.30, 0.70, "m"),
     "pivot_x": (0.13, 0.05, 0.30, "m"),  # front station from rover center; rear mirrored
@@ -44,7 +46,6 @@ ASSUMPTIONS = {
     # Fixed for each solve; CLI --set accepts degrees. Separate from static slope_angle.
     "empty_slope_degrees": (30.0, "deg"),
     "loaded_slope_degrees": (20.0, "deg"),
-    "actuator_attachment_fraction": (1.0, None),  # B-to-pin / arm length; 0 < f <= 1; move to DESIGN to optimize
     "gravity": (9.80665, "m/s**2"),
     "run_time": (900.0, "s"),
     "traversal_time_one_way": (45.0, "s"),  # includes all route turns, excludes deposition
@@ -97,7 +98,7 @@ ASSUMPTIONS = {
     "mechanism_clearance": (0.015, "m"),
     "minimum_pivot_spacing": (0.08, "m"),
     "minimum_stroke": (0.04, "m"),
-    "actuator_housing_allowance": (0.04, "m"),
+    "actuator_housing_allowance": (0.04, "m"),  # generic body-length diagnostic only, not a constraint
     "pit_depth": (0.45, "m"),
     "actuator_efficiency": (0.65, None),
     "actuator_safety_factor": (1.50, None),
@@ -178,7 +179,13 @@ X44_ASSUMPTIONS = {
 }
 
 
-def configuration(structure="reference", motors="reference"):
+PA04_DESIGN = {"actuator_catalog_stroke": (0.1524, 0.0508, 1.016, "m")}
+PA04_ASSUMPTIONS = {
+    "actuator_installation_allowance": (0.1613408, "m"),  # USER, added once to EACH endpoint
+}
+
+
+def configuration(structure="reference", motors="reference", actuators="reference"):
     """Independent dictionaries per Problem; no mutation of reference config."""
     if structure not in ("reference", "plate-frame"):
         raise ValueError(f"Unknown structure profile {structure!r}")
@@ -200,13 +207,23 @@ def configuration(structure="reference", motors="reference"):
         # Continuous exploratory ratio; select and recheck a real cartridge stack later.
         design["drum_gear_ratio"] = (75.0, 9.0, 125.0, None)
         assumptions.update(X44_ASSUMPTIONS)
+    if actuators not in ("reference", "pa04-900"):
+        raise ValueError(f"Unknown actuator profile {actuators!r}")
+    if actuators == "pa04-900":
+        for name, value in (("actuator_force_rating", 900*4.4482216152605),
+                            ("actuator_speed", .39*.0254)):
+            entry = design.pop(name)
+            assumptions[name] = (value, entry[-1])
+        design.update(PA04_DESIGN)
+        assumptions.update(PA04_ASSUMPTIONS)
     return design, assumptions
 
 
 def input_spec(name):
     """Unit/default lookup for adapters, including optional profile inputs."""
     return DESIGN.get(name, ASSUMPTIONS.get(name,
-           PLATE_FRAME_DESIGN.get(name, PLATE_FRAME_ASSUMPTIONS.get(name, X44_ASSUMPTIONS.get(name)))))
+           PLATE_FRAME_DESIGN.get(name, PLATE_FRAME_ASSUMPTIONS.get(name,
+           X44_ASSUMPTIONS.get(name, PA04_DESIGN.get(name, PA04_ASSUMPTIONS.get(name)))))))
 
 # name: (upper limit, units); guidebook section 13. These are stowed dimensions.
 REQUIREMENTS = {

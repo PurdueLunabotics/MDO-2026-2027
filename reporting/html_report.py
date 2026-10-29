@@ -8,7 +8,7 @@ import json
 import math
 from pathlib import Path
 from rover.config import ROUTE
-from rover.linkage import sweep_poses, attachment_point
+from rover.linkage import sweep_poses, attachment_point, offset_values
 
 
 def values_from_snapshot(snapshot):
@@ -61,14 +61,16 @@ def geometry_svg(values, extended=False, title=None, travel=False):
     poses, _ = sweep_poses(values)
     cx, cy = ((v("travel_x"),v("travel_y")) if travel else
               (poses[-1] if extended else (v("stowed_x"),v("stowed_y"))))
-    fraction = values.get("actuator_attachment_fraction", 1.0)
-    jx, jy = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, fraction)
+    side, top_offset = offset_values(values)
+    jx, jy = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, side, top_offset)
+    qx, qy = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, side, 0.)
+    end_x, end_y = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, max(side,0.), 0.)
     rd, rw = v("drum_diameter") / 2, v("wheel_diameter") / 2
-    arm_ends=[attachment_point(v('pivot_x'),v('bottom_pivot_height'),x,y,max(1.,fraction)) for x,y in [*poses,(cx,cy)]]
+    arm_ends=[attachment_point(v('pivot_x'),v('bottom_pivot_height'),x,y,max(side,0.),0.) for x,y in [*poses,(cx,cy)]]
     xlim = max(1.05, max(p[0] for p in poses) + rd + .12)
     yhi = max(.85, v("top_pivot_height") + .12, max(p[1] for p in poses) + rd + .12)
     ylo = min(-.55, min(p[1] for p in poses) - rd - .12)
-    if fraction>1:
+    if side != 0 or top_offset != 0:
         xlim=max(xlim,max(abs(x) for x,y in arm_ends)+.12)
         yhi=max(yhi,max(y for x,y in arm_ends)+.12)
         ylo=min(ylo,min(y for x,y in arm_ends)-.12)
@@ -114,24 +116,27 @@ def geometry_svg(values, extended=False, title=None, travel=False):
         svg += [circle(sign*v("wheelbase")/2,rw,rw,"#354657","#cbd6df",3)]
         path=" ".join(f'{point(sign*x,y)[0]:.2f},{point(sign*x,y)[1]:.2f}' for x,y in poses)
         svg += [f'<polyline points="{path}" fill="none" stroke="#9aafba" stroke-width="2" stroke-dasharray="3 5"/>',
-                line(sign*v("pivot_x"),v("bottom_pivot_height"),sign*(jx if fraction>1 else cx),jy if fraction>1 else cy,"#246f99",7),
+                line(sign*v("pivot_x"),v("bottom_pivot_height"),sign*end_x,end_y,"#246f99",7),
+                line(sign*qx,qy,sign*jx,jy,"#246f99",4),
                 line(sign*v("actuator_pivot_x"),v("top_pivot_height"),sign*jx,jy,"#d77422",7),
                 circle(sign*cx,cy,rd,"#a54b1e","#e6b68e",3),
+                line(sign*cx,cy,sign*qx,qy,"#246f99",3,"4 3"),
+                line(sign*qx,qy,sign*jx,jy,"#246f99",4),
                 circle(sign*cx,cy,.009,"#172e45","#172e45"),
                 circle(sign*jx,jy,.009,"#172e45","#172e45"),
                 circle(sign*v("actuator_pivot_x"),v("top_pivot_height"),.009,"#172e45","#172e45"),
                 circle(sign*v("pivot_x"),v("bottom_pivot_height"),.009,"#172e45","#172e45")]
     svg += [label(v("actuator_pivot_x"),v("top_pivot_height"),"A",-22,-12),
             label(v("pivot_x"),v("bottom_pivot_height"),"B",-22,22),
-            label(cx,cy,"C",12,-10), label(-.74,.75,"1.50 m × 0.75 m stowed envelope",8,-10),
+            label(cx,cy,"C: axle",14,20), label(-.74,.75,"1.50 m × 0.75 m stowed envelope",8,-10),
             label(-xlim+.03,0,"Ground level",0,-10),
             label(-xlim+.03,-v("pit_depth"),f'Pit floor: −{v("pit_depth"):.2f} m',0,22)]
-    if fraction != 1:
-        svg.append(label(jx,jy,"D",12,18))
+    if side != 0 or top_offset != 0:
+        svg.append(label(jx,jy,"D: pin",14,-10))
     top = cy + rd; bottom = cy - rd
     svg += [f'<text x="35" y="672" font-size="18" fill="#24354b">Actuator: {actuator_length*1000:.1f} mm · Fixed arm: {v("arm_length")*1000:.1f} mm · Drum Ø {2*rd*1000:.1f} mm</text>',
             f'<text x="35" y="705" font-size="18" fill="#24354b">Drum top: {top:+.3f} m · Drum bottom: {bottom:+.3f} m · A: {v("top_pivot_height"):.3f} m · B: {v("bottom_pivot_height"):.3f} m</text>',
-            f'<text x="35" y="739" font-size="15" fill="#546579">Blue = fixed arm · Orange = actuator · Attachment B-D: {fraction*v("arm_length")*1000:.1f} mm ({fraction:.1%} of arm) · Ground is y = 0</text>',
+            f'<text x="35" y="739" font-size="15" fill="#546579">Blue = fixed arm · Orange = actuator · Axle-to-pin offsets: side {side*1000:+.1f} mm / top {top_offset*1000:+.1f} mm · Ground is y = 0</text>',
             '</g></svg>']
     return "".join(svg)
 
@@ -200,6 +205,8 @@ def top_view_svg(values):
             pieces.append(box((x+ex)/2,0,abs(ex-x),m['width'],'#76aac7','#246f99',kind='arm'))
         elif m['kind'] == 'arm':
             pieces.append(line(x,y,ex,ey,'#246f99',5,kind='arm'))
+        elif m['kind'] == 'offset-bracket':
+            pieces.append(line(x,y,ex,ey,color='#246f99',width=4,kind=m['kind']))
         elif m['kind'] == 'actuator':
             pieces.append(line(x,y,ex,ey,'#d77422',5,kind='actuator'))
     for sx in (-1,1):

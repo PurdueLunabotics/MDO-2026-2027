@@ -1,3 +1,5 @@
+Current attachment interface: [axle-relative side/top offsets, revision 2](ARM_OFFSETS.md). The fraction-based attachment selection described in older sections below is historical; live models use signed metre-valued offsets, with automatic axial tube continuation and an assumed rigid, massless normal bracket.
+
 # Preliminary CF-tube / aluminum-plate frame
 
 Select the coordinated optional profile with:

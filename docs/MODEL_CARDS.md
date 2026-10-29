@@ -10,6 +10,7 @@ needs a card with provenance, domain, held-out validation error and reproduction
 | DrumMass | Four closed cylindrical shells plus two motor/gear assemblies | Architecture-specific scoops, helix/baffles, shafts, hubs, joints and actual part ratings | Component-level CAD/BOM and weighed drums with a clear motor/gear boundary |
 | GeometryMass | Sum wheel, drum, linkage, structure, drive, battery and fixed mass; stowed envelope | Detailed drive/gear catalog and mounting mass | Measured assembly mass and packaging CAD |
 | LinkageGeometry/Loads | Mirrored planar arms with independently located actuator and arm pivots; valid triangle/clearance; provisional wheel-diameter step clearance; sampled maximum virtual-work leverage and rated force screen | Validated obstacle capability, cylinder envelopes, real force-speed/thermal curves, joint/rod strength, lowering load history | CAD sweep, obstacle/actuator tests and extraction tests |
+| PA-04 900 lbf / 12 V actuator (revision 1) | Frozen force variant; continuous 2–40 inch catalog stroke; exact affine installed lengths plus editable 161.3408 mm allowance; affine mass fit; chart current/speed with conservative phase load envelopes; two-actuator electrical energy | Approximate plot digitization; lowering assumed at rated load; startup/thermal/duty-cycle/directional behavior, installation mass and detailed mass distribution unmeasured | Versioned transcription/manifest; 3 withheld catalog mass rows: MAE 0.09849 lb, max 0.15068 lb; electrical/work, mass/overlap, domain, derivative and N2 tests. No independent hardware validation. See [PA04_ACTUATORS.md](PA04_ACTUATORS.md) |
 | StructureGeometry | Two longitudinal tubes, crossmember, two towers, two arms | Exact hardware/joint manufacturing mass | BOM, weighed prototype, CAD |
 | StructureLoads | Small-deflection elastic beam envelopes, valid tube sections | Assembled frame load sharing, joint strength, local shell buckling, fatigue | Beam/FEA plus load/deflection tests |
 | Aluminum box drum arms (plate-frame revision 3) | Sharp hollow rectangles; two-arm mass once, in-plane bending/deflection and weaker-axis Euler buckling; editable width/height/wall, baseline 50.8 x 50.8 x 1.5875 mm; existing aluminum material inputs | Actual corner radii/stock allowables, local wall buckling, torsion, joints/welds, arm envelope collisions; existing gravity-only frame scope retained | Independent area/inertia subtraction, cantilever force/deflection limit, rotated-section weak-axis check, two-arm mass accounting, slender/invalid failures and total derivatives; no hardware calibration. See PLATE_FRAME.md |
@@ -31,34 +32,9 @@ needs a card with provenance, domain, held-out validation error and reproduction
 
 ## Assumptions requiring particular attention
 
-- ExtendedAttachment revision 1 (optional): `--attachment-max 1.5` selects
-  coordinated plate-frame box-arm factories in `rover/alternatives/extended_attachment.py`.
-  The same uniform tube continues past the drum shaft to the pin for f>1;
-  added two-arm mass, gravity moment/work, tail CG/yaw inertia, whole-length
-  beam screening, stowed/deployed extent and pit-floor checks are included.
-  Existing port meanings and reference defaults remain; optional diagnostics
-  are physical per-arm length in metres and combined tail mass in kilograms.
-  Domain: positive finite dimensions, selected fraction bound <=1.5, existing
-  material/geometry bounds. No calibration or fitted data are introduced.
-  Independent beam/equilibrium, work/mass/inertia, closure, invalid-domain,
-  reference-equivalence and smooth-derivative checks are in
-  `tests/test_extended_attachment.py`. No experimental error metric is available.
-  Core linkage placement remains approximate; brackets, interference and tail
-  soil interaction require CAD and tests. See [equations and reproduction](EXTENDED_ATTACHMENT.md).
+- At the user’s request `actuator_body_margin` is diagnostic only for both actuator profiles. The generic body-length heuristic and PA-04 signed catalog interval reserve are still calculated, but neither is enforced by the optimizer or included in feasibility. This removal does not establish real actuator packaging or stroke compatibility. Force, chart-domain, minimum-stroke, triangle/toggle and other checks remain.
 
-- Arm attachment revision: `actuator_attachment_fraction` selects the pin along
-  the straight arm, measured from the chassis pivot (default 1; domain 0<f<=1).
-  It is fixed in ASSUMPTIONS by default; `--optimize-attachment` makes it a
-  per-problem design variable in [0.001, 1] without changing the equations or
-  reference defaults. These bounds are exploratory, not selected hardware.
-  Geometry intersects circles at that pin and extends to the drum tip. Loads use
-  virtual work at the pin; gravity energy remains based on drum lift. MassProperties
-  retains an equivalent rod between mean proximal and distal link endpoints.
-  Evidence is analytical geometry, numerical virtual work, gravity-work conservation,
-  and invalid-triangle tests in `tests/test_arm_attachment.py`; no hardware data
-  or fitted relationships are used. Calibration status remains uncalibrated.
-  Actuator-body interference, bracket mass/strength, actual link mass distribution,
-  and assembled-frame load sharing still require CAD and physical tests.
+- Axle-relative actuator offsets revision 2: replaces the fraction with signed side/top lengths in metres, with local positive directions outward and above. Generic defaults are zero; requested baseline is +0.05 m each. Uniform axial continuation includes mass, gravity, actual tail inertia, eccentric tube moment and envelope checks. The normal bracket is rigid and massless, with mass/strength/collisions unverified. Independent coordinate, circle-closure, virtual-work, eccentric equilibrium/end-couple beam, failure-domain, derivative and N2 tests are in test_arm_attachment.py and the retained extension/PA-04 tests. No calibration data introduced. See [ARM_OFFSETS.md](ARM_OFFSETS.md). Historical fraction evidence is retained in Git history.
 
 - At the student's request the uncalibrated dig/dump Fr caps are removed.
   Legacy 0.30/0.20 reference values and signed differences remain diagnostics,

@@ -7,19 +7,20 @@ from studies.linkage_multistart import selected_failures, normalized_violation
 
 
 class AttachmentSearchTests(unittest.TestCase):
-    def test_opt_in_variable_and_default_problem_are_independent(self):
-        fixed = build_problem({"actuator_attachment_fraction": .8})
-        free = build_problem({"actuator_attachment_fraction": .8}, optimize_attachment=True)
+    def test_offsets_are_design_variables_and_can_be_frozen_independently(self):
+        changes = {"lin_act_side_arm_offset": .05, "lin_act_top_arm_offset": .05}
+        fixed = build_problem(changes, freeze=list(changes))
+        free = build_problem(changes)
         self.addCleanup(fixed.cleanup); self.addCleanup(free.cleanup)
         fixed.run_model(); free.run_model()
         a,b = snapshot(fixed),snapshot(free)
         self.assertEqual(a["outputs"],b["outputs"])
-        self.assertNotIn("actuator_attachment_fraction",fixed.design_specs)
-        self.assertEqual(free.design_specs["actuator_attachment_fraction"][1:3],(.001,1.))
-        self.assertTrue(b["constraints"]["actuator_attachment_fraction_bounds"]["passed"])
-        self.assertIn("actuator_attachment_fraction",configuration()[1])
-        self.assertFalse(fixed.model_metadata["optimize_attachment"])
-        self.assertTrue(free.model_metadata["optimize_attachment"])
+        for name in changes:
+            self.assertNotIn(name,fixed.design_specs)
+            self.assertEqual(free.design_specs[name][1:3],(-.15,.15))
+            self.assertTrue(b["constraints"][name+"_bounds"]["passed"])
+            self.assertIn(name,configuration()[0])
+        self.assertNotIn("actuator_attachment_fraction",configuration()[1])
 
     def test_selected_ranking_preserves_excluded_failure_and_frozen_bound_failures(self):
         state={"constraints":{"turn_traction_margin":{"passed":False,"margin":-100.},
@@ -32,9 +33,9 @@ class AttachmentSearchTests(unittest.TestCase):
     def test_invalid_attachment_settings_are_rejected(self):
         with self.assertRaises(ValueError):
             build_problem(optimize_attachment="yes")
-        for value in (0.,1.01):
+        for value in (-.151,.151):
             with self.assertRaises(ValueError):
-                build_problem({"actuator_attachment_fraction":value},optimize_attachment=True)
+                build_problem({"lin_act_side_arm_offset":value},optimize_attachment=True)
 
 
 if __name__=="__main__":

@@ -36,46 +36,19 @@ ModelSet factories replace individual components. New disciplines keep CONFIG_IN
 
 ## Linkage and actuator loads
 
+The saved student baseline selects the frozen PA-04 900 lbf / 12 V profile.
+It uses continuous catalog stroke sizing, chart-based speed/current and mass,
+and adds the configurable 0.1613408 m installation allowance to both hardware
+end lengths. Generic reference defaults below remain available. Geometry emits
+`lowering_time`; loads emit total `actuation_time`, allowing payload-dependent
+raising speed without a circular dependency. See [the actuator equations,
+source manifest, updated port contract and limitations](docs/PA04_ACTUATORS.md).
+
 Wheel-center track width is now a design variable alongside wheelbase. Both are screened by the stowed envelope, structural loads and mobility constraints.
 
-For lower arm pivot B=(pivot_x,h_b), upper actuator pivot A=(actuator_pivot_x,h_t), arm L, actuator length l, attachment fraction f=actuator_attachment_fraction, r=f*L, s=|A-B|, u=(A-B)/s and outward normal n=(u_z,-u_x):
+The actuator attachment now uses two signed metre-valued coordinates relative to the drum axle: lin_act_side_arm_offset and lin_act_top_arm_offset. With arm direction u=(C-B)/L and its upward normal n=(-u_z,u_x), the pin is D=C+side*u+top*n. Positive side extends past the axle; positive top is above the arm. Rear geometry mirrors the front. Circle closure uses radius hypot(L+side,top), then rotates through -atan2(top,L+side) to recover the drum position. arm_length remains the pivot-to-axle distance. Both offsets are design variables with exploratory bounds [-0.15,0.15] m; generic defaults are zero and the requested baseline is +0.05 m for both. The old fraction is removed from live configuration.
 
-```text
-a=(r^2+s^2-l^2)/(2s)
-D=B+a*u+sqrt(r^2-a^2)*n
-C=B+(D-B)/f
-```
-
-D is the actuator pin; C remains the drum shaft at full arm length L.
-The dimensionless input f defaults to 1 (the previous tip attachment), with
-reference domain 0<f<=1. Zero cannot generate an arm moment. It is fixed in
-ASSUMPTIONS during optimization by default, preserving the reference design
-space. `--optimize-attachment` (or `build_problem(optimize_attachment=True)`)
-moves it into that problem's design variables with `(1.0, 0.001, 1.0, None)`; those
-positive lower bounds are exploratory numerical bounds, not hardware data.
-The output actuator_attachment_distance=r is in metres from B, not from C.
-Triangle closure uses r, not L; actuator lengths generally need to change when
-moving the pin. The existing clearance screens concern the drum envelope, not
-actuator-to-arm interference or the actuator body; check those in a CAD sweep.
-Historical report snapshots without f are drawn with the original f=1 geometry.
-The option changes only the search space; it does not alter equations, units or
-defaults in other problems. The offline `studies.linkage_multistart` runner
-generates matched-angle starting geometries and actual pin-to-mount actuator
-lengths, then reoptimizes with explicit constraint exclusions recorded per run.
-
-For the plate-frame box arms, `--attachment-max 1.5` opts into a uniform tube
-continuation beyond the drum shaft, with physical arm length max(1,f)*L.
-Together with `--optimize-attachment`, this raises the search bound to 1.5.
-The coordinated alternative factories include extra two-arm mass, gravity
-moment/work, tail CG/yaw inertia, full-length beam screening and tail envelopes.
-Existing names retain their meanings: arm_length is still B-to-drum distance.
-New optional diagnostics are arm_physical_length (m per arm) and
-arm_extension_mass (kg for both tails). Default models remain unchanged.
-See [equations, verification and remaining collision/soil limitations](docs/EXTENDED_ATTACHMENT.md).
-
-The outward branch is sampled at 81 equally spaced arm angles. The compact starting pose uses actuator_retracted_length; after startup the shorter travel_actuator_length raises the drum, then actuator_extended_length lowers it to dig. Wheelbase is a design variable. The compact pose must fit the starting envelope. The travel drum bottom must clear a step equal to wheel diameter, rather than a fixed 0.50 m rock; this is a provisional wheel-first screen for drums ahead of the wheels, not a measured obstacle capability. Its loaded center of gravity enters the level-ground mobility stability screen, while mechanism self-clearance is checked across the travel-to-dig sweep. Triangle closure, positive spacing, stroke/body packaging, toggle reserve, pit floor, mounting and envelope constraints remain. Full drum submergence is not required. The provisional trench screen is wheel_diameter >= trench_depth. Guarded arithmetic only keeps infeasible trials finite; signed margins reject them.
-
-Nominal per-cycle actuation time is twice (extended_length - travel_length)/actuator_speed. Per-actuator extraction force uses the maximum virtual-work leverage |(C_x-B_x)*|A-D| / ((D-B)×(A-B))| over the sampled arm sweep, multiplied by loaded-pair weight plus breakout allowance. This reduces to length/(f*s) when the pivots align vertically. The actuator-toggle margin uses ((D-B)×(A-B))/s minus mechanism_clearance, so an inward pin does not receive the drum tip's larger toggle reserve. Rated force is divided by the actuator safety factor. Energy charges raising full/lowering empty gravity work, breakout work over cut_depth and active idle, without regeneration; moving the pin does not multiply gravity work by the force leverage. Initial deployment from the compact pose is treated as one-time setup outside repeated cycles. Exact lowering load history, force-speed curves, rod/pin/bearing strength, breakout and cylinder envelopes remain open calibration/design tasks. Battery sizing sums drum and actuator peaks during simultaneous cutting/lowering.
+The same eccentric pin feeds virtual-work actuator force, plate-frame equilibrium, mass placement and report drawings. For positive side offset, a uniform tube continuation adds actual mass, gravity work, yaw inertia, physical length and beam load effects. Top offset transfers an eccentric couple into the tube; its normal bracket is assumed rigid and massless pending hardware/CAD data. Actuator catalog stroke/load domains, safety factors, triangle/toggle, mounting, pit-floor, envelope and existing drum/wheel clearance screens remain. At the user’s request actuator_body_margin is diagnostic only: the body/catalog installed-length reserve is computed but excluded from optimization and feasibility. The sweep retains 81 arm-angle samples. Raising/lowering time, simultaneous cutting overlap and one-time electrical loss accounting are unchanged. See [complete equations, interface migration, domains and limitations](docs/ARM_OFFSETS.md).
 
 ## Reachable soil, storage and cut depth
 
@@ -174,7 +147,7 @@ Elementary load envelopes cover longitudinal supports, crossmember torsion under
 
 ## Mass properties and fixed-time mobility
 
-Sum local component Izz plus m*(x^2+y^2) about chassis-center yaw. Include wheel/drive units, structure/equipment, linkage, drums and payload at their actual longitudinal/lateral stations. The reference linkage center uses the midpoint between the mean chassis pivots (A+B)/2 and mean distal endpoints (C+D)/2; local yaw inertia retains an equivalent rod between those means. This reproduces the previous result at f=1; CAD should resolve the unequal arm and actuator masses. Full/empty states are symmetric; front-pair-only load shifts CG. Equivalent cylinder inertia and payload CG R/3 below the shaft are approximations needing CAD/material-distribution data. A displaced CG's translational kinetic contribution is included by using inertia about the actual yaw axis.
+Sum local component Izz plus m*(x^2+y^2) about chassis-center yaw. Include wheel/drive units, structure/equipment, linkage, drums and payload at their actual longitudinal/lateral stations. The reference linkage center uses the midpoint between the mean chassis pivots (A+B)/2 and mean distal endpoints (C+D)/2; local yaw inertia retains an equivalent rod between those means. The distal actuator endpoint is the eccentric pin D. Explicit axial tails are removed from the core linkage lump and placed at their actual centroid/inertia. Zero offsets reproduce the previous tip attachment; CAD should resolve the unequal arm and actuator masses. Full/empty states are symmetric; front-pair-only load shifts CG. Equivalent cylinder inertia and payload CG R/3 below the shaft are approximations needing CAD/material-distribution data. A displaced CG's translational kinetic contribution is included by using inertia about the actual yaw axis.
 
 Each reference segment stops/starts: peak=min(requested_speed,sqrt(distance*acceleration)), time=distance/peak+peak/acceleration. Scale total to traversal_time_one_way with velocities /k and accelerations /k^2. Motor upgrades do not shorten the schedule. Turning wheel-rim distance=abs(yaw)*track/2; effective mass=Izz/(track/2)^2. Scrub moment=coefficient*mass*g*wheelbase/4. Energy sums resistance work and rest-to-rest kinetic energy without regeneration.
 

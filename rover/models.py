@@ -80,9 +80,17 @@ def extended_attachment_models(models):
     from .alternatives.plate_frame import PlateMassProperties
     from .alternatives.extended_attachment import (
         ExtendedLinkageGeometry,ExtendedLinkageLoads,ExtendedPlateStructureLoads,ExtendedPlateMassProperties)
-    expected={'linkage':LinkageGeometry,'linkage_loads':LinkageLoads,
-              'structure_loads':BoxArmPlateStructureLoads,'mass_properties':PlateMassProperties}
+    from .alternatives.pa04_actuator import (
+        PA04LinkageGeometry, PA04LinkageLoads, ExtendedPA04LinkageGeometry, ExtendedPA04LinkageLoads)
+    pair = (models.linkage, models.linkage_loads)
+    if pair == (LinkageGeometry, LinkageLoads):
+        geometry, loads = ExtendedLinkageGeometry, ExtendedLinkageLoads
+    elif pair == (PA04LinkageGeometry, PA04LinkageLoads):
+        geometry, loads = ExtendedPA04LinkageGeometry, ExtendedPA04LinkageLoads
+    else:
+        raise ValueError('Attachment beyond the drum requires compatible linkage factories; student models were not replaced')
+    expected={'structure_loads':BoxArmPlateStructureLoads,'mass_properties':PlateMassProperties}
     if any(getattr(models,n) is not cls for n,cls in expected.items()):
         raise ValueError('Attachment beyond the drum requires the coordinated plate/box-arm factories; student models were not replaced')
-    return replace(models,linkage=ExtendedLinkageGeometry,linkage_loads=ExtendedLinkageLoads,
+    return replace(models,linkage=geometry,linkage_loads=loads,
                    structure_loads=ExtendedPlateStructureLoads,mass_properties=ExtendedPlateMassProperties)

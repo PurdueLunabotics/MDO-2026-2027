@@ -7,16 +7,23 @@ def chassis_members(values):
     Coordinates are the existing level-chassis x/y/z stations. Arm width comes
     from the section; actuator line thickness remains a schematic style.
     """
+    from rover.linkage import attachment_point, offset_values
+    side, top = offset_values(values)
     members = []
     for sign, station in ((-1, 'rear'), (1, 'front')):
         base = (sign*values['pivot_x'], 0., values['bottom_pivot_height'])
         end = (sign*values['travel_x'], 0., values['travel_y'])
-        fraction = values.get('actuator_attachment_fraction', 1.)
-        pin = tuple(a+fraction*(b-a) for a,b in zip(base,end))
+        x,z = attachment_point(values['pivot_x'],values['bottom_pivot_height'], values['travel_x'],values['travel_y'],side,top)
+        pin = (sign*x,0.,z)
+        ex,ez = attachment_point(values['pivot_x'],values['bottom_pivot_height'], values['travel_x'],values['travel_y'],max(side,0.),0.)
+        qx,qz = attachment_point(values['pivot_x'],values['bottom_pivot_height'], values['travel_x'],values['travel_y'],side,0.)
+        arm_end = (sign*ex,0.,ez)
         upper = (sign*values['actuator_pivot_x'], 0., values['top_pivot_height'])
-        members += [dict(kind='arm', station=station, start=base, end=pin if fraction>1 else end,
+        members += [dict(kind='arm', station=station, start=base, end=arm_end,
                          width=values.get('arm_box_width', values.get('arm_tube_diameter'))),
                     dict(kind='actuator', station=station, start=upper, end=pin, width=None)]
+        if top != 0:
+            members.append(dict(kind='offset-bracket',station=station,start=(sign*qx,0.,qz),end=pin,width=None))
         if 'cf_tube_span' in values:
             half = values['cf_tube_span']/2
             od = values['cf_tube_inner_diameter']+2*values['cf_tube_wall']

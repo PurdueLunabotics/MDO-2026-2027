@@ -28,28 +28,30 @@ def dependencies(component):
                 "rover_length": {"stowed_length"}, "rover_height": {"stowed_height"},
                 "rover_width": names("track_width wheel_width drum_length drum_pair_gap")}
     if component == "LinkageGeometry":
-        core = names("arm_length top_pivot_height bottom_pivot_height pivot_x actuator_pivot_x actuator_attachment_fraction")
+        core = names("arm_length top_pivot_height bottom_pivot_height pivot_x actuator_pivot_x lin_act_side_arm_offset lin_act_top_arm_offset")
         retract = core | {"actuator_retracted_length"}
         travel = core | {"travel_actuator_length"}
         extend = core | {"actuator_extended_length"}
         sweep = travel | extend
-        envelope = names("wheelbase wheel_diameter drum_diameter pivot_x actuator_pivot_x")
-        high = names("wheel_diameter chassis_height drum_diameter top_pivot_height")
+        envelope = names("wheelbase wheel_diameter drum_diameter pivot_x actuator_pivot_x arm_envelope_radius")
+        high = names("wheel_diameter chassis_height drum_diameter top_pivot_height arm_envelope_radius")
         return {
             "stowed_x": retract, "stowed_y": retract,
             "travel_x": travel, "travel_y": travel,
             "extended_x": extend, "extended_y": extend,
             "sweep_x_min": sweep, "sweep_x_max": sweep,
             "actuator_leverage_max": sweep,
-            "actuator_attachment_distance": names("arm_length actuator_attachment_fraction"),
+            "actuator_attachment_distance": names("arm_length lin_act_side_arm_offset lin_act_top_arm_offset"),
+            "arm_physical_length": names("arm_length lin_act_side_arm_offset"),
+            "arm_extension_mass": names("arm_length lin_act_side_arm_offset arm_linear_mass"),
             "actuator_toggle_margin": sweep | {"mechanism_clearance"},
             "stowed_length": retract | envelope, "stowed_height": retract | high,
             "deployed_length": sweep | envelope, "deployed_height": sweep | high,
             "deployed_height_margin": sweep | high,
             "stroke": names("actuator_extended_length travel_actuator_length"),
-            "actuation_time": names("actuator_extended_length travel_actuator_length actuator_speed"),
-            "pit_depth_margin": extend | names("pit_depth drum_diameter"),
-            "transport_clearance_margin": retract | names("drum_diameter transport_clearance"),
+            "lowering_time": names("actuator_extended_length travel_actuator_length actuator_speed"),
+            "pit_depth_margin": sweep | names("pit_depth drum_diameter arm_envelope_radius"),
+            "transport_clearance_margin": retract | names("drum_diameter transport_clearance arm_envelope_radius"),
             "wheel_first_margin": travel | names("drum_diameter wheel_diameter"),
             "startup_position_margin": names("actuator_retracted_length travel_actuator_length"),
             "dig_position_margin": names("actuator_extended_length actuator_retracted_length"),
@@ -65,14 +67,15 @@ def dependencies(component):
             "toggle_margin": sweep | {"mechanism_clearance"},
             "wheel_clearance_margin": sweep | envelope | {"mechanism_clearance"},
             "chassis_clearance_margin": sweep | envelope | names("mechanism_clearance chassis_height"),
-            "linkage_mass": names("actuator_fixed_mass actuator_mass_per_force actuator_force_rating actuator_mass_per_power actuator_speed actuator_efficiency actuator_mass_per_length actuator_extended_length arm_linear_mass arm_length"),
+            "linkage_mass": names("actuator_fixed_mass actuator_mass_per_force actuator_force_rating actuator_mass_per_power actuator_speed actuator_efficiency actuator_mass_per_length actuator_extended_length arm_linear_mass arm_length lin_act_side_arm_offset"),
         }
     if component == "LinkageLoads":
-        weights = names("drum_mass arm_linear_mass arm_length payload_mass gravity")
+        weights = names("drum_mass arm_linear_mass arm_length lin_act_side_arm_offset payload_mass gravity")
         force = weights | names("breakout_force actuator_leverage_max")
         return {"required_actuator_force": force,
+                "actuation_time": {"lowering_time"},
                 "actuator_force_margin": force | names("actuator_force_rating actuator_safety_factor"),
-                "arm_energy": weights | names("travel_y extended_y breakout_force cut_depth actuator_efficiency actuator_idle_power actuation_time"),
+                "arm_energy": weights | names("travel_y extended_y breakout_force cut_depth actuator_efficiency actuator_idle_power lowering_time"),
                 "arm_peak_power": force | names("actuator_speed actuator_efficiency actuator_idle_power")}
     if component == "Mobility":
         profile = names("track_width travel_speed acceleration turn_speed_fraction turn_accel_fraction traversal_time_one_way")

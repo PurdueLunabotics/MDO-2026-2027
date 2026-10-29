@@ -76,7 +76,7 @@ def obstacle_pose_svg(values):
     for member in chassis_members(values):
         a,b = mounted(member['start']),mounted(member['end'])
         color,width = {'arm':('#246f99',7),'actuator':('#d77422',4),
-                       'cf-connector':('#263f49',5)}[member['kind']]
+                       'cf-connector':('#263f49',5), 'offset-bracket':('#246f99',4)}[member['kind']]
         layer(member['kind'],(a,b),line(a,b,color,width),member['kind']+'-'+member['station'])
     for sign in (-1,1):
         a = mounted((sign*values['travel_x'],-values['drum_length']-values['drum_pair_gap']/2,values['travel_y']))

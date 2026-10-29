@@ -10,7 +10,8 @@ from rover.motors import Gearmotor
 from rover.problem import build_problem
 from reporting.report import snapshot
 from rover.models import ModelSet, plate_frame_models
-from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
+from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads, arm_beam_screen
+from rover.alternatives.offset_attachment import OffsetArmMechanics
 from rover.alternatives.bekker_wong_reece import BekkerWongReeceMobility
 from rover.excavation import Excavation
 from rover.mobility import Mobility
@@ -19,6 +20,19 @@ from rover.drums import DrumMass
 from rover.components import GeometryMass
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class HistoricalAxlePinMechanics(OffsetArmMechanics):
+    """Freeze the fixture's original beam envelope, with the pin at the axle."""
+    @staticmethod
+    def beam_screen(length, side, top, *args):
+        if side != 0 or top != 0:
+            raise ValueError('Historical motor fixture supports zero offsets only')
+        return arm_beam_screen(length, 1., *args)
+
+
+class HistoricalRoundPlateLoads(PlateStructureLoads):
+    ARM_MECHANICS = HistoricalAxlePinMechanics
 
 
 class DoubleLossMotor:
@@ -62,7 +76,7 @@ class MotorInterfaceTests(unittest.TestCase):
                     # Freeze the original round-aluminum-arm model as well as
                     # mobility for this historical motor-interface regression.
                     models = replace(models, structure_geometry=PlateStructureGeometry,
-                                     structure_loads=PlateStructureLoads)
+                                     structure_loads=HistoricalRoundPlateLoads)
                     inputs.setdefault('arm_wall', .002)
                 p=build_problem(inputs,structure=c['structure'],motors=c['motors'],
                                 models=replace(models,mobility=Mobility))
@@ -90,6 +104,8 @@ class MotorInterfaceTests(unittest.TestCase):
                         actual=p.get_val(n).item()
                         self.assertLessEqual(abs(actual-expected),1e-11*max(1.,abs(expected)),n)
                     for n,expected in c['constraint_margins'].items():
+                        if n == 'actuator_body_margin':
+                            continue  # User retired this criterion; historical fixture data are unchanged.
                         if c["motors"] == "x44-standard" and n in {"battery_energy_margin", "battery_power_margin"}:
                             continue  # intentionally changed energy model; tested independently below
                         actual=result['constraints'][n]['margin']

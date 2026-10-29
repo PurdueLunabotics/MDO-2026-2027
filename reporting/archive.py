@@ -55,6 +55,7 @@ def archive_cases(baseline, optimized, destination, *, baseline_inputs, optimize
                      "structure": metadata["structure_profile"], "motors": metadata["motor_profile"],
                      "traversal_mode": metadata.get("traversal_mode", "fixed"),
                      "attachment_max": metadata.get("attachment_max",1.),
+                     "actuators": metadata.get("actuator_profile", "reference"),
                      "inputs": inputs,
                      "notes": {"source_baseline_sha256": source['sha256'],
                                "analysis_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),

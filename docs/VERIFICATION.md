@@ -1,18 +1,135 @@
 # Current verification status
 
-Checked locally on **2026-10-24**, using the repository's `.venv`. This page
+Checked locally using the repository's `.venv`. This page
 describes the current implementation; Git history retains earlier run notes.
 Software verification is separate from physical calibration and validation.
+
+## Publication input check (2026-10-29)
+
+The latest student baseline edits were preserved for publication to `main`.
+The input edits and the actuator-pivot x lower-bound edit (0.05 to 0.02 m)
+postdate the tested source snapshot below. A fresh fixed evaluation with
+`main.py --inputs design_baseline.json --output results/prepush_baseline.json`
+exits 2 at input validation: `bottom_pivot_height=0.0762 m` is below its existing
+`0.09 m` lower bound. No baseline prediction or feasibility result was produced.
+The earlier passing suite does not establish that these newer inputs run.
+The input-validation failure and the reference slope-domain exception below
+remain unresolved; publication is not a claim of passing CI or a feasible design.
+
+## Actuator body constraint retired; diagnostic retained (2026-10-28)
+
+At the user's explicit request, `actuator_body_margin` is no longer an
+optimization constraint or a feasibility/pass-fail criterion, for either
+actuator profile. Its existing metre-valued calculation and dependencies are
+unchanged. Generic body-length and PA-04 installed catalog-interval reserves
+remain diagnostic outputs; reports label them diagnostic only. The model does
+not thereby establish real actuator packaging. All other constraints, catalog
+stroke/load domains, dimensions, safety factors and mission equations remain.
+Schema 5 records this acceptance-policy change without removing the output port.
+
+All **185 tests passed in 353.602 s** using the local `.venv`.
+The final log is `results/actuator_body_constraint_tests.log`. Tests cover all
+four frame/actuator combinations, absence from the actual optimizer constraints,
+retention in outputs, and unchanged feasibility/remaining checks after making
+the diagnostic negative. Existing actuator, derivative, N2, mass/energy and
+reference drum/motor tests pass. The historical motor fixture's retired
+constraint expectation is explicitly skipped; all other values and tolerances
+are unchanged, and its historical data file is unchanged.
+
+Fixed before/after evaluations used the exact same current student input source.
+Every existing numeric output and every remaining constraint is identical.
+The diagnostic value is -0.110540800 m, without a pass/fail decision.
+The current baseline still fails 8 other checks:
+`rover_length`, `empty_slope_traversal_margin`, `loaded_slope_traversal_margin`, `turn_traction_margin`, `wheel_first_margin`, `actuator_force_margin`, `tip_stability_margin`, `obstacle_drum_wheel_margin`.
+The updated report is `results/actuator_body_removed_baseline.html`.
+Earlier saved reports retain their original acceptance rules and need rerunning.
+
+The required reference fixed evaluation completed; its physical failures remain.
+The current student baseline and generic reference derivative step-size checks
+passed. The required unbounded reference optimization ended with an analysis exception in `TraversalStability`: `Slope screen needs positive spans/CG height and angle in [0, pi/2).`. It did not return a normal optimizer result or produce a final JSON/HTML report. This is an unresolved domain failure, not convergence or a feasible result. The traceback is retained in `results/actuator_body_removed_optimization.log` and recorded trials remain in its SQL file. No input, constraint or domain check was changed to bypass this failure.
+No hardware/soil calibration or external simulator run was performed.
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe main.py --baseline --output results/actuator_body_removed_reference_baseline.json
+.\.venv\Scripts\python.exe main.py --check-derivatives --output results/actuator_body_removed_optimization.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --output results/actuator_body_removed_baseline.json
+```
+
+## Axle-relative actuator offsets (2026-10-28)
+
+The maintained baseline replaces the attachment fraction with signed
+`lin_act_side_arm_offset=0.05 m` and `lin_act_top_arm_offset=0.05 m`.
+Positive directions are outward past the drum axle and above the arm; rear
+geometry is mirrored. Every other baseline input is unchanged. The two new
+lengths are ordinary design variables; reference defaults are zero.
+Equations, signed domains, schema 4 ports, historical input conversion and
+unverified bracket details are in [ARM_OFFSETS.md](ARM_OFFSETS.md).
+
+All **184 tests passed in 520.980 s** using the local `.venv`.
+The final log is `results/arm_offsets_tests_verified.log`. Earlier
+`arm_offsets_tests.log` and `arm_offsets_tests_final.log` are superseded.
+Independent checks cover local coordinates, pin/axle circle closure,
+virtual work, gravity conservation, eccentric force/moment balance, the
+analytic end-couple beam limit, continuity through zero, actual tail mass/work/
+inertia, invalid and unreachable geometry, mirrored drawings, explicit source
+migration, declared dependencies and smooth total derivatives. The historical
+motor fixture retains its original numbers and tolerances through an explicit
+historical round-arm/axle-pin beam factory. The current conservative offset
+beam screen is tested separately. Reference drum/motor regressions pass.
+
+The fixed requested report is `results/arm_offsets_baseline.html`, with its
+JSON, N2 and seven SVG drawings alongside it. It gives 50.26370105 kg
+dry mass, 12.29209524 kg payload, 174.81946390 s cycle time,
+32.82664776 Wh continuous mission energy and
+337.24857968 construction points. Both offsets are exactly
+0.05 m and this is a fixed evaluation, not an optimized design.
+Four failures remain: stowed height (787.8916 mm versus
+750 mm), empty/full BWR climbing and actuator packaging (âˆ’64.4388 mm).
+The old turn-traction failure now passes at this geometry; no check was waived.
+
+The requested baseline and generic reference derivative step-size checks pass.
+The required generic reference SLSQP run completed normally with exit mode 8,
+optimizer success false and `failed_or_infeasible`: 158 model evaluations,
+18 derivative evaluations and 423.64 s driver runtime. Mass, height, both climbs,
+straight motor, dig reach/payload, drum/dump torque, obstacle clearance and
+rock-path wheel load remain failed in its saved final iterate. It is not a
+feasible result and no maintained design was replaced with that iterate.
+
+The current baseline has 356 explicit connections and no automatic IVC sources.
+The independent audit found mass/energy/time residuals below 1e-10 in native
+units, zero run-energy residual and zero actuator-length closure residual at
+all three commanded poses. Uniform tube tails add 0.08437483125
+kg across both arms, counted once. Source hashes in the requested report match
+the current rover sources. Four drawings were rasterized offline and visually
+inspected, including separate axle/pin labels and mirrored bracket offsets.
+
+No actuator/soil hardware test, fitted dataset or external simulator was run.
+The normal bracket is assumed rigid and massless; its mass, strength, joints,
+full collision envelope and soil interaction remain unverified. Soil transfer,
+motor thermal/current capability and other existing model-card limits remain.
+Passing software checks is not predictive validation. Side=0 is the physical
+tube-length branch boundary; smooth offset derivatives are checked away from it.
+
+Reproduction (ordinary local temporary-folder access; no limits relaxed):
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe main.py --baseline --output results/arm_offsets_reference_baseline.json
+.\.venv\Scripts\python.exe main.py --check-derivatives --output results/arm_offsets_reference_optimization.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --output results/arm_offsets_baseline.json
+```
 
 ## Status at a glance
 
 | Check | Result |
 | --- | --- |
-| Full unit suite | 148 tests passed, 178.670 s |
+| Full combined unit suite | 185 tests passed, 353.602 s; actuator body constraint retired |
 | Generic reference fixed evaluation | Completed; failed constraints remain visible |
 | Generic reference derivative step-size check | Passed at its starting design |
 | Generic reference cold-start SLSQP solve | Known failure; saved as failed/infeasible, exit 1 |
-| Current saved baseline | Six failures retained: empty/full climbs, turn traction, asymmetric-dump tipping, slope tipping and rock-path wheel loading |
+| Current saved baseline | 8 remaining failures; actuator packaging reserve is diagnostic only |
+| Initial PA-04 baseline derivative check / optimization | Historical pre-update geometry: derivatives passed; COBYLA exhausted 2000 evaluations and retained a failed/infeasible iterate |
 | Historical optimized candidates | Prior success statements predate BWR climb requirements; reevaluation required |
 | Historical sensitivity grid | 96 cells, 192 starts; 88 formerly feasible cells, before BWR climb requirements |
 | Hardware/soil predictive validation | Not established |
@@ -40,10 +157,114 @@ against hardware or certify behavior at branch transitions.
 The suite covers independent geometry and physical limits, mass/mission-energy
 conservation, signed failure domains, explicit dependencies and connections,
 motor curve/gear/loss accounting, model replacement, and optimizer regressions.
-The reference drum and mass boundaries remain covered. Full-suite local logs
-are in ignored `results/pdf_ready_tests.log`; the seven study-specific tests
-also passed in `results/traversal_fill_tests.log`. These local logs are not
+The reference drum and mass boundaries remain covered. Current full-suite logs
+are in ignored `results/conflict_repair_tests_final.log`; initial actuator checks are in
+`results/pa04_tests_final.log` and targeted checks are in
+`results/pa04_targeted_final.log` and `results/pa04_study_final.log`. Older logs
+include `results/pdf_ready_tests.log` and `results/traversal_fill_tests.log`. These local logs are not
 available in a fresh clone; rerun the commands above.
+
+## PA-04 actuator integration (2026-10-27)
+
+This section records the initial actuator integration before the newer upstream
+500/508/726 mm commanded lengths and revised pivots were combined. Its saved
+outputs and numerical comparisons remain historical; current integration
+checks are recorded in the next section.
+
+The frozen 900 lbf / 12 V profile uses chart endpoints, exact affine catalog
+lengths with the adjustable 161.3408 mm allowance, and an affine mass fit with
+three withheld catalog rows. The model card, domain and missing hardware
+validation are in [PA04_ACTUATORS.md](PA04_ACTUATORS.md). No physical actuator or
+external simulator was run.
+
+Full-suite checks passed (156 tests). The final actuator tests additionally
+reject tiny out-of-domain excursions that normal constraint report tolerances
+might otherwise accept. N2 connections show geometry `lowering_time` feeding
+excavation/loads, and loads `actuation_time` feeding mission. Mass is summed
+once, electrical losses are not applied twice, and lowering overlap is removed
+once. Reference drum, reference mass/energy regressions and smooth derivatives
+passed. Initial sandbox errors were temporary-directory permissions; the suite
+passed when rerun with approved access outside the sandbox.
+
+Fixed evaluations at identical mounts and pose commands compare the prior
+generic actuator assumptions with the selected PA-04 profile:
+
+| Quantity | Prior actuator assumptions | PA-04, provisional 8-inch stroke |
+| --- | ---: | ---: |
+| Dry mass | 52.6791 kg | 50.2783 kg |
+| Linkage mass, both arms and actuators | 8.4593 kg | 6.0584 kg |
+| Actuation time per cycle | 9.5758 s | 61.1611 s |
+| Arm electrical energy per cycle | 1742.16 J | 17462.89 J |
+| Arm peak electrical power, both actuators | 459.60 W | 336.00 W |
+| Mission cycle time | 159.6393 s | 193.6728 s |
+| Continuous mission energy | 37.6485 Wh | 57.6964 Wh |
+
+These are conditional diagnostics, not feasible hardware predictions. The
+initial baseline retained seven failures, including a Ã¢Ë†â€™189.4388 mm installed
+actuator travel-limit margin. The 564.4388 mm hardware minimum is incompatible
+with the 375 mm travel command. A mounting/pose redesign is required.
+
+Both required derivative-checked optimizations were actually run with their
+normal settings. Both initial derivative checks passed. Reference SLSQP ended
+failed/infeasible (114 model evaluations; 312.52 s driver runtime), retaining
+mass, climbing, motor and obstacle/path failures. PA-04 plate-frame COBYLA
+exhausted 2000 objective evaluations (2001 recorded model evaluations; 325.80 s
+driver runtime). Its failed final iterate retains height, climbing, ground
+pressure, bottom-mount, actuator packaging (Ã¢Ë†â€™153.35 mm), obstacle, slope,
+wheel-reaction and design-bound failures. Its continuous stroke of 170.977 mm
+is not a recommended catalog selection. No limits or tests were relaxed.
+
+Ignored local outputs are `results/pa04_reference_baseline.json`,
+`results/pa04_reference_optimization.json`, `results/pa04_before_baseline.json`,
+`results/pa04_selected_baseline.json` and
+`results/pa04_selected_optimization.json`, with HTML/N2 reports and matching logs.
+The maintained baseline records the new actuator choice, while its mounting
+geometry remains pending. The historical optimized case and published report
+snapshots were not promoted to the new hardware profile.
+
+## Traversal/actuator conflict repair
+
+Seven stash-application conflicts were resolved in the CLI, problem builder,
+baseline, case reader, report snapshot, archive and traversal/fill study. The
+working files contain no conflict markers, and Git's index contains no unresolved
+paths. The stash backup remains intact; no commit or push was performed.
+
+The final combined suite passed all **181 tests in 479.634 s**. The initial pass
+caught an out-of-bounds seed in a new integration test; a valid inward-pin seed
+was used for its rerun without altering model bounds or the assertion.
+All 74 Python sources parse successfully; staged and working diffs pass
+`git diff --check`.
+
+The combined CLI accepts the PA-04 selection alongside frozen design variables,
+calculated traversal, ignored optimizer constraints and the optional attachment
+search. The existing arm-overhang corrections compose with both reference and
+PA-04 actuator models. Tests verify physical mass/force expressions, preservation
+of frozen ratings in multistart seeds, recorded outputs when catalog stroke is
+frozen, and propagation of all profile choices through CLI and report metadata.
+
+The newer upstream baseline mounting geometry and commanded lengths are
+preserved. Fixed evaluation of the maintained case has four failed checks:
+empty/full climbing, turn traction and actuator packaging. The actuator reserve
+is Ã¢Ë†â€™64.4388 mm because the travel command is 500 mm and the provisional 8-inch
+unit's installed minimum is 564.4388 mm. With climb angles explicitly set to zero
+and calculated traversal selected, only turn traction and packaging fail.
+The turn-traction exclusion remains visible as a failed, unenforced check.
+
+The user's command was exercised as a bounded smoke run using `--maxiter 1`.
+SciPy raises that COBYLA budget to its minimum of 29 objective evaluations
+(30 recorded model evaluations); the saved final status correctly remains
+failed/infeasible. This verifies command parsing and model/report execution,
+not convergence. The normal 2000-evaluation fixed-hardware search was not rerun.
+Freezing 500/726 mm travel/dig lengths is geometrically incompatible with every
+PA-04 catalog stroke at the current allowance; see [the interval proof](PA04_ACTUATORS.md).
+
+The generic reference fixed evaluation completed, and its initial total
+derivative check passed. Generic reference cold-start optimization completed
+114 model evaluations in 758.37 s and retains its documented failed/infeasible
+status, including mass, climb, motor and obstacle/path failures.
+Software/connection/conservation tests do not add
+actuator, soil or thermal calibration. Local outputs and logs use the ignored
+`results/conflict_repair_*` prefix.
 
 ## Reports and provenance
 
@@ -52,7 +273,7 @@ inputs. Each curated HTML embeds its exact numeric run, native inputs/outputs,
 checks, source hash, and model provenance. Publishing rejects stale or unrelated
 baseline/candidate pairs and preserves the baseline byte for byte.
 
-The current baseline is the fixed aluminum-box-arm design evaluated on
+The published baseline snapshot is the fixed aluminum-box-arm design evaluated on
 2026-10-24: dry mass 52.67914912 kg and six failed checks, including
 `rock_sweep_wheel_load_margin = -48.36401627 N`. Structural stress passes the
 current screen. Full current metrics and inputs are embedded in the published
@@ -64,7 +285,7 @@ validation runs below are historical snapshots; see the latest publication note.
 
 ## Sensitivity study
 
-The 12 × 8 traversal/fill grid uses unchanged physics, bounds, and solver
+The 12 Ãƒâ€” 8 traversal/fill grid uses unchanged physics, bounds, and solver
 settings. Every cell has two recorded starts; only successful, feasible attempts
 are eligible. Five 15 s cells retain failed numeric iterates and three retain
 exceptions without usable final states. Error reports invent neither score nor
@@ -81,7 +302,7 @@ mobile layout. Full results and audit stay under ignored
 `results/sensitivity/traversal_fill/`.
 
 An additional fixed-hardware evaluation held the 45 s / 0.4 study candidate
-unchanged across all 88 cells at 30–180 s. Every current modeled check passed.
+unchanged across all 88 cells at 30Ã¢â‚¬â€œ180 s. Every current modeled check passed.
 At 45 s / 0.9 it scored 2348.03 versus 3694.07 for the reoptimized candidate;
 its payload stayed reach-limited at 53.66 kg. This supports modeled feasibility
 robustness, not equal performance or physical validation. See
@@ -324,7 +545,7 @@ The baseline uses 50.8 x 50.8 mm outside with 1.5875 mm wall. Only arm-section
 physical inputs changed: round diameter replaced by box width/height and wall
 changed from 2 mm. Other baseline inputs, aluminum properties, frame loading,
 limits and safety factors were retained. Width/height remain independent design
-variables (25–100 mm); wall bounds remain 1–5 mm. Reference `ModelSet()` retains
+variables (25Ã¢â‚¬â€œ100 mm); wall bounds remain 1Ã¢â‚¬â€œ5 mm. Reference `ModelSet()` retains
 round arms. Existing port names/units for mass, stress, deflection and margins
 are unchanged. The historical candidate and X44 restart have explicit nominal
 box-side migrations, without claiming reoptimization or prior feasibility.

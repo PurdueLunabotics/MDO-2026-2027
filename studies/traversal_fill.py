@@ -87,7 +87,7 @@ def run_attempt(job, seed_name, seed_design):
               'traversal_time_one_way': job['seconds'], 'fill_fraction': job['fill']}
     p = None
     started = time.perf_counter()
-    record = {'schema_version': 2, 'openmdao_version': openmdao.__version__,
+    record = {'schema_version': 3, 'openmdao_version': openmdao.__version__,
               'optimizer_success': False, 'status': 'error', 'notice': 'Uncalibrated conceptual estimates.',
               'report_context': {'name': f"Traversal {job['seconds']:g} s / fill ceiling {job['fill']:.2f}",
                                  'revision': job['source_revision'], 'source': job['source_name'],
@@ -98,6 +98,7 @@ def run_attempt(job, seed_name, seed_design):
                                                   'study_fingerprint': job['fingerprint']}}}
     try:
         p = build_problem(values, structure=job['structure'], motors=job['motors'], traversal_mode="fixed",
+                          actuators=job.get('actuators', 'reference'),
                           maxiter=job['maxiter'], display=False)
         record['model_metadata'] = p.model_metadata
         assert not {'traversal_time_one_way', 'fill_fraction'} & set(p.design_specs)
@@ -172,7 +173,7 @@ def load_study_inputs(path, seed_path):
     from rover.config import configuration
     source, meta = read_case(path)
     structure, motors = meta.get('structure', 'reference'), meta.get('motors', 'reference')
-    design, assumptions = configuration(structure, motors)
+    design, assumptions = configuration(structure, motors, meta.get('actuators', 'reference'))
     # Freeze all effective assumptions for reproducibility even for a partial source file.
     complete = {n: spec[0] for n, spec in {**design, **assumptions}.items()}
     complete.update(source)
@@ -180,7 +181,8 @@ def load_study_inputs(path, seed_path):
     seeds = {}
     if seed_path:
         candidate, seed_meta = read_case(seed_path)
-        if seed_meta.get('structure', structure) != structure or seed_meta.get('motors', motors) != motors:
+        if (seed_meta.get('structure', structure) != structure or seed_meta.get('motors', motors) != motors
+                or seed_meta.get('actuators', 'reference') != meta.get('actuators', 'reference')):
             raise ValueError('The second starting design must use the baseline hardware profiles.')
         seeds = {n: candidate[n] for n in design if n in candidate}
         starts.append(('saved_candidate', seeds))
@@ -190,18 +192,21 @@ def load_study_inputs(path, seed_path):
 def build_study(args):
     times, fills = validate_grid(args.times, args.fills)
     values, meta, structure, motors, starts = load_study_inputs(args.inputs, args.seed)
+    actuators = meta.get('actuators', 'reference')
     files = sorted((ROOT/'rover').rglob('*.py')) + sorted((ROOT/'data/motors').glob('*.csv')) + [ROOT/'data/motors/manifest.json']
+    if actuators == 'pa04-900':
+        files += sorted((ROOT/'data/actuators').glob('*.csv')) + [ROOT/'data/actuators/manifest.json']
     model_hashes = {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     versions = {name: version(name) for name in ('openmdao', 'numpy', 'scipy')}
     fingerprint = digest({'source_inputs': values, 'source_sha256': meta['sha256'], 'starts': starts,
-                          'structure': structure, 'motors': motors, 'maxiter': args.maxiter,
+                          'structure': structure, 'motors': motors, 'actuators': actuators, 'maxiter': args.maxiter,
                           'model_hashes': model_hashes, 'versions': versions,
                           'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()})
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     manifest = {'schema_version': 1, 'created_utc': utc_now(), 'source': args.inputs.name,
                 'source_sha256': meta['sha256'], 'source_inputs': values, 'source_model_sha256': model_hashes,
-                'fingerprint': fingerprint, 'structure': structure, 'motors': motors,
+                'fingerprint': fingerprint, 'structure': structure, 'motors': motors, 'actuators': actuators,
                 'traversal_times_s': times, 'fill_fractions': fills, 'starts': [n for n, _ in starts],
                 'maxiter_per_start': args.maxiter, 'package_versions': versions,
                 'objective': 'maximum saved continuous construction_points among converged, modeled-feasible starts',
@@ -219,7 +224,7 @@ def build_study(args):
             else:
                 jobs.append({'seconds': seconds, 'fill': fill, 'output': str(output), 'source_inputs': values,
                              'source_name': args.inputs.name, 'source_revision': meta.get('revision', 'Not specified'),
-                             'source_sha256': meta['sha256'], 'structure': structure, 'motors': motors,
+                             'source_sha256': meta['sha256'], 'structure': structure, 'motors': motors, 'actuators': actuators,
                              'maxiter': args.maxiter, 'starts': starts, 'fingerprint': fingerprint})
     from .traversal_fill_view import write_explorer
     def save_progress():
@@ -245,7 +250,7 @@ def build_study(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--inputs', type=Path, default=Path('design_baseline.json'))
-    parser.add_argument('--seed', type=Path, default=Path('design_optimized.json'))
+    parser.add_argument('--seed', type=Path, help='Optional second start with matching hardware profiles; historical candidates must be migrated explicitly')
     parser.add_argument('--times', nargs='+', type=float, default=DEFAULT_TIMES)
     parser.add_argument('--fills', nargs='+', type=float, default=DEFAULT_FILLS)
     parser.add_argument('--workers', type=int, default=6)

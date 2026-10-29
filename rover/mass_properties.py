@@ -6,6 +6,7 @@ component without changing mobility or relocation. Coordinate axes: x forward,
 y left, z above the original level ground (linkage.py calls z 'y').
 """
 from .components import scalar
+from .alternatives.offset_attachment import attachment_point
 from .discipline import Discipline, names
 
 
@@ -17,9 +18,19 @@ def mass_properties(parts):
             sum(i+m*(x*x+y*y) for m,x,y,z,i in parts))
 
 
+def tail_part(v, sign):
+    """Actual uniform axial continuation; excluded from the core linkage lump."""
+    extra = v("arm_extension_mass")/2
+    if extra == 0: return None
+    ratio = max(v("lin_act_side_arm_offset"), 0.)/v("arm_length")
+    dx = ratio*(v("travel_x")-v("pivot_x"))
+    dz = ratio*(v("travel_y")-v("bottom_pivot_height"))
+    return (extra, sign*(v("travel_x")+dx/2), 0., v("travel_y")+dz/2, extra*dx*dx/12)
+
+
 class MassProperties(Discipline):
-    CONFIG_INPUTS = tuple(sorted(names("wheelbase track_width wheel_diameter wheel_width drum_diameter drum_length drum_pair_gap fixed_mass chassis_height pivot_x actuator_pivot_x bottom_pivot_height top_pivot_height actuator_attachment_fraction")))
-    COUPLED_INPUTS = {"wheel_mass": "kg", "drive_mass": "kg", "drum_mass": "kg", "battery_mass": "kg", "structure_mass": "kg", "rocker_mass": "kg", "linkage_mass": "kg", "payload_mass": "kg", "travel_x": "m", "travel_y": "m"}
+    CONFIG_INPUTS = tuple(sorted(names("wheelbase track_width wheel_diameter wheel_width drum_diameter drum_length drum_pair_gap fixed_mass chassis_height pivot_x actuator_pivot_x bottom_pivot_height top_pivot_height lin_act_side_arm_offset lin_act_top_arm_offset arm_length")))
+    COUPLED_INPUTS = {"wheel_mass": "kg", "drive_mass": "kg", "drum_mass": "kg", "battery_mass": "kg", "structure_mass": "kg", "rocker_mass": "kg", "linkage_mass": "kg", "arm_extension_mass": "kg", "payload_mass": "kg", "travel_x": "m", "travel_y": "m"}
     OUTPUT_UNITS = {f"{state}_{quantity}": units for state in ("empty", "loaded", "half")
                     for quantity,units in (("yaw_inertia","kg*m**2"),("cg_x","m"),("cg_z","m"))}
     OUTPUT_UNITS.update({"loaded_sprung_mass": "kg", "loaded_sprung_cg_x": "m", "loaded_sprung_cg_z": "m"})
@@ -44,13 +55,15 @@ class MassProperties(Discipline):
                 md = v("drum_mass")/4
                 parts.append((md, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2, v("travel_y"), md*(3*rd**2+length**2)/12))
                 sprung.append(parts[-1])
-            ml = v("linkage_mass")/2
+            tail = tail_part(v, sx)
+            if tail is not None:
+                parts.append(tail); sprung.append(tail)
+            ml = (v("linkage_mass")-v("arm_extension_mass"))/2
             # Equivalent midpoint of arm and actuator links. Their actual masses
             # differ, so CAD mass properties should replace this approximation.
             pivot_x = (v("pivot_x")+v("actuator_pivot_x"))/2
             pivot_z = (v("bottom_pivot_height")+v("top_pivot_height"))/2
-            joint_x = v("pivot_x")+v("actuator_attachment_fraction")*(v("travel_x")-v("pivot_x"))
-            joint_z = v("bottom_pivot_height")+v("actuator_attachment_fraction")*(v("travel_y")-v("bottom_pivot_height"))
+            joint_x, joint_z = attachment_point(v("pivot_x"), v("bottom_pivot_height"), v("travel_x"), v("travel_y"), v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
             # Mean of the arm and actuator endpoints, retaining the reference
             # equivalent-rod approximation and its mass boundary.
             end_x, end_z = (v("travel_x")+joint_x)/2, (v("travel_y")+joint_z)/2

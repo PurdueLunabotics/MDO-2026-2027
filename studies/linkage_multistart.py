@@ -57,25 +57,31 @@ def geometry_seed(reference, fraction, layout, rotation):
     v = {n:i["value"] for group in ("design", "assumptions", "outputs") for n,i in state[group].items()}
     bx,bz,ax,az,scale = LAYOUTS[layout]
     values = {n:i["value"] for group in ("design", "assumptions") for n,i in state[group].items()}
+    old_fraction = values.pop("actuator_attachment_fraction", None)
+    values.setdefault("lin_act_top_arm_offset", 0.)
     values.update(pivot_x=v["pivot_x"]+bx, bottom_pivot_height=v["bottom_pivot_height"]+bz,
                   actuator_pivot_x=v["actuator_pivot_x"]+ax, top_pivot_height=v["top_pivot_height"]+az,
-                  arm_length=v["arm_length"]*scale, actuator_attachment_fraction=fraction)
+                  arm_length=v["arm_length"]*scale, lin_act_side_arm_offset=(fraction-1)*v["arm_length"]*scale)
     for pose,length in (("travel", "travel_actuator_length"), ("stowed", "actuator_retracted_length"),
                          ("extended", "actuator_extended_length")):
         angle = math.atan2(v[pose+"_y"]-v["bottom_pivot_height"], v[pose+"_x"]-v["pivot_x"])+rotation
-        pin_x = values["pivot_x"]+fraction*values["arm_length"]*math.cos(angle)
-        pin_z = values["bottom_pivot_height"]+fraction*values["arm_length"]*math.sin(angle)
+        pin_x = values["pivot_x"]+fraction*values["arm_length"]*math.cos(angle)-values["lin_act_top_arm_offset"]*math.sin(angle)
+        pin_z = values["bottom_pivot_height"]+fraction*values["arm_length"]*math.sin(angle)+values["lin_act_top_arm_offset"]*math.cos(angle)
         values[length] = math.hypot(pin_x-values["actuator_pivot_x"], pin_z-values["top_pivot_height"])
-    if fraction < 1:
+    if fraction < 1 and reference['model_metadata'].get('actuator_profile', 'reference') == 'reference':
         values["actuator_force_rating"] = 6000.  # Explicit starting value, not automatic resizing in compute.
     values.update(empty_slope_degrees=0., loaded_slope_degrees=0.)
     return values
 
 
-def make_problem(values, **options):
+def make_problem(values, *, actuators="reference", **options):
     from rover.problem import build_problem
+    if options.pop("optimize_attachment", True) is False:
+        options["freeze"] = FROZEN+["lin_act_side_arm_offset", "lin_act_top_arm_offset"]
+    else:
+        options["freeze"] = FROZEN
     return build_problem(values, structure="plate-frame", motors="x44-standard", traversal_mode="calculated",
-                         freeze=FROZEN, ignore_constraints=IGNORED, **options)
+                         actuators=actuators, ignore_constraints=IGNORED, **options)
 
 
 def make_row(name, record, folder):
@@ -106,7 +112,7 @@ def run_attempt(job):
     folder.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     p = None
-    record = {"schema_version": 2, "openmdao_version": openmdao.__version__, "optimizer_success": False,
+    record = {"schema_version": 3, "openmdao_version": openmdao.__version__, "optimizer_success": False,
               "status": "error", "notice": "Uncalibrated conceptual estimates; explicit turn-traction exclusion retained.",
               "report_context": {"name": "Actuator/pivot study: "+name, "revision": "2026-10-27",
                   "source": "Immutable study seed inputs", "generated_utc": now(), "mode": "optimization",
@@ -114,7 +120,7 @@ def run_attempt(job):
     with (folder/"solver.log").open("w", encoding="utf-8") as log, redirect_stdout(log), redirect_stderr(log):
         print("Starting", name, flush=True)
         try:
-            p = make_problem(job["values"], optimize_attachment=job.get("optimize_attachment", True),
+            p = make_problem(job["values"], actuators=job.get('actuators', 'reference'), optimize_attachment=job.get("optimize_attachment", True),
                              maxiter=job["maxiter"], cobyla_radius=job["radius"], solver_tol=job["tol"],attachment_max=job.get('attachment_max',1.))
             record["model_metadata"] = p.model_metadata
             p.run_model()
@@ -142,6 +148,7 @@ def run_attempt(job):
             effective = {n:i["value"] for group in ("design", "assumptions") for n,i in record["final"][group].items()}
             atomic_json(folder/"candidate_inputs.json", {"name": name, "revision": "Actuator/pivot study 2026-10-27",
                 "structure": "plate-frame", "motors": "x44-standard", "traversal_mode": "calculated", "inputs": effective,
+                "actuators": job.get('actuators', 'reference'),
                 "attachment_max":job.get('attachment_max',1.),
                 "notes": {"full_status": record["status"], "optimizer_success": record["optimizer_success"],
                           "selected_constraints_pass": not selected_failures(record["final"]), "ignored_optimizer_constraints": IGNORED,
@@ -164,26 +171,26 @@ def publish(manifest, output):
         label = "Converged under selected constraints" if row.get("eligible") else "Failed / diagnostic"
         gain = f'{100*(row["score"]/reference_score-1):+.2f}%' if "score" in row else "—"
         body.append('<tr>'+''.join('<td>'+str(x)+'</td>' for x in [title,label,cell("construction_points"),gain,
-            cell("actuator_attachment_fraction"),cell("arm_length",1000),
+            cell("lin_act_side_arm_offset",1000)+" / "+cell("lin_act_top_arm_offset",1000),cell("arm_length",1000),
             cell("actuator_pivot_x",1000)+", "+cell("top_pivot_height",1000),
             cell("pivot_x",1000)+", "+cell("bottom_pivot_height",1000),
             cell("travel_actuator_length",1000)+" / "+cell("actuator_retracted_length",1000)+" / "+cell("actuator_extended_length",1000),
             cell("actuator_force_rating"),cell("turn_traction_margin")])+'</tr>')
     html = '<!doctype html><meta charset="utf-8"><title>Actuator and pivot multistart study</title><style>body{font:15px system-ui;margin:32px;color:#20323e}table{border-collapse:collapse;width:100%}th,td{padding:9px;border-bottom:1px solid #ddd;text-align:left}th{background:#edf4f4}a{color:#176a67}p{max-width:1100px}</style>'
-    html += '<h1>Actuator and pivot multistart study</h1><p>Reference score: '+f'{reference_score:.2f}'+f'. Wheels fixed; actuator lengths and pivots adjustable. Attachment is optimized in [0.001, {manifest["settings"].get("attachment_max",1.):g}] unless held at the reference value for a control run. Climb angles are zero; turn traction is excluded from the optimizer only.</p>'
+    html += '<h1>Actuator and pivot multistart study</h1><p>Reference score: '+f'{reference_score:.2f}'+f'. Wheels fixed; actuator lengths and pivots adjustable. Side/top offsets are optimized within their metre-valued bounds unless held fixed for a control run. Climb angles are zero; turn traction is excluded from the optimizer only.</p>'
     if manifest['settings'].get('attachment_max',1.)>1:
         html+='<p>Fractions above 1 continue the uniform arm tube beyond the drum shaft. Extra mass, inertia, structural loads and physical arm envelopes are included; brackets, arm/actuator interference and soil contact still need CAD/testing.</p>'
     html += '<p><b>Eligibility means solver success and every selected constraint passes.</b> Full-model pass/fail remains unchanged in each report. An excluded turn-traction failure is not a verified feasible rover. Continuous actuator dimensions are exploratory; no catalog selection or physical validation is claimed.</p>'
     html += f'<p>{len(rows)} / {manifest["planned_attempts"]} planned attempts saved. <a href="study.json">Study manifest and numerical results</a>. Best found local results; no global optimality claim.</p>'
-    html += '<div style="overflow:auto"><table><thead><tr>'+''.join('<th>'+x+'</th>' for x in ["Attempt/report","Study status","Score","Gain","Pin fraction","Arm mm","Actuator pivot x,z mm","Arm pivot x,z mm","Actuator travel/retracted/extended mm","Actuator rating N","Turn traction N"])+ '</tr></thead><tbody>'+''.join(body)+'</tbody></table></div>'
+    html += '<div style="overflow:auto"><table><thead><tr>'+''.join('<th>'+x+'</th>' for x in ["Attempt/report","Study status","Score","Gain","Side/top offsets mm","Arm mm","Actuator pivot x,z mm","Arm pivot x,z mm","Actuator travel/retracted/extended mm","Actuator rating N","Turn traction N"])+ '</tr></thead><tbody>'+''.join(body)+'</tbody></table></div>'
     (output/"index.html").write_text(html, encoding="utf-8")
 
 
 def screen_seeds(reference, count, attachment_max=1.,fractions=(1.,.85,.7,.55)):
     from rover.config import configuration
     from reporting.report import snapshot
-    design,_ = configuration("plate-frame", "x44-standard")
-    design["actuator_attachment_fraction"] = (1., .001, attachment_max, None)
+    actuators = reference['model_metadata'].get('actuator_profile', 'reference')
+    design,_ = configuration("plate-frame", "x44-standard", actuators)
     screened = []
     for fraction in fractions:
         pool = []
@@ -194,7 +201,7 @@ def screen_seeds(reference, count, attachment_max=1.,fractions=(1.,.85,.7,.55)):
                     continue
                 p = None
                 try:
-                    p = make_problem(values, optimize_attachment=True, maxiter=1,attachment_max=attachment_max)
+                    p = make_problem(values, actuators=actuators, optimize_attachment=True, maxiter=1,attachment_max=attachment_max)
                     p.run_model(); state = snapshot(p)
                     pool.append({"name": f"f{fraction:g}_{layout}_r{rotation:+.2f}".replace('.','p').replace('+','plus').replace('-','minus'),
                                  "values": values, "fraction": fraction, "layout": layout,
@@ -250,10 +257,13 @@ def main():
     source_inputs.update(empty_slope_degrees=0.,loaded_slope_degrees=0.)
     import hashlib
     files = sorted((ROOT/"rover").rglob("*.py"))+sorted((ROOT/"data/motors").glob("*.csv"))+[ROOT/"data/motors/manifest.json",ROOT/"data/mobility/bekker_wong_reece/grc1_loose.json"]
+    actuators = reference['model_metadata'].get('actuator_profile', 'reference')
+    if actuators == 'pa04-900':
+        files += sorted((ROOT/'data/actuators').glob('*.csv')) + [ROOT/'data/actuators/manifest.json']
     settings = {"reference_sha256":hashlib.sha256(raw).hexdigest(),"model_hashes":{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
                 "runner_sha256":hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 "maxiter":args.maxiter,"refine":args.refine,"refine_maxiter":args.refine_maxiter,"seeds_per_fraction":args.seeds_per_fraction,
-                "attachment_max":args.attachment_max,"fractions":fractions,
+                "attachment_max":args.attachment_max,"fractions":fractions,"actuators":actuators,
                 "versions":{n:version(n) for n in ("openmdao","numpy","scipy")},"frozen":FROZEN,"ignored":IGNORED}
     fingerprint = digest(settings)
     path = output/"study.json"
@@ -270,7 +280,7 @@ def main():
         publish(manifest,output)
     controls=[{"name":"control_fixed_attachment","values":source_inputs,"optimize_attachment":False},
               {"name":"incumbent_free_fraction","values":source_inputs,"optimize_attachment":True}]
-    common={"output":str(output),"fingerprint":fingerprint,"maxiter":args.maxiter,"radius":.02,"tol":1e-5,"attachment_max":args.attachment_max}
+    common={"output":str(output),"fingerprint":fingerprint,"maxiter":args.maxiter,"radius":.02,"tol":1e-5,"attachment_max":args.attachment_max,"actuators":actuators}
     jobs=[{**common,**s} for s in controls+seeds]
     execute(jobs,manifest,output,args.workers)
     ranked=sorted((r for r in manifest["rows"] if not r["id"].startswith("refine_") and r.get("selected_constraints_pass")),key=lambda r:r["score"],reverse=True)

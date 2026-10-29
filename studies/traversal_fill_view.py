@@ -14,7 +14,7 @@ def write_explorer(study, output):
         from rover.mobility import route_profiles
         from rover.alternatives.x44_motor import CURVE
         import math
-        design, _ = configuration(study['structure'], study['motors'])
+        design, _ = configuration(study['structure'], study['motors'], study.get('actuators', 'reference'))
         v = study['source_inputs']
         fastest_shape = route_profiles(design['track_width'][1], v['travel_speed'], v['acceleration'],
                                        v['turn_speed_fraction'], v['turn_accel_fraction'], 15)

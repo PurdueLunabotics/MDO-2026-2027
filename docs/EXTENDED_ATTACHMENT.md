@@ -1,3 +1,5 @@
+Current attachment interface: [axle-relative side/top offsets, revision 2](ARM_OFFSETS.md). The fraction-based attachment selection described in older sections below is historical; live models use signed metre-valued offsets, with automatic axial tube continuation and an assumed rigid, massless normal bracket.
+
 # Optional attachment beyond the drum shaft (revision 1)
 
 `actuator_attachment_fraction = f` measures B-to-pin distance divided by

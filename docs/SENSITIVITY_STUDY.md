@@ -46,9 +46,11 @@ the chosen time; route distances and turns stay fixed. Deposition and relocation
 remain separate. `fill_fraction` scales usable storage capacity: actual payload
 is the smaller of that storage target and reachable captured soil.
 
-Each cell has two deterministic starts: baseline design variables and saved
-candidate design variables. Both inherit every nonswept assumption from the
-baseline. The completed study uses plate-frame / standard-X44, COBYLA, 2000
+Each new cell starts from baseline design variables. An optional `--seed PATH`
+adds a second start with matching structure, motor and actuator profiles. The
+historical candidate is not a valid seed for the new PA-04 baseline without
+explicit migration. Every start inherits nonswept assumptions from the baseline.
+The historical completed study used two starts, plate-frame / standard-X44, COBYLA, 2000
 evaluations per start, stopping accuracy 1e-5, and initial radius 0.02. Bounds,
 physical constraints, inward numerical reserves, score weights, Earth gravity,
 and 900 s mission are unchanged.

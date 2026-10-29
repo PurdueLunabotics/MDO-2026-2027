@@ -14,11 +14,12 @@ OUTPUTS = {
     "mass_points": None, "energy_points": None, "construction_points": None,
     "no_load_speed": "m/s", "loaded_motor_speed_limit": "m/s",
     "loaded_power_speed_limit": "m/s", "stall_drive_force": "N",
-    "actuation_time": "s", "arm_energy": "J", "arm_peak_power": "W",
+    "actuation_time": "s", "lowering_time": "s", "arm_energy": "J", "arm_peak_power": "W",
     "required_actuator_force": "N", "linkage_mass": "kg", "stroke": "m",
     "stowed_x": "m", "stowed_y": "m", "travel_x": "m", "travel_y": "m", "extended_x": "m", "extended_y": "m",
     "sweep_x_min": "m", "sweep_x_max": "m", "actuator_leverage_max": None,
-    "actuator_attachment_distance": "m",
+    "actuator_attachment_distance": "m", "arm_physical_length": "m", "arm_extension_mass": "kg",
+    "actuator_body_margin": "m",  # diagnostic only; excluded from feasibility/optimizer
     "chassis_clearance_margin": "m",  # legacy diagnostic; inactive in plate-frame
     "stowed_length": "m", "stowed_height": "m", "deployed_length": "m", "deployed_height": "m",
     "route_distance": "m", "route_turn_angle": "deg", "route_translation_time": "s",
@@ -57,6 +58,10 @@ def snapshot(problem, configuration=None):
     if specs.get("traversal_mode", "fixed") == "calculated":
         from rover.alternatives.calculated_traversal import TIMING_OUTPUTS
         output_units.update(TIMING_OUTPUTS)
+    if getattr(problem, "model_metadata", {}).get("actuator_profile") == "pa04-900" or "actuator_catalog_stroke" in {**design, **assumptions}:
+        from rover.alternatives.pa04_actuator import PA04LinkageGeometry, PA04LinkageLoads
+        output_units.update(PA04LinkageGeometry.OUTPUT_UNITS)
+        output_units.update(PA04LinkageLoads.OUTPUT_UNITS)
     if getattr(problem, "model_metadata", {}).get("structure_profile") == "plate-frame" or "plate_thickness" in assumptions:
         from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads
         output_units.update(PlateStructureGeometry.OUTPUT_UNITS)
@@ -67,6 +72,11 @@ def snapshot(problem, configuration=None):
         constraints[name] = {"margin": margin, "units": units, "passed": margin >= -1e-6 * upper}
     for name, (scale, units) in margins.items():
         constraints[name] = {"margin": get(name), "units": units, "passed": get(name) >= -1e-6 * scale}
+        if name in ("actuator_stroke_domain_margin", "actuator_curve_margin"):
+            # An out-of-domain chart diagnostic is never an accepted prediction.
+            constraints[name]["passed"] = bool(get(name) >= 0)
+            if name == "actuator_curve_margin":
+                constraints[name]["passed"] &= bool(get("actuator_curve_valid") == 1)
         if name in STRICT_SLOPE_MARGINS:
             state = STRICT_SLOPE_MARGINS[name]
             constraints[name].update(passed=bool(get(state+"_slope_solution_valid") == 1

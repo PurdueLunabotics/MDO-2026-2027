@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "revision": "pa04-900-12v-v1-2026-10-27",
+  "source": "Four user-supplied PA-04 chart/table screenshots, attached to the request on 2026-10-27. Manual transcription; manufacturer revision/date and original URL not supplied.",
+  "source_images": [
+    "codex-clipboard-a2bd6c67-2b10-4bc9-bf78-0b277a98d02e.png (current vs load, yellow 900 lbs 12V)",
+    "codex-clipboard-210adaf8-1ddc-4b21-a527-cf1e784bbab2.png (speed vs load, yellow 900 lbs 12V)",
+    "codex-clipboard-9d8cb7c2-3df3-40b0-893e-d1b6913ee5af.png (hole-to-hole table)",
+    "codex-clipboard-3ca1ac3a-3c91-4948-a421-3a220dd39847.png (stroke/length/weight table)"
+  ],
+  "sha256": {
+    "pa04_lengths.csv": "e4a3e693fbd8b436ad70f8e42d7b3049ef97bc04bd4378e598890416f9935d45",
+    "pa04_load.csv": "fd2ddaa1cff7c3481dc13d67e863d7f86de48b92967b1bb21cbe7a344ebe9440",
+    "pa04_mass.csv": "117db996bd24eb7f0ae8445c886adabb5dc56627a53d90f0f4f6b715e39a7a8b"
+  },
+  "conditions": {"voltage_V": 12, "rated_force_lbf": 900, "temperature": "not supplied", "duty_cycle": "not supplied", "direction": "opposing load magnitude; directional distinction not supplied"},
+  "units": {"stroke": "inch", "length": "inch", "weight": "lb interpreted as mass", "load": "lbf", "current": "A", "speed": "inch/s"},
+  "conversions": {"m_per_inch": 0.0254, "kg_per_lb": 0.45359237, "N_per_lbf": 4.4482216152605},
+  "digitization": "Current endpoints 4 and 14 A; speed endpoints approximately 0.47 and 0.39 inch/s, read from the supplied graph. No precision beyond graph resolution is claimed.",
+  "geometry": {"retracted_in": "stroke_in + 7.87", "extended_in": "2*stroke_in + 7.87", "source_stroke_domain_in": [1, 60], "installed_allowance_m": 0.1613408, "allowance_source": "user, adjustable; added to each endpoint once; no allowance mass supplied"},
+  "mass_fit": {
+    "method": "Affine ordinary least squares, 13 catalog rows; 9, 18, 30 inch rows withheld before fitting",
+    "processing_script": "data/actuators/fit_pa04.py",
+    "intercept_lb": 4.376918958521191,
+    "slope_lb_per_in": 0.1574588593327322,
+    "domain_stroke_in": [2, 40],
+    "validation": {"count": 3, "mae_lb": 0.09848587315900244, "max_abs_lb": 0.1506847385031591, "rmse_lb": 0.10602784405386584},
+    "all_rows_max_abs_lb": 0.17527333183047844
+  },
+  "validity": {"profile_stroke_in": [2, 40], "opposing_load_lbf": [0, 900], "outside_domain": "Strict helper rejection; finite component diagnostics are flagged with negative feasibility margins and curve_valid=0 where appropriate"},
+  "calibration": "Catalog approximation only. Withheld catalog rows are not independent physical experiments. No independent hardware validation, lowering/regeneration, thermal or duty-cycle data supplied.",
+  "assumptions": ["Rated-load lowering at 0.39 inch/s and 14 A", "Raising uses maximum sampled loaded extraction force, including breakout, over the entire stroke", "Both actuators move in parallel", "No regeneration; no additional actuator idle loss or efficiency applied to chart electrical power", "Installation brackets/extension allowance mass and detailed mass distribution not provided"]
+}

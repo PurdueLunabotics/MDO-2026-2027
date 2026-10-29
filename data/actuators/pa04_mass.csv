@@ -1,0 +1,17 @@
+stroke_in,mass_lb,split
+2,4.60,fit
+3,4.75,fit
+4,4.90,fit
+6,5.35,fit
+8,5.65,fit
+9,5.85,validation
+10,6.00,fit
+12,6.30,fit
+14,6.60,fit
+16,7.00,fit
+18,7.30,validation
+20,7.65,fit
+22,7.90,fit
+24,8.20,fit
+30,8.95,validation
+40,10.50,fit

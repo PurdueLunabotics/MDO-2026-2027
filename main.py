@@ -32,11 +32,12 @@ def main():
     parser.add_argument("--freeze", action="extend", nargs="+", default=[], metavar="NAME",
                         help="Hold design variables at their resolved input values; accepts multiple names and may be repeated")
     parser.add_argument("--optimize-attachment", action="store_true",
-                        help="Optimize actuator_attachment_fraction within [0.001, attachment-max]; default keeps it fixed")
+                        help="Compatibility flag: both actuator offsets are now ordinary design variables; use --freeze to hold them")
     parser.add_argument("--attachment-max",type=float,
-                        help="Attachment-fraction upper bound, 1 to 1.5; >1 enables the optional box-arm overhang model")
+                        help="Legacy study compatibility only; use signed offsets in metres (tube continuation is automatic)")
     parser.add_argument("--ignore-constraint", action="extend", nargs="+", default=[], metavar="MARGIN",
                         help="Exclude named margin constraints from the optimizer only; keep full feasibility checks and reports (repeatable)")
+    parser.add_argument("--actuators", choices=["reference", "pa04-900"], help="Reference sizing or frozen PA-04 900 lbf / 12 V hardware")
     parser.add_argument("--optimizer", choices=["SLSQP", "COBYLA"],
                         help="Default: COBYLA for plate-frame, SLSQP for reference")
     parser.add_argument("--maxiter", type=int,
@@ -58,6 +59,7 @@ def main():
         motors = args.motors or source.get("motors", "reference")
         traversal_mode = args.traversal_mode or source.get("traversal_mode", "fixed")
         attachment_max = args.attachment_max if args.attachment_max is not None else source.get('attachment_max',1.)
+        actuators = args.actuators or source.get("actuators", "reference")
         baseline_mode = args.baseline or (args.inputs is not None and not args.optimize)
         output = args.output or Path("results") / ("baseline.json" if baseline_mode else "optimization.json")
         artifacts = [output, output.with_suffix(".html"), output.with_suffix(".sql"),
@@ -66,7 +68,7 @@ def main():
                       for part in ("retracted", "travel", "extended", "frame", "stability", "top", "obstacle")]
         if args.inputs and args.inputs.resolve() in {path.resolve() for path in artifacts}:
             raise ValueError("Output artifacts would overwrite the source baseline. Choose --output with a different filename.")
-        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=structure, cobyla_radius=args.cobyla_radius, motors=motors, solver_tol=args.solver_tol, freeze=args.freeze, ignore_constraints=args.ignore_constraint, traversal_mode=traversal_mode, optimize_attachment=args.optimize_attachment,attachment_max=attachment_max)
+        problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=structure, cobyla_radius=args.cobyla_radius, motors=motors, actuators=actuators, solver_tol=args.solver_tol, freeze=args.freeze, ignore_constraints=args.ignore_constraint, traversal_mode=traversal_mode, optimize_attachment=args.optimize_attachment, attachment_max=attachment_max)
         context = {
             "name": args.design_name or source.get("name", "Configured design — example"),
             "revision": args.revision or source.get("revision", "Not specified"),
@@ -106,7 +108,7 @@ def main():
             print_report("Final optimizer iterate", final)
             print(f"Optimizer success: {success}")
         om.n2(problem, outfile=str(output.parent / f"{output.stem}_n2.html"), show_browser=False)
-        record = {"schema_version": 2, "model_metadata": problem.model_metadata, "report_context": context,
+        record = {"schema_version": 5, "model_metadata": problem.model_metadata, "report_context": context,
                   "openmdao_version": openmdao.__version__, "optimizer": problem.model_metadata["optimizer_settings"]["optimizer"],
                   "optimizer_success": success, "optimizer_result": message,
                   "status": "baseline" if baseline_mode else ("converged_feasible" if success and final["feasible"] else "failed_or_infeasible"),

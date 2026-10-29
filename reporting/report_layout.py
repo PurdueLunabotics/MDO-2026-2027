@@ -11,6 +11,7 @@ from rover.config import REQUIREMENTS
 
 
 LABELS = {
+    "actuator_body_margin": "Actuator packaging reserve (diagnostic only)",
     "wheel_diameter": "Wheel diameter", "wheel_width": "Wheel width",
     "wheelbase": "Wheelbase", "track_width": "Wheel-center track",
     "drum_diameter": "Drum outer diameter", "drum_length": "Width of each drum",
@@ -22,6 +23,10 @@ LABELS = {
     "travel_actuator_length": "Travel actuator length", "actuator_retracted_length": "Compact actuator length",
     "actuator_extended_length": "Digging actuator length", "actuator_force_rating": "Actuator rating, each",
     "actuator_speed": "Actuator speed", "battery_capacity": "Battery capacity",
+    "actuator_catalog_stroke": "Actuator catalog stroke (continuous)",
+    "actuator_installation_allowance": "Actuator installed length allowance",
+    "actuator_stroke_domain_margin": "Actuator catalog stroke domain",
+    "actuator_curve_margin": "Actuator load-curve domain",
     "top_pivot_height": "Actuator pivot height", "bottom_pivot_height": "Arm pivot height",
     "pivot_x": "Arm pivot longitudinal position", "actuator_pivot_x": "Actuator pivot longitudinal position",
     "rocker_pivot_offset": "Rocker pivot above wheel centers", "cf_tube_span": "CF tube span / plate spacing",
@@ -269,6 +274,8 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     motor_note = ""
     if metadata.get("motor_profile") == "x44-standard":
         motor_note = f'<details><summary>Standard X44 motors · assumptions</summary><p>Four wheel motors at 100:1; two drum motors at {val("drum_gear_ratio"):.2f}:1 (exploratory gearing).</p><p>Electrical energy = output-shaft mechanical work / combined efficiency. Drive: {val("drive_efficiency"):.0%}; drums: {val("drum_efficiency"):.0%}. Both efficiencies are provisional.</p><p>Continuous operation unverified. Current-limit inputs of zero mean undecided. Shaft torque-speed capability is enforced separately from energy accounting.</p></details>'
+    if metadata.get("actuator_profile") == "pa04-900":
+        motor_note += f'<details open><summary>PA-04 actuators · 900 lbf / 12 V</summary><p>Two actuators. Continuous catalog stroke: {q("actuator_catalog_stroke")}; installed hardware limits: {q("actuator_catalog_retracted_length")} to {q("actuator_catalog_extended_length")}. These include {q("actuator_installation_allowance")} added to each endpoint. Compact, travel and digging commands must all fit inside these limits.</p><p>Mass per actuator: {q("actuator_unit_mass")}. Raising envelope: {q("actuator_loaded_speed")} and {q("actuator_raising_current")}; raising time: {q("actuator_raising_time")}, lowering time: {q("lowering_time")}. Lowering assumes rated-load speed and 14 A. Electrical energy uses 12 V × current × time for both actuators, including motor losses.</p><p>Mass fit supports 2–40 inch strokes; load curves support 0–900 lbf. Guarded out-of-domain diagnostics retain failed checks. Independent hardware, gravity-assisted lowering, duty cycle, temperature and installation-hardware mass remain unverified. A continuous stroke must be replaced with an available catalog size and reevaluated before purchase.</p></details>'
     obstacle_note = "Guarded pose: requested height is unreachable. Endpoint and path diagnostics are evaluated at a guarded height, not the requested rock height." if val("obstacle_pose_valid", 1) < .5 else "Requested endpoint rock pose is geometrically reachable; this alone does not establish traversal."
     clearance_note = "Guarded clearance: requested pose is unreachable. Clearance diagnostics are not predictions at the requested height." if val("obstacle_clearance_pose_valid", 1) < .5 else "Requested-height obstacle clearance screen."
     if metadata.get('models', {}).get('obstacle_clearance', '').endswith('ParallelCylinderClearance'):
@@ -304,6 +311,11 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
         if flags:
             mobility_notice += f'<p class="callout">BWR soil source-range transfer flags: {flags:g} across the two route legs. The published soil proxy is uncalibrated for this rover; see model provenance and the BWR documentation.</p>'
     ignored = metadata.get("configuration", {}).get("ignored_optimizer_constraints", [])
+    attachment_note = metadata.get("attachment_coordinates", {})
+    if attachment_note:
+        mobility_notice += '<p class="callout">Actuator offsets are measured from the drum axle: positive side is outward along the arm; positive top is above the arm. The straight tube extension is included in mass and loads. The normal bracket is assumed rigid and massless; its mass, strength and interference remain unverified.</p>'
+    if metadata.get("actuator_packaging"):
+        mobility_notice += '<p class="callout">Actuator packaging is not enforced. Its reserve and catalog endpoints are diagnostics only; they do not affect optimization or feasibility.</p>'
     optimizer_notice = ('<article class="panel"><strong>Constraints excluded from optimizer: '+
                         escape(', '.join(ignored))+'.</strong><p>These checks are still calculated and included in full model feasibility. '
                         'Optimizer success with a failed excluded check is not a feasible design.</p></article>') if ignored else ''

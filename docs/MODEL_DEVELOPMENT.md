@@ -13,6 +13,7 @@ discipline per change. Preserve the reference model for comparisons.
 | Model assembly, constraints, optimization | `rover/problem.py` |
 | Select or replace a discipline | `rover/models.py` (`ModelSet`) |
 | Kinematics and actuator loads | `rover/linkage.py` |
+| Frozen PA-04 900 lbf actuator profile/data | `rover/alternatives/pa04_actuator.py`, `data/actuators/`, `docs/PA04_ACTUATORS.md` |
 | Drum mass, soil capture, torque, time | `rover/drums.py`, `rover/excavation.py` |
 | Wheel mass, route, fresh-site motion | `rover/wheels.py`, `rover/mobility.py`, `rover/relocation.py` |
 | Frame loads and mass properties | `rover/structure.py`, `rover/mass_properties.py` |
@@ -63,6 +64,14 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 
 ## Contracts that must remain explicit
 
+Schema 5 retires `actuator_body_margin` from optimizer constraints and report pass/fail decisions at the user’s request. Its metre-valued output, equations, dependencies and catalog endpoint diagnostics remain unchanged. It is listed under diagnostic-only screens and does not affect `feasible` or CLI acceptance. Catalog stroke/load domains and all other constraints remain.
+
+Schema 4 introduces axle-relative metre-valued side/top actuator offsets and explicit tail mass/envelope ports; see [ARM_OFFSETS.md](ARM_OFFSETS.md). The earlier schema 3 actuator integration moves `actuation_time` (total cycle arm motion,
+seconds) from linkage geometry to loads. Geometry now supplies `lowering_time`
+to excavation and loads. Custom replacements must implement those ports; valid
+reference behavior is unchanged. [PA-04 documentation](PA04_ACTUATORS.md) explains
+the source change, hardware-specific body margin and phase assumptions.
+
 | Quantity | Convention |
 | --- | --- |
 | Coordinates | Global x forward, y left, z up; legacy linkage side-view y means global z |
@@ -74,7 +83,7 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 | `cut_depth` | Scoop protrusion / maximum bite, distinct from total trench depth |
 | `payload_mass` | Retained soil across all FOUR drums |
 | `fill_fraction` | Storage ceiling; actual payload also depends on reachable soil |
-| `actuator_attachment_fraction` | Chassis-pivot-to-pin distance / B-to-drum arm length; default 0 < f <= 1; optional box-arm extension up to 1.5, see EXTENDED_ATTACHMENT.md |
+| `lin_act_side_arm_offset` / `lin_act_top_arm_offset` | Signed metres from drum axle along arm / upward normal; positive side is outward. Tail mass included, normal bracket mass/strength unverified. See ARM_OFFSETS.md |
 | `dig_energy`, `dump_energy` | Electrical phase energy in J, including startup/idle |
 | `dig_power`, `dump_power` | Peak electrical W; peak × duration is not phase energy |
 | `*_yaw_inertia` | About the chassis-center yaw axis, not the displaced CG |

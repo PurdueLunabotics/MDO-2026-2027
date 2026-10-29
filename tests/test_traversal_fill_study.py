@@ -20,11 +20,11 @@ class TraversalFillStudyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.values, cls.meta, cls.structure, cls.motors, cls.starts = load_study_inputs(
-            Path('design_baseline.json'), Path('design_optimized.json'))
+            Path('design_baseline.json'), None)
 
     def evaluate(self, seconds, fill):
         p = build_problem({**self.values, 'traversal_time_one_way': seconds, 'fill_fraction': fill},
-                          structure=self.structure, motors=self.motors)
+                          structure=self.structure, motors=self.motors, actuators=self.meta.get('actuators', 'reference'))
         self.addCleanup(p.cleanup)
         p.run_model()
         self.assertNotIn('traversal_time_one_way', p.design_specs)
@@ -98,7 +98,7 @@ class TraversalFillStudyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             job = {'seconds':15., 'fill':.9, 'output':folder, 'source_inputs':values,
                    'source_name':'design_baseline.json', 'source_revision':'test', 'source_sha256':self.meta['sha256'],
-                   'structure':self.structure, 'motors':self.motors, 'maxiter':1,
+                   'structure':self.structure, 'motors':self.motors, 'actuators':self.meta.get('actuators', 'reference'), 'maxiter':1,
                    'starts':[('baseline',{})], 'fingerprint':'test'}
             row = run_cell(job)
             self.assertEqual(row['status'],'failed_or_infeasible')

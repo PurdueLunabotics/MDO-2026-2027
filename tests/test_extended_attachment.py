@@ -16,9 +16,9 @@ class ExtendedAttachmentTests(unittest.TestCase):
 
     def matched(self,p,fraction):
         get=lambda n:p.get_val(n).item()
-        change={'actuator_attachment_fraction':fraction}
+        change={'lin_act_side_arm_offset':(fraction-1)*get('arm_length')}
         for pose,name in [('travel','travel_actuator_length'),('stowed','actuator_retracted_length'),('extended','actuator_extended_length')]:
-            x,z=attachment_point(get('pivot_x'),get('bottom_pivot_height'),get(pose+'_x'),get(pose+'_y'),fraction)
+            x,z=attachment_point(get('pivot_x'),get('bottom_pivot_height'),get(pose+'_x'),get(pose+'_y'),(fraction-1)*get('arm_length'))
             change[name]=math.hypot(x-get('actuator_pivot_x'),z-get('top_pivot_height'))
         return change
 
@@ -37,8 +37,8 @@ class ExtendedAttachmentTests(unittest.TestCase):
 
     def test_reference_numerics_unchanged_for_fraction_at_or_below_one(self):
         for fraction in (.8,1.):
-            a=self.problem({'actuator_attachment_fraction':fraction})
-            b=self.problem({'actuator_attachment_fraction':fraction},attachment_max=1.5)
+            a=self.problem({'lin_act_side_arm_offset':(fraction-1)*.6})
+            b=self.problem({'lin_act_side_arm_offset':(fraction-1)*.6},attachment_max=1.5)
             sa,sb=snapshot(a),snapshot(b)
             for n,item in sa['outputs'].items():self.assertEqual(item,sb['outputs'][n],n)
             self.assertEqual(sa['constraints'],sb['constraints'])
@@ -59,7 +59,7 @@ class ExtendedAttachmentTests(unittest.TestCase):
         dry=sum(v[n] for n in ('fixed_mass','structure_mass','wheel_mass','drum_mass','drive_mass','battery_mass','linkage_mass'))
         self.assertAlmostEqual(dry,get('dry_mass'),places=10)
         for pose,name in [('travel','travel_actuator_length'),('stowed','actuator_retracted_length'),('extended','actuator_extended_length')]:
-            x,z=attachment_point(v['pivot_x'],v['bottom_pivot_height'],v[pose+'_x'],v[pose+'_y'],1.2)
+            x,z=attachment_point(v['pivot_x'],v['bottom_pivot_height'],v[pose+'_x'],v[pose+'_y'],.2*v['arm_length'])
             self.assertAlmostEqual(math.hypot(x-v['actuator_pivot_x'],z-v['top_pivot_height']),v[name],places=10)
         empty=(get('drum_mass')/2+mu*(1.2*L)**2/(2*L))*get('gravity')
         loaded=empty+get('payload_mass')/2*get('gravity')
@@ -72,6 +72,7 @@ class ExtendedAttachmentTests(unittest.TestCase):
         component=p.model.mass_properties
         inp={n:component._inputs[n].copy() for n in component._inputs}
         inp['linkage_mass']-=get('arm_extension_mass')
+        inp['arm_extension_mass']*=0  # Core comparison excludes tails now placed by the base component.
         core={};PlateMassProperties.compute(component,inp,core)
         each=mu*.2*L;tail_x=get('travel_x')+.1*(get('travel_x')-get('pivot_x'))
         local=each*(.2*(get('travel_x')-get('pivot_x')))**2/12
@@ -81,9 +82,9 @@ class ExtendedAttachmentTests(unittest.TestCase):
         for max_f in (.9,1.51,float('nan')):
             with self.assertRaises(ValueError):build_problem(attachment_max=max_f)
         with self.assertRaises(ValueError):build_problem(attachment_max=1.5)
-        with self.assertRaises(ValueError):build_problem({'actuator_attachment_fraction':1.2},structure='plate-frame')
-        p=self.problem({'actuator_attachment_fraction':1.2},attachment_max=1.5,optimize_attachment=True)
-        self.assertEqual(p.design_specs['actuator_attachment_fraction'][2],1.5)
+        with self.assertRaises(ValueError):build_problem({'lin_act_side_arm_offset':.151},structure='plate-frame')
+        p=self.problem({'lin_act_side_arm_offset':.12},attachment_max=1.5,optimize_attachment=True)
+        self.assertEqual(p.design_specs['lin_act_side_arm_offset'][1:3],(-.15,.15))
         for L,f in ((0.,1.2),(1.,0.),(float('nan'),1.2)):
             with self.assertRaises(ValueError):physical_length(L,f)
 
@@ -92,7 +93,7 @@ class ExtendedAttachmentTests(unittest.TestCase):
         for n,value in self.matched(p,1.2).items():p.set_val(n,value)
         p.set_val('fill_fraction',.4);p.run_model()
         checks=p.check_totals(of=['linkage_mass','arm_energy','required_actuator_force','empty_cg_z','half_yaw_inertia','loaded_sprung_cg_z'],
-            wrt=['actuator_attachment_fraction','arm_length'],method='fd',form='central',step=3e-5,step_calc='rel_avg',out_stream=None)
+            wrt=['lin_act_side_arm_offset','arm_length'],method='fd',form='central',step=3e-5,step_calc='rel_avg',out_stream=None)
         assert_check_totals(checks,atol=1e-3,rtol=2e-3)
 
 

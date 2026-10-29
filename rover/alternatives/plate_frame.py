@@ -14,8 +14,9 @@ import numpy as np
 from ..components import scalar
 from ..discipline import Discipline, names
 from ..structure import StructureGeometry, StructureLoads, tube_section
-from ..linkage import sweep_poses, drum_pose
-from ..mass_properties import MassProperties, mass_properties
+from ..linkage import sweep_poses, drum_pose, attachment_point
+from .offset_attachment import OffsetArmMechanics
+from ..mass_properties import MassProperties, mass_properties, tail_part
 from .obstacle_stability import ObstacleStability, raised_wheel_pose, posed_loaded_cg, projected_support_margin
 
 
@@ -127,6 +128,7 @@ def geometry_inventory(values, arm_section=round_arm_section):
     total = sprung_mass+rocker_mass
     return {**g, "structure_mass": total, "rocker_mass": rocker_mass,
             "arm_linear_mass": arm['area']*v("tube_density"),
+            "arm_envelope_radius": math.hypot(values.get("arm_box_width",arm["depth"]), arm["depth"])/2 if "arm_box_width" in values else arm["depth"]/2,
             "plate_mass_total": 2*g["plate_mass"], "cf_tube_mass_total": cf_mass,
             "suspension_axle_mass": axle_mass, "suspension_bearing_span": g["rocker_span"],
             "cf_tube_outer_diameter": g["cf_od"],
@@ -281,19 +283,20 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
     poses, _ = sweep_poses(values)
     poses = [drum_pose(v("arm_length"), v("pivot_x"), v("bottom_pivot_height"),
                       v("actuator_pivot_x"), v("top_pivot_height"), v("actuator_retracted_length"),
-                      v("actuator_attachment_fraction")), *poses]
+                      v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset")), *poses]
     pair_weight = (v("drum_mass")+v("payload_mass"))/2*grav*factor
-    physical_arm_length = v("arm_length") if arm_mechanics is None else arm_mechanics.physical_length(v("arm_length"), v("actuator_attachment_fraction"))
+    arm_mechanics = arm_mechanics or OffsetArmMechanics
+    physical_arm_length = arm_mechanics.physical_length(v("arm_length"), v("lin_act_side_arm_offset"))
     arm_weight = g["arm_linear_mass"]*physical_arm_length*grav*factor
-    mount_model = arm_mount_loads if arm_mechanics is None else arm_mechanics.mount_loads
-    beam_model = arm_beam_screen if arm_mechanics is None else arm_mechanics.beam_screen
+    mount_model = arm_mechanics.mount_loads
+    beam_model = arm_mechanics.beam_screen
     b, a = g["nodes"][2], g["nodes"][1]
     loads, actuator_forces = [], []
     cf_stress, arm_stress, arm_deflection, arm_compression, tube_motion = [], [], [], [], []
     span, half = v("cf_tube_span"), v("cf_tube_span")/2
     distributed = np.array([0., -ac*v("cf_density")*grav*factor])
     for c in poses:
-        upper, lower, actuator = mount_model(b, a, c, pair_weight, arm_weight, v("actuator_attachment_fraction"))
+        upper, lower, actuator = mount_model(b, a, c, pair_weight, arm_weight, v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
         actuator_forces.append(float(np.linalg.norm(actuator)))
         f = np.zeros((5, 2))
         f[1], f[2] = upper/2+distributed*span/2, lower/2+distributed*span/2
@@ -311,7 +314,7 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
             cf_stress.append(np.linalg.norm(moment)*g["cf_od"]/(2*ic))
             displacements.append((force*half**3/6+distributed*half**4/8)/(v("cf_flexural_modulus")*ic))
         tube_motion.append(displacements)
-        sigma, delta, _, compressive = beam_model(v("arm_length"), v("actuator_attachment_fraction"),
+        sigma, delta, _, compressive = beam_model(v("arm_length"), v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"),
                                         np.asarray(c)-b, actuator, pair_weight, arm_weight,
                                         aa, ia, arm['depth'], e)
         arm_stress.append(sigma)
@@ -402,7 +405,7 @@ class PlateStructureGeometry(Discipline):
 class PlateStructureLoads(Discipline):
     ARM_SECTION = staticmethod(round_arm_section)
     ARM_MECHANICS = None
-    CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cf_flexural_modulus cf_flexural_strength plate_buckling_k allowable_deflection actuator_attachment_fraction actuator_retracted_length travel_actuator_length actuator_extended_length")))
+    CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cf_flexural_modulus cf_flexural_strength plate_buckling_k allowable_deflection lin_act_side_arm_offset lin_act_top_arm_offset actuator_retracted_length travel_actuator_length actuator_extended_length")))
     COUPLED_INPUTS = {"dry_mass": "kg", "payload_mass": "kg", "drum_mass": "kg", "wheel_mass": "kg", "drive_mass": "kg"}
     OUTPUT_UNITS = {**StructureLoads.OUTPUT_UNITS,
                     "plate_stress": "Pa", "plate_stress_margin": "Pa", "plate_buckling_margin": "N",
@@ -453,11 +456,13 @@ class PlateMassProperties(Discipline):
                 md = v("drum_mass")/4
                 parts.append((md, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2, v("travel_y"), md*(3*rd**2+length**2)/12))
                 sprung.append(parts[-1])
-            ml = v("linkage_mass")/2
+            tail = tail_part(v, sx)
+            if tail is not None:
+                parts.append(tail); sprung.append(tail)
+            ml = (v("linkage_mass")-v("arm_extension_mass"))/2
             px = (v("pivot_x")+v("actuator_pivot_x"))/2
             pz = (v("bottom_pivot_height")+v("top_pivot_height"))/2
-            jx = v("pivot_x")+v("actuator_attachment_fraction")*(v("travel_x")-v("pivot_x"))
-            jz = v("bottom_pivot_height")+v("actuator_attachment_fraction")*(v("travel_y")-v("bottom_pivot_height"))
+            jx, jz = attachment_point(v("pivot_x"), v("bottom_pivot_height"), v("travel_x"), v("travel_y"), v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
             ex, ez = (v("travel_x")+jx)/2, (v("travel_y")+jz)/2
             parts.append((ml, sx*(px+ex)/2, 0, (pz+ez)/2, ml*(ex-px)**2/12))
             sprung.append(parts[-1])

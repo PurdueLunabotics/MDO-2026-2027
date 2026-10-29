@@ -26,7 +26,7 @@ BOX_ARM_EVIDENCE = {
     'arm_section': 'aluminum rectangular hollow section; baseline 50.8 x 50.8 x 1.5875 mm; sharp corners',
     'arm_material': 'existing aluminum density/Young modulus/yield inputs; no purchased-stock alloy/temper certification',
     'arm_axes': 'width transverse; height in arm-motion plane; bending uses width-axis I, Euler uses min(I_width,I_height)',
-    'arm_mass': 'two uniform arms, rho*A*L each; LinkageGeometry owns arm mass exactly once',
+    'arm_mass': 'two uniform arms, rho*A*max(L,L+side_offset) each; LinkageGeometry owns mass once; rigid normal bracket mass unverified and omitted',
 }
 
 

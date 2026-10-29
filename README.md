@@ -29,6 +29,13 @@ The historical candidate reports predate the current BWR climbs and box arms;
 their old pass statuses do not establish current feasibility. These are saved
 snapshots: changing inputs does not refresh them.
 
+The current input baseline now selects **PA-04 900 lbf / 12 V actuators** from
+the supplied charts. Stroke is continuous for optimization; its provisional
+8-inch start includes an editable **161.3408 mm** installed length allowance.
+The current 500 mm travel command is shorter than the installed minimum, so the
+baseline retains a packaging failure pending mounting/pose redesign. Regenerate
+reports to see this selection. See [actuator data and assumptions](docs/PA04_ACTUATORS.md).
+
 ## First run
 
 These steps are for **Windows 10 or 11** and assume you have not used Python,
@@ -309,31 +316,7 @@ original bound checks. Physical constraints still apply; freezing dimensions
 does not establish feasibility or prevent other variables from leaving the
 model's valid domain during an optimizer trial.
 
-`--optimize-attachment` also makes `actuator_attachment_fraction` adjustable in
-the documented exploratory range [0.001, 1]. Without this option it remains a
-fixed assumption. To explore actuator and pivot alternatives across several
-starting geometries, run:
-
-```powershell
-.\.venv\Scripts\python.exe -m studies.linkage_multistart --workers 3
-```
-
-For the plate-frame box arms, add `--attachment-max 1.5` to either `main.py`
-(with `--optimize-attachment`) or the study runner to explore pins beyond the
-drum shaft. This selects the optional uniform arm continuation model with
-extra mass, gravity work, inertia, beam loads and physical envelope checks.
-The default maximum remains 1. See [the model and its limits](docs/EXTENDED_ATTACHMENT.md).
-
-The study uses the saved `results/fixed_hardware_optimization.json` result as its
-reference, freezes only wheel diameter/width, sets both climb angles to zero,
-uses calculated timing and excludes turn traction from the optimizer. It varies
-actuator lengths, pivots and pin fraction within existing model limits. Reports,
-logs and reproducible input snapshots are saved under
-`results/actuator_pivot_study_2026_10_27/index.html`. Ranking requires solver
-success and every selected check to pass; excluded failures remain visible in
-the full model status. This is a search for alternative local optima, not
-hardware validation or proof of a global optimum. No maintained design file is
-rewritten. Use a new output folder after changing study inputs, code or settings.
+Actuator attachment uses two signed offsets measured from the drum axle: side along the arm (positive outward) and top normal to the arm (positive above). Both are in metres and are ordinary design variables. The saved baseline uses +0.05 m for each. To hold them during optimization, use `--freeze lin_act_side_arm_offset lin_act_top_arm_offset`. Positive side offsets include the straight tube continuation in mass and loads; the normal bracket is rigid and massless pending hardware data. See [equations, migration and limits](docs/ARM_OFFSETS.md). The old fraction input is removed. Named historical cases are explicitly converted on read; old report predictions still need reevaluation.
 
 For an exploratory study, exclude a particular margin from the optimizer with
 `--ignore-constraint turn_traction_margin`. Add it to the optimization command
