@@ -30,7 +30,7 @@ DESIGN = {
     "actuator_retracted_length": (0.45, 0.25, 0.65, "m"),  # compact starting pose
     "actuator_extended_length": (0.68, 0.45, 1.05, "m"),
     "top_pivot_height": (0.45, 0.35, 0.70, "m"),  # above level ground
-    "actuator_pivot_x": (0.15, 0.05, 0.30, "m"),  # actuator mount; independent of arm pivot_x
+    "actuator_pivot_x": (0.15, 0.03, 0.30, "m"),  # actuator mount; independent of arm pivot_x. Lower bound 0.03 by user for drivetrain rev E inward ex-dep shift; check CAD clevis packaging
     "bottom_pivot_height": (0.15, 0.09, 0.30, "m"),
     "arm_length": (0.60, 0.30, 0.70, "m"),
     "pivot_x": (0.13, 0.05, 0.30, "m"),  # front station from rover center; rear mirrored

@@ -21,10 +21,10 @@
     "actuator_retracted_length": 0.508,
     "actuator_extended_length": 0.726,
     "top_pivot_height": 0.4064,
-    "actuator_pivot_x": 0.0762,
+    "actuator_pivot_x": 0.0337,
     "bottom_pivot_height": 0.18,
     "arm_length": 0.5588,
-    "pivot_x": 0.1524,
+    "pivot_x": 0.1099,
     "wheelbase": 0.515,
     "track_width": 0.515,
     "actuator_force_rating": 3500.0,
@@ -194,8 +194,19 @@
         "from": 0.4,
         "to": 0.2,
         "reason": "20 cm rock; pending chief engineer sign-off"
+      },
+      "pivot_x": {
+        "from": 0.1524,
+        "to": 0.1099,
+        "reason": "ex-dep arm pivot moved inward 0.0425 m with the front/rear axles so lifted, stowed and dig drum positions relative to the wheels match main"
+      },
+      "actuator_pivot_x": {
+        "from": 0.0762,
+        "to": 0.0337,
+        "reason": "ex-dep actuator pivot moved inward 0.0425 m with the axles; actuator lengths, speed and force unchanged (locked). Needs actuator_pivot_x lower bound 0.03 m"
       }
     },
-    "pending": "obstacle_height 0.2 m awaits chief engineer sign-off."
+    "pending": "obstacle_height 0.2 m awaits chief engineer sign-off. Front/rear actuator top pivots are 67 mm apart center-to-center; confirm clevis packaging in CAD.",
+    "exdep_shift": "Arm length, pivot heights and actuator attachment unchanged; whole ex-dep linkage translated inward by (0.60-0.515)/2 = 0.0425 m per end."
   }
 }
