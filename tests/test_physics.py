@@ -4,9 +4,11 @@ import math
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import numpy as np
 import openmdao.api as om
 from rover.problem import build_problem, MARGINS
+from rover.config import DESIGN
 from rover.models import ModelSet
 from rover.wheels import WheelMass
 from rover.drums import DrumMass
@@ -18,11 +20,19 @@ from rover.structure import tube_section
 from rover.tip_stability import extended_pair_tip_margin
 from rover.calibration import ResponseTable
 from examples.empirical_excavation import demonstration_model
+from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
 
 
 class PhysicsTests(unittest.TestCase):
     def problem(self, **kwargs):
-        p=build_problem(**kwargs)
+        # Historical limits below use the original tip-mounted actuator fixture.
+        # Keep production attachment bounds and the assertions unchanged.
+        with patch.dict(DESIGN, {
+            **HISTORICAL_ACTUATOR_DESIGN,
+            'lin_act_side_arm_offset': (0., -.15, .15, 'm'),
+            'lin_act_top_arm_offset': (0., -.15, .15, 'm'),
+        }):
+            p=build_problem(**kwargs)
         self.addCleanup(p.cleanup)
         p.run_model()
         return p
@@ -47,7 +57,8 @@ class PhysicsTests(unittest.TestCase):
         self.assertAlmostEqual(segment_area(r,h),numeric,places=8)
 
     def test_reachable_mass_and_no_soil_no_payload(self):
-        p=self.problem()
+        # Preserve independent regression coverage of the inactive plunge reference.
+        p=self.problem(models=ModelSet(excavation=Excavation))
         comp=p.model.excavation
         above=self.evaluate(comp,extended_y=.20)
         self.assertEqual(above['payload_mass'],0)
@@ -69,7 +80,7 @@ class PhysicsTests(unittest.TestCase):
         self.assertAlmostEqual(faster['payload_mass'],large['payload_mass'])
 
     def test_storage_cap_allows_partial_fill(self):
-        p=self.problem()
+        p=self.problem(models=ModelSet(excavation=Excavation))
         comp=p.model.excavation
         shallow=self.evaluate(comp,extended_y=.13)
         deep=self.evaluate(comp,extended_y=.02)
@@ -92,7 +103,8 @@ class PhysicsTests(unittest.TestCase):
         self.assertGreater(v('stowed_y'),v('extended_y'))
         self.assertAlmostEqual(v('wheel_first_margin'),v('travel_y')-v('drum_diameter')/2-v('wheel_diameter'))
         self.assertGreater(v('wheel_first_margin'),0)
-        self.assertAlmostEqual(v('dig_overlap_time'),v('actuation_time')/2)
+        self.assertEqual(v('dig_overlap_time'),0)
+        self.assertAlmostEqual(v('actuation_time'),4*v('lowering_time'))
         p.set_val('travel_actuator_length',.60);p.run_model()
         self.assertLess(p.get_val('wheel_first_margin').item(),0)
         p.set_val('travel_actuator_length',.38);p.run_model()
@@ -181,7 +193,7 @@ class PhysicsTests(unittest.TestCase):
         self.assertAlmostEqual(motor_torque(100,3000,100,.8,30),rated)
         self.assertAlmostEqual(motor_torque(100,3000,100,.8,60),0)
         self.assertLess(motor_torque(100,3000,100,.8,70),0)
-        self.assertIn('cut_depth',p.model.get_design_vars())
+        self.assertIn('inlet_depth',p.model.get_design_vars())
 
     def test_yaw_parallel_axis_and_half_loaded_cg(self):
         p=self.problem()

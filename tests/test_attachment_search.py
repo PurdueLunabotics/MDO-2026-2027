@@ -1,7 +1,8 @@
 """Opt-in pin optimization changes the search space, not physics/defaults."""
 import unittest
+from unittest.mock import patch
 from reporting.report import snapshot
-from rover.config import configuration
+from rover.config import configuration, DESIGN
 from rover.problem import build_problem
 from studies.linkage_multistart import selected_failures, normalized_violation
 
@@ -9,8 +10,10 @@ from studies.linkage_multistart import selected_failures, normalized_violation
 class AttachmentSearchTests(unittest.TestCase):
     def test_offsets_are_design_variables_and_can_be_frozen_independently(self):
         changes = {"lin_act_side_arm_offset": .05, "lin_act_top_arm_offset": .05}
-        fixed = build_problem(changes, freeze=list(changes))
-        free = build_problem(changes)
+        # Original signed-offset search fixture; current hardware bounds stay intact.
+        with patch.dict(DESIGN, {"lin_act_side_arm_offset": (0., -.15, .15, "m")}):
+            fixed = build_problem(changes, freeze=list(changes))
+            free = build_problem(changes)
         self.addCleanup(fixed.cleanup); self.addCleanup(free.cleanup)
         fixed.run_model(); free.run_model()
         a,b = snapshot(fixed),snapshot(free)

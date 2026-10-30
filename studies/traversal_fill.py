@@ -170,8 +170,11 @@ def run_cell(job):
 
 def load_study_inputs(path, seed_path):
     from reporting.case_inputs import read_case
-    from rover.config import configuration
+    from rover.config import configuration, migrate_inlet_inputs
     source, meta = read_case(path)
+    source, retired = migrate_inlet_inputs(source)
+    if retired:
+        meta["inlet_migration"] = retired
     structure, motors = meta.get('structure', 'reference'), meta.get('motors', 'reference')
     design, assumptions = configuration(structure, motors, meta.get('actuators', 'reference'))
     # Freeze all effective assumptions for reproducibility even for a partial source file.
@@ -181,6 +184,7 @@ def load_study_inputs(path, seed_path):
     seeds = {}
     if seed_path:
         candidate, seed_meta = read_case(seed_path)
+        candidate, _ = migrate_inlet_inputs(candidate)
         if (seed_meta.get('structure', structure) != structure or seed_meta.get('motors', motors) != motors
                 or seed_meta.get('actuators', 'reference') != meta.get('actuators', 'reference')):
             raise ValueError('The second starting design must use the baseline hardware profiles.')

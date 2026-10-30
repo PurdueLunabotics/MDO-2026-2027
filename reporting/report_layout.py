@@ -24,13 +24,28 @@ LABELS = {
     "wheel_diameter": "Wheel diameter", "wheel_width": "Wheel width",
     "wheelbase": "Wheelbase", "track_width": "Wheel-center track",
     "drum_diameter": "Drum outer diameter", "drum_length": "Width of each drum",
-    "cut_depth": "Scoop protrusion / cut depth", "drum_rpm": "Excavation speed",
+    "inlet_depth": "Inlet depth / fresh-layer cut depth", "inlet_width": "Inlet width (full drum width)",
+    "cut_depth_margin": "Inlet depth: radial geometry reserve",
+    "cut_depth": "Fresh-layer cut depth (equals inlet depth)", "drum_rpm": "Excavation drum RPM",
+    "feed_speed": "Straight excavation feed speed", "scoop_opening": "Scoop opening width",
+    "front_dig_depth": "Front depth below original grade", "rear_dig_depth": "Rear depth below original grade",
+    "feed_margin": "Forward advance per scoop: inlet-depth reserve",
+    "feed_per_scoop": "Advance per scoop", "feed_speed_limit": "Feed limit at selected drum RPM",
+    "feed_distance": "Productive excavation lane length", "feed_drive_distance": "Feed travel including tandem staging",
+    "feed_time": "Straight-feed duration", "pair_cutting_time": "Cutting duration per pair",
+    "axle_ground_margin": "Plunge/recovery: axle reaches ground level",
+    "operating_reach_margin": "Moving excavation: operating-pose reach",
+    "excavation_domain_margin": "Moving excavation: geometry domain",
+    "feed_motor_margin": "Excavation feed: motor-force reserve",
+    "feed_traction_margin": "Excavation feed: traction reserve",
+    "feed_power_margin": "Excavation feed: shaft-power reserve",
+    "feed_drive_energy": "Feed-drive electrical energy", "feed_drive_peak_power": "Feed-drive peak electrical power",
     "dump_rpm": "Dumping speed", "drum_gear_ratio": "Drum reduction ratio",
     "drive_gear_ratio": "Drive reduction ratio", "arm_length": "Arm length",
     "arm_box_width": "Aluminum arm box width", "arm_box_height": "Aluminum arm box height",
     "arm_wall": "Arm wall thickness", "arm_tube_diameter": "Round-arm diameter (reference model)",
     "travel_actuator_length": "Travel actuator length", "actuator_retracted_length": "Compact actuator length",
-    "actuator_extended_length": "Digging actuator length", "actuator_force_rating": "Actuator rating, each",
+    "actuator_extended_length": "Maximum-extension actuator length", "actuator_force_rating": "Actuator rating, each",
     "actuator_speed": "Actuator speed", "battery_capacity": "Battery capacity",
     "actuator_catalog_stroke": "Actuator catalog stroke (continuous)",
     "actuator_installation_allowance": "Actuator installed length allowance",
@@ -38,8 +53,11 @@ LABELS = {
     "actuator_curve_margin": "Actuator load-curve domain",
     "top_pivot_height": "Actuator pivot height", "bottom_pivot_height": "Arm pivot height",
     "pivot_x": "Arm pivot longitudinal position", "actuator_pivot_x": "Actuator pivot longitudinal position",
-    "rocker_pivot_offset": "Rocker pivot above wheel centers", "cf_tube_span": "CF tube span / plate spacing",
-    "cf_tube_wall": "CF wall thickness", "plate_spoke_width": "Plate strip width",
+    "rocker_pivot_offset": "Rocker pivot above wheel centers", "cross_tube_span": "aluminum cross-tube span / plate spacing",
+    "cross_tube_wall": "Aluminum cross-tube wall thickness", "plate_spoke_width": "Plate strip width",
+    "cross_tube_density": "Aluminum cross-tube density",
+    "cross_tube_youngs_modulus": "Aluminum cross-tube Young's modulus",
+    "cross_tube_yield_strength": "Aluminum cross-tube yield screening strength",
     "plate_thickness": "Plate sheet thickness", "wheel_rocker_gap": "Wheel-to-rocker gap",
     "dry_mass": "Dry rover mass", "rover_length": "Compact overall length",
     "rover_width": "Overall width", "rover_height": "Compact overall height",
@@ -53,7 +71,7 @@ LABELS = {
     "structure_deflection_margin": "Structural deflection envelope",
     "structure_buckling_margin": "Structural buckling reserve",
     "plate_stress_margin": "Plate strip stress", "plate_buckling_margin": "Plate strip buckling reserve",
-    "cf_bending_margin": "CF tube bending stress", "frame_packing_margin": "Frame packaging reserve",
+    "cross_tube_bending_margin": "aluminum cross-tube bending stress", "frame_packing_margin": "Frame packaging reserve",
     "plate_geometry_margin": "Plate geometry reserve", "actuator_force_margin": "Actuator force capacity",
     "straight_motor_margin": "Straight travel: motor-force reserve",
     "turn_motor_margin": "Turning: motor-force reserve",
@@ -73,11 +91,12 @@ LABELS = {
 }
 
 UNASSESSED = [
+    ("Drum-supported recovery driving", "Axle-to-ground reach is screened geometrically. Drum traction, motor-ground clearance, recovery loads and actual escape capability require hardware and soil tests."),
     ("Slope motor limits / sideways sliding", "The separate BWR climb checks accept slip<1 only. Motor capability on slopes, lateral sliding and controller behavior are not evaluated."),
-    ("Real 40 cm rock traversal", "Static poses and clearance screens do not establish the driving forces or actual terrain-contact sequence."),
+    ("Real 30 cm rock traversal", "Static poses and clearance screens do not establish the driving forces or actual terrain-contact sequence."),
     ("50 cm ditch crossing", "Ditch width/radius and contact sequence have not been defined."),
     ("Continuous motor operation", "Stator-current limits and thermal duty remain undecided."),
-    ("Connections & material validation", "Bonded inserts, bushings, bolts, local failure and selected CF tube properties need separate checks."),
+    ("Connections & material validation", "Bonded inserts, bushings, bolts, local failure and selected aluminum cross-tube properties need separate checks."),
     ("Soil and skid-steer predictions", "Rolling, traction, capture and scrub relationships remain uncalibrated."),
 ]
 
@@ -92,6 +111,8 @@ def quantity(value, units=None, name=""):
         return "Not reported"
     if units == "m":
         value, units = value*1000, "mm"
+    elif units == "m/s" and name in ("feed_speed", "feed_speed_limit"):
+        value, units = value*1000, "mm/s"
     elif units == "m**3":
         value, units = value*1000, "L"
     elif units == "rad":
@@ -119,7 +140,7 @@ def badge(status):
     return f'<span class="status {status.lower().replace(" ", "-")}">{escape(status)}</span>'
 
 
-def render_report(record, output, drawings, frame_drawing, stability_drawing, route_drawing, frames, top_drawing="", download_links=None, obstacle_drawing=""):
+def render_report(record, output, drawings, frame_drawing, stability_drawing, route_drawing, frames, top_drawing="", download_links=None, obstacle_drawing="", excavation_drawing="", feed_drawing=""):
     final, start = record["final"], record["baseline"]
     metadata = record.get("model_metadata", final.get("model_metadata", {}))
     context = record.get("report_context", {})
@@ -153,7 +174,8 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
         title_status, overall = "Optimizer did not converge successfully", "attention"
     conditional = "Predictions are conditional on the failed checks below." if failed else "Passing modeled checks does not establish hardware performance."
     guarded = (val("obstacle_pose_valid", 1) < .5 or val("rock_sweep_pose_valid", 1) < .5 or
-               val("frame_load_solution_valid", 1) < .5)
+               val("frame_load_solution_valid", 1) < .5 or
+               val("excavation_domain_margin", 1) <= 0)
     guard_note = '<p class="callout">Some geometry or load calculations use a guarded trial. Obstacle diagnostics at a reduced height do not verify the requested height; invalid frame loads are not design loads.</p>' if guarded else ""
 
     # Human-readable actual/limit pairs where the model provides both. Remaining
@@ -163,12 +185,14 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
         ("structure_stress_margin", "structure_stress", val("tube_yield_strength")/val("structure_safety_factor", 1)),
         ("structure_deflection_margin", "structure_deflection", val("allowable_deflection")),
         ("plate_stress_margin", "plate_stress", val("tube_yield_strength")/val("structure_safety_factor", 1)),
-        ("cf_bending_margin", "cf_bending_stress", val("cf_flexural_strength")/val("structure_safety_factor", 1)),
+        ("cross_tube_bending_margin", "cross_tube_bending_stress", val("cross_tube_yield_strength")/val("structure_safety_factor", 1)),
         ("ground_pressure_margin", "ground_pressure", val("allowable_ground_pressure")),
         ("actuator_force_margin", "required_actuator_force", val("actuator_force_rating")/val("actuator_safety_factor", 1)),
         ("obstacle_drum_wheel_margin", "obstacle_drum_wheel_gap_bound", val("mechanism_clearance")),
         ("battery_energy_margin", "run_energy", val("battery_capacity")*val("battery_usable_fraction")),
         ("battery_power_margin", "peak_power", val("battery_capacity")*val("battery_c_rate")),
+        ("feed_margin", "feed_per_scoop", val("inlet_depth")),
+        ("axle_ground_margin", "extended_y", 0.),
     ):
         if actual in outputs:
             measured[check] = (val(actual), outputs[actual]["units"], limit, outputs[actual]["units"])
@@ -341,6 +365,32 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
         extra_geometry += '<details class="panel geometry-extra"><summary>Plate-frame member schematic</summary>'+frame_drawing+'</details>'
     if stability_drawing:
         extra_geometry += '<details class="panel geometry-extra"><summary>Static slope and articulation curves</summary>'+stability_drawing+'</details>'
+    moving = bool(excavation_drawing)
+    extension_caption = "Maximum reach" if moving else "Digging"
+    cycle_sequence = ("Position each pair → drive the staged straight excavation pass → raise loaded drums → outbound → dump one pair → turn → dump second pair → return → relocate to a fresh lane."
+                      if moving else "Dig and lower concurrently → raise loaded drums → outbound → dump one pair → turn → dump second pair → return → relocate to fresh ground.")
+    cycle_overlap_note = ("Moving excavation has no lowering/cutting overlap credit. Full-range arm motion and load allowances conservatively screen the plunge/recovery sweep."
+                          if moving else "Lowering overlap is subtracted once.")
+    excavation_section = ''
+    if moving:
+        excavation_guard_note = ('<p class="callout">Guarded moving-excavation trial: the requested geometry is outside the model domain. Diagnostic values and drawings do not establish valid operation.</p>'
+                                 if val("excavation_domain_margin", 1) <= 0 else '')
+        excavation_rows = [row([escape(label(n)), q(n)]) for n in
+                           ("inlet_depth", "inlet_width", "front_dig_depth", "rear_dig_depth", "feed_speed", "drum_rpm", "feed_per_scoop",
+                            "feed_speed_limit", "feed_distance", "feed_drive_distance", "feed_time",
+                            "feed_drive_energy", "feed_drive_peak_power", "axle_ground_margin")]
+        excavation_section = ('<section id="excavation"><div class="section-heading"><span>Excavation / Forward feed</span>'
+                              '<h2>Drive straight with the drums lowered</h2>'
+                              '<p>Each pair cuts one inlet-depth fresh layer across its full drum width. Radial protrusion equals inlet depth; the rear cuts a second layer in the same tracks. Forward advance per scoop remains limited by inlet depth.</p></div>'+excavation_guard_note+
+                              '<article class="panel">'+excavation_drawing+
+                              f'<p class="screen-only"><a href="{prefix}_excavation.svg">Moving excavation SVG</a></p></article>'
+                              '<article class="panel">'+feed_drawing+
+                              f'<p class="screen-only"><a href="{prefix}_feed_rpm.svg">Feed / RPM SVG</a></p></article>'
+                              '<article class="panel">'+table(["Excavation quantity", "Evaluated value"], excavation_rows)+
+                              '<p class="muted">Feed-drive electrical work and peak power are included in digging totals. '
+                              'The old stationary-plunge soil-volume calculation is inactive. Maximum extension remains a separate capability envelope. '
+                              'Reaching the ground with an axle does not verify motor clearance or driving on the drums.</p></article></section>')
+        nav_html = nav_html.replace('<a href="#performance">', '<a href="#excavation">Excavation</a><a href="#performance">')
     source_hash = context.get("source_sha256") or "No source file; evaluated inputs are listed below."
     links = {"analysis": output.name, "inputs": None,
              "n2": output.stem+"_n2.html" if output.with_name(output.stem+"_n2.html").exists() else None}
@@ -354,11 +404,12 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
 <aside class="sidebar"><div class="brand">LUNABOTICS<span>Engineering design report</span></div><nav aria-label="Report sections">{nav_html}</nav><div class="sidebar-foot">Fixed inputs → model predictions<br>Constraints remain visible<br><b>Uncalibrated conceptual model</b></div></aside>
 <main><header><div class="eyebrow">{mode}</div><h1>{escape(name)}</h1><p class="subtitle">Revision {escape(revision)} · {escape(metadata.get("structure_profile", "reference"))} frame · {escape(metadata.get("motor_profile", "reference"))} motors</p><div class="header-bottom">{warning}<span class="muted">{escape(context.get("generated_utc", "Saved analysis"))}</span></div></header>{mobility_notice}{optimizer_notice}
 <section id="overview"><div class="verdict {overall}"><div><strong>{title_status}</strong><p>{len(physical)-sum(not c["passed"] for c in physical.values())} / {len(physical)} physical model checks pass · {len(UNASSESSED)} capabilities not assessed</p></div><a class="button" href="#requirements">Review checks ↓</a></div><p class="muted">{conditional} These are predictions from the stated inputs, not measured performance.</p>{guard_note}<div class="metrics">{metrics}</div><div class="score-summary"><h2>Construction score</h2><p class="muted">Continuous mission estimate using the configured mass and energy weights. The complete-cycle estimate is reported in Performance &amp; mass.</p><div class="metrics score-metrics">{score_metrics}</div></div></section>
-<section id="geometry"><div class="section-heading"><span>01 / Rover configuration</span><h2>Geometry at the evaluated inputs</h2><p>Level-ground schematics and one prescribed obstacle pose. Check statuses below determine whether envelopes and clearance requirements are satisfied.</p></div><article class="panel geometry-top">{top_drawing}<p class="muted">Travel-pose plan view. Four wheels and four drums are shown at their model stations. <a href="{prefix}_top.svg">Top-down SVG</a></p></article><article class="panel geometry-sides"><div class="pose-controls" role="group" aria-label="Linkage pose"><button data-pose="travel" aria-pressed="true">Travel</button><button data-pose="retracted" aria-pressed="false">Compact</button><button data-pose="extended" aria-pressed="false">Digging</button></div><div id="pose-travel" class="pose">{drawings[1]}</div><div id="pose-retracted" class="pose" hidden>{drawings[0]}</div><div id="pose-extended" class="pose" hidden>{drawings[2]}</div><p class="muted">Blue: arm · orange: actuator. Each visible drum represents a shaft-linked pair. Drawings are not CAD.</p><p class="screen-only"><a href="{prefix}_travel.svg">Travel SVG</a> · <a href="{prefix}_retracted.svg">Compact SVG</a> · <a href="{prefix}_extended.svg">Digging SVG</a></p></article>{extra_geometry}</section>
-<section id="performance"><div class="section-heading"><span>02 / Predicted output</span><h2>Performance & mass</h2><p>Complete-cycle estimates and continuous MDO estimates are labeled separately.</p></div><article class="panel">{table(["Prediction", "Value", "Meaning"], performance_rows)}</article><div class="two-col"><article class="panel"><h3>Dry mass breakdown</h3><p class="muted">Each assembly is counted once.</p>{mass_bars}</article><article class="panel"><h3>Electrical energy per cycle</h3><p class="muted">Work / provisional efficiency, plus auxiliaries.</p>{energy_bars}</article></div><details class="panel"><summary>Route & cycle accounting</summary><div class="two-col">{route_drawing}<div><h3>{route_schedule}</h3><p>Dig and lower concurrently → raise loaded drums → outbound → dump one pair → turn → dump second pair → return → relocate to fresh ground.</p><p>Lowering overlap is subtracted once. The deposition turn and fresh-site relocation are additional to the timed route. Modeled full cycle: {q("cycle_time")}.</p></div></div></details></section>
+<section id="geometry"><div class="section-heading"><span>01 / Rover configuration</span><h2>Geometry at the evaluated inputs</h2><p>Level-ground schematics and one prescribed obstacle pose. Check statuses below determine whether envelopes and clearance requirements are satisfied.</p></div><article class="panel geometry-top">{top_drawing}<p class="muted">Travel-pose plan view. Four wheels and four drums are shown at their model stations. <a href="{prefix}_top.svg">Top-down SVG</a></p></article><article class="panel geometry-sides"><div class="pose-controls" role="group" aria-label="Linkage pose"><button data-pose="travel" aria-pressed="true">Travel</button><button data-pose="retracted" aria-pressed="false">Compact</button><button data-pose="extended" aria-pressed="false">{extension_caption}</button></div><div id="pose-travel" class="pose">{drawings[1]}</div><div id="pose-retracted" class="pose" hidden>{drawings[0]}</div><div id="pose-extended" class="pose" hidden>{drawings[2]}</div><p class="muted">Blue: arm · orange: actuator. Each visible drum represents a shaft-linked pair. Drawings are not CAD.</p><p class="screen-only"><a href="{prefix}_travel.svg">Travel SVG</a> · <a href="{prefix}_retracted.svg">Compact SVG</a> · <a href="{prefix}_extended.svg">{extension_caption} SVG</a></p></article>{extra_geometry}</section>
+{excavation_section}
+<section id="performance"><div class="section-heading"><span>02 / Predicted output</span><h2>Performance & mass</h2><p>Complete-cycle estimates and continuous MDO estimates are labeled separately.</p></div><article class="panel">{table(["Prediction", "Value", "Meaning"], performance_rows)}</article><div class="two-col"><article class="panel"><h3>Dry mass breakdown</h3><p class="muted">Each assembly is counted once.</p>{mass_bars}</article><article class="panel"><h3>Electrical energy per cycle</h3><p class="muted">Work / provisional efficiency, plus auxiliaries.</p>{energy_bars}</article></div><details class="panel"><summary>Route & cycle accounting</summary><div class="two-col">{route_drawing}<div><h3>{route_schedule}</h3><p>{cycle_sequence}</p><p>{cycle_overlap_note} The deposition turn and fresh-site relocation are additional to the timed route. Modeled full cycle: {q("cycle_time")}.</p></div></div></details></section>
 <section id="requirements"><div class="section-heading"><span>03 / Gaps to resolve</span><h2>Requirements & model checks</h2><p>Failures are listed first. “Not assessed” means the model does not verify that capability.</p></div><article class="panel"><div class="toolbar"><label>Show <select id="check-filter"><option value="attention">Needs attention</option><option value="all">All checks & gaps</option><option value="fail">Failed checks</option><option value="pass">Passed checks</option><option value="not-assessed">Not assessed</option><option value="bounds">Optimizer search ranges</option></select></label><label class="search-label">Search checks <input id="check-search" type="search" placeholder="e.g. actuator, slope, clearance"></label><span id="check-count" aria-live="polite"></span></div>{table(["Check", "Prediction / reserve", "Limit / criterion", "Signed margin", "Status"], check_rows, "checks")}<p class="muted">Positive margins satisfy the modeled criterion. Status uses the saved model's numerical tolerance. Search ranges are hidden by default and available in the filter; they remain part of saved feasibility. Margins use their own units and cannot be ranked directly across unlike checks.</p><p id="empty-checks" hidden>No matching checks.</p></article></section>
 <section id="loads"><div class="section-heading"><span>04 / Engineering loads</span><h2>Loads & structural response</h2><p>Values identify their load case and whether they apply per component or to the whole rover.</p></div><article class="panel"><p class="muted">{escape(load_note)} Structural load factor: {val("structure_load_factor"):g}; structural safety factor: {val("structure_safety_factor"):g}.</p>{table(["Quantity / scope", "Prediction", "Load case / interpretation"], load_rows)}</article></section>
-<section id="notes"><div class="section-heading"><span>05 / Scope & traceability</span><h2>Model notes & engineering data</h2><p>Keep assumptions and validity limits attached to the predictions.</p></div><article class="panel"><details open><summary>Obstacle and structural interpretation</summary><p>{escape(obstacle_note)}</p><h3>Obstacle drum–wheel clearance</h3><p>{escape(clearance_note)}</p><p>Ditch requirement remains unverified. Static slope tipping assumes adequate friction; it does not verify climbing. The {val("allowable_deflection")*1000:g} mm structural limit applies to the modeled envelope of local deflections, not one assembled-frame displacement.</p><p>For the plate frame, CF tube stiffness/strength are PROVISIONAL. Connections, dynamic obstacle loads, cutting/recovery frame cases and whole-plate buckling need separate verification.</p></details>{motor_note}<details><summary>Removed screens: diagnostics only</summary><ul>{diagnostic_list or '<li>No removed screens recorded.</li>'}</ul></details><details class="screen-only"><summary>Baseline source & revision</summary><pre>{escape(json.dumps(context, indent=2))}</pre></details><details class="screen-only"><summary>Model provenance and evidence</summary><pre>{escape(json.dumps(metadata, indent=2))}</pre></details><div class="downloads">{downloads}<button class="print-button" onclick="window.print()">Print / save PDF</button></div></article></section>
+<section id="notes"><div class="section-heading"><span>05 / Scope & traceability</span><h2>Model notes & engineering data</h2><p>Keep assumptions and validity limits attached to the predictions.</p></div><article class="panel"><details open><summary>Obstacle and structural interpretation</summary><p>{escape(obstacle_note)}</p><h3>Obstacle drum–wheel clearance</h3><p>{escape(clearance_note)}</p><p>Ditch requirement remains unverified. Static slope tipping assumes adequate friction; it does not verify climbing. The {val("allowable_deflection")*1000:g} mm structural limit applies to the modeled envelope of local deflections, not one assembled-frame displacement.</p><p>For the plate frame, aluminum cross-tube stiffness/strength are PROVISIONAL. Connections, dynamic obstacle loads, cutting/recovery frame cases and whole-plate buckling need separate verification.</p></details>{motor_note}<details><summary>Removed screens: diagnostics only</summary><ul>{diagnostic_list or '<li>No removed screens recorded.</li>'}</ul></details><details class="screen-only"><summary>Baseline source & revision</summary><pre>{escape(json.dumps(context, indent=2))}</pre></details><details class="screen-only"><summary>Model provenance and evidence</summary><pre>{escape(json.dumps(metadata, indent=2))}</pre></details><div class="downloads">{downloads}<button class="print-button" onclick="window.print()">Print / save PDF</button></div></article></section>
 {comparison}
 <section id="engineering-data"><div class="section-heading"><span>Appendix / Native units</span><h2>Design inputs &amp; output data</h2><p>{escape(input_hint)} Values below retain their native model units.</p></div><details id="effective-inputs" class="panel raw-data" open><summary>All effective inputs &amp; model assumptions</summary><p>Includes mission, soil, material properties and inactive legacy inputs. Source SHA-256: <code>{escape(source_hash)}</code>.</p>{raw_inputs}</details><details id="design-bounds" class="panel raw-data" open><summary>Design variables and bounds</summary><p>Optimizer search ranges and evaluated design variables. These ranges guide MDO and input validation; they are not all hardware requirements.</p>{table(["Port", "Lower", "Evaluated", "Upper", "Native units"], bounds_rows)}</details><details id="output-ports" class="panel raw-data" open><summary>All output ports</summary>{raw_outputs}</details></section>
 <footer>Engineering design report · Input values and predictions are separate from baseline approval. OpenMDAO {escape(record.get("openmdao_version", "not recorded"))}. Failed checks remain visible.</footer>

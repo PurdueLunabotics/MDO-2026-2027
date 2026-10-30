@@ -53,6 +53,14 @@ def snapshot(problem, configuration=None):
     assumptions = specs.get("assumptions", ASSUMPTIONS)
     margins = specs.get("margins", MARGINS)
     output_units = dict(OUTPUTS)
+    # A recorded OpenMDAO Case has no live model. Its saved configuration must
+    # identify moving excavation just as it identifies calculated traversal.
+    excavation = getattr(getattr(problem, "model", None), "excavation", None)
+    if getattr(excavation, "MOVING_EXCAVATION", False):
+        output_units.update(excavation.OUTPUT_UNITS)
+    elif specs.get("excavation_mode") == "moving":
+        from rover.alternatives.moving_excavation import MovingExcavation
+        output_units.update(MovingExcavation.OUTPUT_UNITS)
     if specs.get('attachment_max',1.)>1:
         from rover.alternatives.extended_attachment import EXTRA_OUTPUTS
         output_units.update(EXTRA_OUTPUTS)
@@ -73,6 +81,9 @@ def snapshot(problem, configuration=None):
         constraints[name] = {"margin": margin, "units": units, "passed": margin >= -1e-6 * upper}
     for name, (scale, units) in margins.items():
         constraints[name] = {"margin": get(name), "units": units, "passed": get(name) >= -1e-6 * scale}
+        if name == "excavation_domain_margin":
+            constraints[name].update(passed=bool(get(name) > 0),
+                                     criterion="Strictly positive shell and operating geometry domain; guarded diagnostics are not valid predictions")
         if name in ("actuator_stroke_domain_margin", "actuator_curve_margin"):
             # An out-of-domain chart diagnostic is never an accepted prediction.
             constraints[name]["passed"] = bool(get(name) >= 0)
@@ -115,6 +126,9 @@ def print_report(label, report):
     print(f"\n{label}: {'FEASIBLE' if report['feasible'] else 'INFEASIBLE'} (modeled constraints only)")
     timing_mode = report.get("model_metadata", {}).get("traversal_mode", "fixed")
     print(f"Traversal timing: {timing_mode}")
+    retired = report.get("model_metadata", {}).get("excavation_operation", {}).get("input_migration", {}).get("retired_inputs", {})
+    if retired:
+        print("Inlet geometry migration: "+", ".join(sorted(retired))+" retired; cut_depth maps to inlet_depth, and full drum width is engaged. See model metadata.")
     if timing_mode == "calculated":
         out = report["outputs"]
         print(f"  Outbound {out['outbound_travel_time']['value']:.4f} s; return {out['return_travel_time']['value']:.4f} s")

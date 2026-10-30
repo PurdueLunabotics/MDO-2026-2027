@@ -40,12 +40,12 @@ def plate_frame_svg(values):
         pieces.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="#d77422"/><text x="{x+offset:.2f}" y="{label_y:.2f}" text-anchor="{anchor}" font-size="13">{escape(label)}</text>')
     lines = [f'Plate thickness: {values["plate_thickness"]*1000:.2f} mm (fixed)',
              f'Common strip width: {values["plate_spoke_width"]*1000:.2f} mm',
-             f'CF ID / OD: {values["cf_tube_inner_diameter"]*1000:.2f} / {g["cf_od"]*1000:.2f} mm',
-             f'Plate spacing / CF span: {values["cf_tube_span"]*1000:.1f} mm',
+             f'cross-tube ID / OD: {values["cross_tube_inner_diameter"]*1000:.2f} / {g["cross_tube_od"]*1000:.2f} mm',
+             f'Plate spacing / cross-tube span: {values["cross_tube_span"]*1000:.1f} mm',
              f'Rocker bearing spacing: {g["rocker_span"]*1000:.1f} mm',
              f'Wheel-to-rocker gap: {values["wheel_rocker_gap"]*1000:.1f} mm',
              'Central support: pin, balanced mirrored gravity only.',
-             'CF material properties are PROVISIONAL.',
+             'cross-tube material properties are PROVISIONAL.',
              'Spoke buckling is a strip screen,', 'not whole-plate buckling validation.']
     if 'arm_box_width' in values and 'arm_box_height' in values:
         lines[6:6] = [f'Aluminum arm box: {values["arm_box_width"]*1000:.2f} x {values["arm_box_height"]*1000:.2f} mm',
@@ -90,7 +90,9 @@ def geometry_svg(values, extended=False, title=None, travel=False):
     def rect(x,y,w,h,fill,stroke="none",dash=""):
         a,b=point(x,y+h)
         return f'<rect x="{a:.3f}" y="{b:.3f}" width="{w*scale:.3f}" height="{h*scale:.3f}" fill="{fill}" stroke="{stroke}" stroke-width="2" stroke-dasharray="{dash}"/>'
-    state = "Raised · travel / deposition" if travel else ("Extended · digging" if extended else "Compact · starting envelope")
+    moving = "front_dig_depth" in values
+    extended_state = "Maximum extension · plunge / recovery reach" if moving else "Extended · digging"
+    state = "Raised · travel / deposition" if travel else (extended_state if extended else "Compact · starting envelope")
     title = title or state
     actuator_length = v("travel_actuator_length") if travel else (v("actuator_extended_length") if extended else v("actuator_retracted_length"))
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 770" role="img" aria-label="{escape(title, quote=True)}">',
@@ -179,7 +181,7 @@ def top_view_svg(values):
               box(0, 0, wb, track, "#edf2f4", "#99aeb8", "4 5", "support-polygon")]
     from .frame_members import chassis_members, rocker_bearing_span
     members = chassis_members(values)
-    if 'cf_tube_span' in values:
+    if 'cross_tube_span' in values:
         span = rocker_bearing_span(values)
         # A top footprint of each sloping box rocker and the central round axle.
         pieces.append(box(0,0,v('axle_outer_diameter'),span,'#526a7b','#304859',kind='rocker-axle'))
@@ -188,12 +190,12 @@ def top_view_svg(values):
             for sx in (-1,1):
                 pieces.append(line(sx*wb/2,sy*span/2,sx*wb/2,sy*track/2,
                                    '#526a7b',3,kind='wheel-axle'))
-        plate_half_length = max(v('pivot_x'),v('actuator_pivot_x'))+v('cf_tube_inner_diameter')/2+v('cf_tube_wall')+v('frame_mount_clearance')
+        plate_half_length = max(v('pivot_x'),v('actuator_pivot_x'))+v('cross_tube_inner_diameter')/2+v('cross_tube_wall')+v('frame_mount_clearance')
         for sy in (-1,1):
-            pieces.append(box(0,sy*v('cf_tube_span')/2,2*plate_half_length,v('plate_thickness'),
+            pieces.append(box(0,sy*v('cross_tube_span')/2,2*plate_half_length,v('plate_thickness'),
                               '#bacbd4','#7898b0',kind='frame-plate'))
         for m in members:
-            if m['kind'] == 'cf-connector':
+            if m['kind'] == 'cross-tube':
                 x,y,_ = m['start']; _,end_y,_ = m['end']
                 pieces.append(box(x,(y+end_y)/2,m['width'],end_y-y,'#405761','#203b46',kind=m['kind']))
     else:
@@ -228,8 +230,8 @@ def top_view_svg(values):
         pieces.append(line(x, -dim_y-.015, x, -dim_y+.015))
     pieces += [f'<text x="35" y="605" font-size="18">Wheel-center track: {track*1000:.1f} | Overall width: {overall_width*1000:.1f} | Wheel width: {ww*1000:.1f}</text>',
                f'<text x="35" y="636" font-size="18">Each drum: {diameter*1000:.1f} diameter x {length*1000:.1f} axial length | Pair gap: {gap*1000:.1f}</text>',
-               '<text x="35" y="675" font-size="15">Blue: one arm per drum pair · orange: actuators · charcoal: CF connectors · slate: rockers and axle.</text>',
-               '<text x="35" y="705" font-size="15">Four CF tubes: upper/lower footprints can overlap. Dashed blue: 1500 x 750 stowed limit.</text>',
+               '<text x="35" y="675" font-size="15">Blue: one arm per drum pair · orange: actuators · charcoal: aluminum cross-tubes · slate: rockers and axle.</text>',
+               '<text x="35" y="705" font-size="15">Four aluminum cross-tubes: upper/lower footprints can overlap. Dashed blue: 1500 x 750 stowed limit.</text>',
                '<text x="35" y="730" font-size="13">Plate outlines are schematic. Projection overlap does not prove collision. Heights and equipment are not shown.</text>',
                '</g></svg>']
     return ''.join(pieces)
@@ -329,7 +331,12 @@ def write_report(record, output, iterations=(), *, download_links=None):
     top = top_view_svg(values)
     from .obstacle_drawing import obstacle_pose_svg
     obstacle = obstacle_pose_svg(values) if "obstacle_height" in values else ""
-    for name, svg in (("frame", frame), ("stability", stability), ("top", top), ("obstacle", obstacle)):
+    excavation, feed = "", ""
+    if "front_dig_depth" in values:
+        from .moving_excavation_drawing import moving_excavation_svg, feed_rpm_svg
+        excavation, feed = moving_excavation_svg(values), feed_rpm_svg(values)
+    for name, svg in (("frame", frame), ("stability", stability), ("top", top), ("obstacle", obstacle),
+                      ("excavation", excavation), ("feed_rpm", feed)):
         if svg:
             (output.parent/f"{output.stem}_{name}.svg").write_text(svg, encoding="utf-8")
     frames = []
@@ -345,5 +352,6 @@ def write_report(record, output, iterations=(), *, download_links=None):
     html = render_report(record, output, drawings, frame, stability,
                          route_svg(values.get("outbound_travel_time", values["traversal_time_one_way"]),
                                    values.get("return_travel_time", values["traversal_time_one_way"])), frames, top_drawing=top,
-                         download_links=download_links, obstacle_drawing=obstacle)
+                         download_links=download_links, obstacle_drawing=obstacle,
+                         excavation_drawing=excavation, feed_drawing=feed)
     output.with_suffix(".html").write_text(html, encoding="utf-8")

@@ -10,12 +10,12 @@ discipline per change. Preserve the reference model for comparisons.
 | Question | Main files |
 | --- | --- |
 | Defaults, design bounds, fixed assumptions | `rover/config.py` |
-| Six-inch level-ground clearance after wheel/bar deductions | `rover/ground_clearance.py`, `ModelSet.ground_clearance` |
+| Eight-inch level-ground clearance after wheel/bar deductions | `rover/ground_clearance.py`, `ModelSet.ground_clearance` |
 | Model assembly, constraints, optimization | `rover/problem.py` |
 | Select or replace a discipline | `rover/models.py` (`ModelSet`) |
 | Kinematics and actuator loads | `rover/linkage.py` |
 | Frozen PA-04 900 lbf actuator profile/data | `rover/alternatives/pa04_actuator.py`, `data/actuators/`, `docs/PA04_ACTUATORS.md` |
-| Drum mass, soil capture, torque, time | `rover/drums.py`, `rover/excavation.py` |
+| Drum mass, moving soil capture, torque, feed and time | `rover/drums.py`, `rover/alternatives/moving_excavation.py`; inactive stationary reference in `rover/excavation.py` |
 | Wheel mass, route, fresh-site motion | `rover/wheels.py`, `rover/mobility.py`, `rover/relocation.py` |
 | Frame loads and mass properties | `rover/structure.py`, `rover/mass_properties.py` |
 | Optional frame, motor, and traversal models | `rover/alternatives/` |
@@ -24,7 +24,7 @@ discipline per change. Preserve the reference model for comparisons.
 | Parameter sweeps | `studies/` |
 
 Ground-clearance outputs include each axle's radius and underside clearance.
-The bottom radius follows `cf_tube_inner_diameter/2 + cf_tube_wall`; the rocker
+The bottom radius follows `cross_tube_inner_diameter/2 + cross_tube_wall`; the rocker
 radius follows `axle_outer_diameter/2`. These existing plate-frame dimensions
 remain active design variables where applicable. The reference configuration
 supplies their nominal defaults as fixed clearance-only inputs. They do not
@@ -72,6 +72,30 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 
 ## Contracts that must remain explicit
 
+Schema 7 unifies moving excavation under `inlet_depth` (metres): radial scoop
+protrusion and fresh-layer cut depth are equal. The front cuts one inlet depth
+and the rear two below original grade. `inlet_width=drum_length` enforces full
+width. The old `cut_depth` source is now a derived compatibility output for
+linkage breakout work. Moving inputs no longer contain `scoop_opening`,
+`scoop_depth_fraction` or `cut_engagement`. Old input dictionaries are explicitly
+migrated and their retired values recorded in model metadata; mixed new/old
+depth keys are rejected. Explicit stationary reference factories keep their old
+configuration and equations. See [migration and equations](MOVING_EXCAVATION.md).
+
+Schema 6 replaces default stationary excavation with `MovingExcavation` through
+`ModelSet`. `feed_speed` is a metre-per-second design variable; `drum_rpm` keeps
+its existing independent setting. Desired front/rear digging depths are one/two
+scoop openings, with one fresh layer credited per pair in shared tracks.
+Storage selects productive lane length. Feed travel includes station separation
+and wheel-drive electrical energy/peak is included once in digging. New signed
+feed, operating-reach, ground-level axle-reach and domain margins are enforced.
+`extended_y` still means maximum-extension capability, and
+`axle_ground_margin=-extended_y`; it must not be repurposed as normal cut height.
+`dig_overlap_time=0` retires stationary lowering/cutting overlap. Full-range
+actuator load/work allowances and sequential positioning time are explicitly
+conservative. See [the equations and output meanings](MOVING_EXCAVATION.md).
+Historical snapshots require reevaluation; no new calibration data are implied.
+
 Schema 5 retires `actuator_body_margin` from optimizer constraints and report pass/fail decisions at the user’s request. Its metre-valued output, equations, dependencies and catalog endpoint diagnostics remain unchanged. It is listed under diagnostic-only screens and does not affect `feasible` or CLI acceptance. Catalog stroke/load domains and all other constraints remain.
 
 Schema 4 introduces axle-relative metre-valued side/top actuator offsets and explicit tail mass/envelope ports; see [ARM_OFFSETS.md](ARM_OFFSETS.md). The earlier schema 3 actuator integration moves `actuation_time` (total cycle arm motion,
@@ -88,15 +112,19 @@ the source change, hardware-specific body margin and phase assumptions.
 | `drum_mass` | FOUR drums plus TWO drum motor/gear assemblies |
 | `GeometryMass` | Adds each assembly once; `rocker_mass` is already part of structure mass |
 | `drum_length` / `drum_diameter` | Length of ONE drum / OUTER cutting diameter |
-| `cut_depth` | Scoop protrusion / maximum bite, distinct from total trench depth |
+| `inlet_depth` | Radial scoop protrusion AND fresh-layer cut depth; front one depth, rear two below original grade |
+| `inlet_width` | Derived full axial width of ONE drum, equal to `drum_length` |
+| `cut_depth` | Derived compatibility output equal to `inlet_depth`; only explicit stationary reference factories retain an independent old input |
 | `payload_mass` | Retained soil across all FOUR drums |
-| `fill_fraction` | Storage ceiling; actual payload also depends on reachable soil |
+| `fill_fraction` | Moving-excavation storage target; required lane length supplies the soil, subject to feed/reach/area feasibility |
+| `feed_speed` / `drum_rpm` | Translation m/s / rotation rpm; forward advance per scoop must not exceed `inlet_depth` |
+| `extended_y` / `axle_ground_margin` | Maximum-extension axle height / its negative, metres; recovery reach is distinct from normal cut pose |
 | `lin_act_side_arm_offset` / `lin_act_top_arm_offset` | Signed metres from drum axle along arm / upward normal; positive side is outward. Tail mass included, normal bracket mass/strength unverified. See ARM_OFFSETS.md |
-| `dig_energy`, `dump_energy` | Electrical phase energy in J, including startup/idle |
+| `dig_energy`, `dump_energy` | Electrical phase energy in J, including startup/idle; moving-dig energy also includes feeding wheel drive |
 | `dig_power`, `dump_power` | Peak electrical W; peak × duration is not phase energy |
 | `*_yaw_inertia` | About the chassis-center yaw axis, not the displaced CG |
 | `*_margin` | Signed reserve in declared units; >= 0 passes, subject to saved tolerances |
-| Cycle accounting | Subtract simultaneous lowering/cutting overlap ONCE; relocation and deposition turn are separate from the timed route |
+| Cycle accounting | Moving excavation has zero lowering/cutting overlap; relocation and deposition turn are separate from the timed route |
 
 Structural dimensions are explicit design variables. Automatic resizing based
 on downstream loads would introduce a coupled solve; design that integration

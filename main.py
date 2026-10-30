@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--design-name", help="Human-readable case name")
     parser.add_argument("--revision", help="Baseline/source revision shown in the report")
     parser.add_argument("--structure", choices=["reference", "plate-frame"],
-                        help="Select reference tubes or the preliminary CF/plate/box-rocker frame")
+                        help="Select reference tubes or the preliminary aluminum cross-tube/plate/box-rocker frame")
     parser.add_argument("--motors", choices=["reference", "x44-standard"],
                         help="Generic scalable motors or fixed standard X44s at 12 V, drive gearing 100:1")
     parser.add_argument("--traversal-mode", choices=["fixed", "calculated"],
@@ -108,7 +108,7 @@ def main():
             print_report("Final optimizer iterate", final)
             print(f"Optimizer success: {success}")
         om.n2(problem, outfile=str(output.parent / f"{output.stem}_n2.html"), show_browser=False)
-        record = {"schema_version": 5, "model_metadata": problem.model_metadata, "report_context": context,
+        record = {"schema_version": 7, "model_metadata": problem.model_metadata, "report_context": context,
                   "openmdao_version": openmdao.__version__, "optimizer": problem.model_metadata["optimizer_settings"]["optimizer"],
                   "optimizer_success": success, "optimizer_result": message,
                   "status": "baseline" if baseline_mode else ("converged_feasible" if success and final["feasible"] else "failed_or_infeasible"),

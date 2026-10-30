@@ -68,7 +68,7 @@ def obstacle_pose_svg(values):
             layer('rocker',(shaft,bearing),line(shaft,bearing,'#668095',7))
             layer('wheel-axle',(bearing,center),line(bearing,center,'#526a7b',3))
     layer('rocker-axle',shafts,line(*shafts,'#394f63',max(4,values.get('axle_outer_diameter',0)*scale*.7)))
-    plate_y = values.get('cf_tube_span',values['track_width'])/2
+    plate_y = values.get('cross_tube_span',values['track_width'])/2
     for side in (-1,1):
         a = mounted((-values['pivot_x'],side*plate_y,values['bottom_pivot_height']))
         b = mounted((values['pivot_x'],side*plate_y,values['bottom_pivot_height']))
@@ -76,7 +76,7 @@ def obstacle_pose_svg(values):
     for member in chassis_members(values):
         a,b = mounted(member['start']),mounted(member['end'])
         color,width = {'arm':('#246f99',7),'actuator':('#d77422',4),
-                       'cf-connector':('#263f49',5), 'offset-bracket':('#246f99',4)}[member['kind']]
+                       'cross-tube':('#263f49',5), 'offset-bracket':('#246f99',4)}[member['kind']]
         layer(member['kind'],(a,b),line(a,b,color,width),member['kind']+'-'+member['station'])
     for sign in (-1,1):
         a = mounted((sign*values['travel_x'],-values['drum_length']-values['drum_pair_gap']/2,values['travel_y']))
@@ -141,7 +141,7 @@ def obstacle_pose_svg(values):
     for i,label in enumerate(lines):
         yy=142+i*25 if i<2 else 475+(i-2)*24
         parts.append(f'<text x="755" y="{yy}" font-size="{17 if i==0 else 14}">{escape(label)}</text>')
-    parts += ['<text x="25" y="586" font-size="14">One centered arm/actuator per drum pair · blue: arms · orange: actuators · charcoal: CF rods · gray: wheels · tan: drums.</text>',
+    parts += ['<text x="25" y="586" font-size="14">One centered arm/actuator per drum pair · blue: arms · orange: actuators · charcoal: aluminum cross-tubes · gray: wheels · tan: drums.</text>',
               '<text x="25" y="612" font-size="14">Support block shows the prescribed height; its shape and width are illustrative. Actual rock climbing is not simulated.</text>',
               '<text x="25" y="638" font-size="14">Contact model omits camber effects. The right section also needs the axial-width check; circles alone can over-reject.</text>',
               '<text x="25" y="663" font-size="14">Parallel-cylinder clearance is the default model. This section shows the closest pair for the illustrated front-left raise.</text>',

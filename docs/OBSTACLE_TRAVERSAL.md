@@ -1,6 +1,6 @@
 # Traversal: obstacles, clearance, slopes, and wheel unloading
 
-The user requires traversal of a 0.40 m obstacle and a 0.50 m deep ditch while
+The user requires traversal of a 0.30 m obstacle and a 0.50 m deep ditch while
 fully loaded in the travel pose. The optimizer now enforces geometric reach,
 gravity-support and parallel-cylinder drum–wheel clearance screens for the obstacle. These do not establish climbing
 capability. Ditch traversal remains unverified. The existing `trench_traverse_margin` concerns the stationary
@@ -51,11 +51,11 @@ Tests verify the independent level-rectangle limit, moment balance for a triangl
 with prescribed positive reactions, coordinate invariance, redundant contacts,
 and failure domains. These are analytical/software checks, not traversal trials.
 
-## Confirmed suspension and 0.40 m obstacle constraint
+## Confirmed suspension and 0.30 m obstacle constraint
 
 The user confirmed an average-angle differential and centered rocker pivots
 estimated 0.10 m above the wheel-center line. Config inputs are
-`obstacle_height=0.40 m` and `rocker_pivot_offset=+0.10 m`. The latter is an
+`obstacle_height=0.30 m` and `rocker_pivot_offset=+0.10 m`. The latter is an
 editable estimate, not a frozen hardware dimension. Below-axis offsets may be
 negative; the supported geometry requires `abs(offset)<wheelbase/2` throughout
 the design bounds. The offset is fixed in the reference profile and a design variable in plate-frame.
@@ -114,9 +114,10 @@ values, not predictions for the requested height**. Reports show this explicitly
 For valid poses, evaluated height equals requested height. Wheel indices are
 0=front left, 1=front right, 2=rear left, 3=rear right; symmetric cases may tie.
 
-The generic reference 0.40 m wheelbase start has h_max=0.39331 m and fails reach.
-A 0.46 m wheelbase at otherwise baseline inputs has positive reach and tip
-reserves. Original failed solver iterates remain failed; see VERIFICATION.md.
+The generic reference 0.40 m wheelbase start has h_max=0.39331 m, above the
+current 0.30 m request. It failed reach under the previous 0.40 m requirement;
+historical solver results remain unchanged in VERIFICATION.md. Reach alone
+does not establish clearance, support or traversal feasibility.
 Passing this static screen still leaves internal joint/load equilibrium,
 climbing torque, traction, contact loss, other hardware interference and terrain failure
 unverified. A rock's height alone also does not specify its approach shape.
@@ -228,7 +229,7 @@ to validate that screen before fitting a fast surrogate for optimization.
 
 ## Slope and intermediate-height stability
 
-The student requires a 30-degree slope and a 0.40 m rock, with all four drums
+The student requires a 30-degree slope and a 0.30 m rock, with all four drums
 loaded and both arms fixed at the travel actuator setting. They explicitly
 retained the original **one-wheel-raised** rock case. Slope and rock are separate
 requirements, without combined slope/rock or front/rear wheel-pair raises.
@@ -273,7 +274,7 @@ and contact points. Confirmed centered rockers have a normal pivot offset and
 an average-angle differential. Horizontal platforms exert vertical reactions.
 No approach profile, side contact force, wheel camber, joint stop or impact is
 modeled. Check all four raised-wheel choices at 41 heights including zero and
-the requested maximum: 10 mm steps for a 40 cm lift.
+the requested maximum: 7.5 mm steps for a 30 cm lift.
 
 Sprung hardware rotates about the shaft. Equal wheel/drive masses follow their
 centers. Uniform plate-profile half-rockers put their centroid halfway between
@@ -321,7 +322,7 @@ of substituting different physics. Original endpoint obstacle ports retain
 their meanings; path outputs/constraints are additive.
 
 Finite sampling is a limitation. A dense-grid regression test compares 401 heights
-per wheel (1 mm spacing) for a synthetic case; the study does not run that dense
+per wheel (1 mm spacing) for a synthetic 0.40 m case; the study does not run that dense
 check for every candidate. Agreement is numerical evidence, not a
 continuous-height proof or a real crossing test.
 Arbitrary rock profiles, simultaneous raised wheels, contact loss, impacts,

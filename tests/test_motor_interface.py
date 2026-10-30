@@ -2,24 +2,33 @@
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from dataclasses import replace
 import numpy as np
 
 from rover.alternatives.x44_motor import CURVE, X44MotorProvider
 from rover.motors import Gearmotor
 from rover.problem import build_problem
+from rover.config import DESIGN
+from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
 from reporting.report import snapshot
 from rover.models import ModelSet, plate_frame_models
 from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads, arm_beam_screen
 from rover.alternatives.offset_attachment import OffsetArmMechanics
 from rover.alternatives.bekker_wong_reece import BekkerWongReeceMobility
 from rover.excavation import Excavation
+from rover.alternatives.moving_excavation import MovingExcavation
 from rover.mobility import Mobility
 from rover.relocation import SiteRelocation
 from rover.drums import DrumMass
 from rover.components import GeometryMass
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def current_frame_name(name):
+    """Read unchanged historical fixture names through the cross-tube contract."""
+    return name.replace('cf_tube_', 'cross_tube_').replace('cf_bending_', 'cross_tube_bending_')
 
 
 class HistoricalAxlePinMechanics(OffsetArmMechanics):
@@ -64,22 +73,31 @@ class MotorInterfaceTests(unittest.TestCase):
         p.run_model()
         return p
 
+    @patch.dict(DESIGN, {**HISTORICAL_ACTUATOR_DESIGN,
+                         'lin_act_side_arm_offset': (0., -.15, .15, 'm')})
     def test_reference_regression_and_x44_mechanical_invariants(self):
+        # Freeze the fixture's zero-offset geometry independently of live bounds.
         fixture=json.loads((ROOT/'tests/fixtures/motor_interface_before.json').read_text())
         for c in fixture['cases']:
             with self.subTest(structure=c['structure'],motors=c['motors'],inputs=c['inputs']):
                 # Freeze the legacy mobility equation for this historical motor
                 # regression; default BWR is tested separately with both providers.
                 models = plate_frame_models() if c['structure'] == 'plate-frame' else ModelSet()
-                inputs = dict(c['inputs'])
+                inputs = {current_frame_name(n): v for n,v in c['inputs'].items()}
+                inputs.setdefault('obstacle_height', .40)  # Historical fixture's rock height.
+                inputs.setdefault('actuator_safety_factor', 1.5)  # Historical acceptance threshold.
                 if c['structure'] == 'plate-frame':
                     # Freeze the original round-aluminum-arm model as well as
                     # mobility for this historical motor-interface regression.
                     models = replace(models, structure_geometry=PlateStructureGeometry,
                                      structure_loads=HistoricalRoundPlateLoads)
                     inputs.setdefault('arm_wall', .002)
+                    # This motor-only regression retains the fixture's historical
+                    # CF material, not the new default aluminum cross-tubes.
+                    inputs.update(cross_tube_density=1600., cross_tube_youngs_modulus=70e9,
+                                  cross_tube_yield_strength=350e6)
                 p=build_problem(inputs,structure=c['structure'],motors=c['motors'],
-                                models=replace(models,mobility=Mobility))
+                                models=replace(models,mobility=Mobility,excavation=Excavation))
                 try:
                     p.run_model();result=snapshot(p)
                     # This fixture predates the intentional X44 energy simplification.
@@ -104,21 +122,21 @@ class MotorInterfaceTests(unittest.TestCase):
                     for n,expected in c['outputs'].items():
                         if c["motors"] == "x44-standard" and n in changed_outputs | retired_outputs:
                             continue
-                        actual=p.get_val(n).item()
+                        actual=p.get_val(current_frame_name(n)).item()
                         self.assertLessEqual(abs(actual-expected),1e-11*max(1.,abs(expected)),n)
                     for n,expected in c['constraint_margins'].items():
                         if n == 'actuator_body_margin':
                             continue  # User retired this criterion; historical fixture data are unchanged.
                         if c["motors"] == "x44-standard" and n in {"battery_energy_margin", "battery_power_margin"}:
                             continue  # intentionally changed energy model; tested independently below
-                        actual=result['constraints'][n]['margin']
+                        actual=result['constraints'][current_frame_name(n)]['margin']
                         self.assertLessEqual(abs(actual-expected),1e-11*max(1.,abs(expected)),n)
                 finally:
                     p.cleanup()
 
     def test_hardware_profile_keeps_the_same_discipline_classes(self):
         p=self.problem(motors='x44-standard')
-        for slot,cls in [('excavation',Excavation),('mobility',BekkerWongReeceMobility),('relocation',SiteRelocation),
+        for slot,cls in [('excavation',MovingExcavation),('mobility',BekkerWongReeceMobility),('relocation',SiteRelocation),
                          ('drum_mass',DrumMass),('geometry',GeometryMass)]:
             self.assertIs(type(getattr(p.model,slot)),cls)
         self.assertIs(p.model.excavation.options['motor_model'],X44MotorProvider)
@@ -143,9 +161,15 @@ class MotorInterfaceTests(unittest.TestCase):
             idle=multiplicity*p.get_val('actuator_idle_power').item()
             duration=(2*p.get_val('traversal_time_one_way').item()+scalar(base,'turn_time')
                       if time is None else scalar(base,time))
-            self.assertAlmostEqual(scalar(changed,energy)-idle*duration,
-                                   2*(scalar(base,energy)-idle*duration))
-            self.assertAlmostEqual(scalar(changed,peak)-idle,2*(scalar(base,peak)-idle))
+            idle_energy = idle*duration
+            idle_peak = idle
+            if slot == 'excavation':
+                idle_energy = idle*(scalar(base,'pair_cutting_time')+2*p.get_val('drum_spinup_time').item())
+                idle_energy += 4*p.get_val('actuator_idle_power').item()*scalar(base,'feed_time')
+                idle_peak += 4*p.get_val('actuator_idle_power').item()
+            self.assertAlmostEqual(scalar(changed,energy)-idle_energy,
+                                   2*(scalar(base,energy)-idle_energy))
+            self.assertAlmostEqual(scalar(changed,peak)-idle_peak,2*(scalar(base,peak)-idle_peak))
             if slot=='excavation':
                 self.assertEqual(changed['payload_mass'],base['payload_mass'])
                 self.assertEqual(changed['cut_force'],base['cut_force'])
@@ -155,7 +179,7 @@ class MotorInterfaceTests(unittest.TestCase):
                 self.assertEqual(changed['turn_traction_margin'],base['turn_traction_margin'])
 
     def test_student_excavation_improvement_survives_motor_selection(self):
-        class LowerLift(Excavation):
+        class LowerLift(MovingExcavation):
             def granular_response(self,inputs,froude):
                 capture,lift=super().granular_response(inputs,froude)
                 return capture,lift/2

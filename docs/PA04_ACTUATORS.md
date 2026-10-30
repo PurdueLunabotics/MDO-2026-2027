@@ -106,8 +106,14 @@ assumptions, not a predicted actuator time history.
 `12*I` is already electrical power. Applying `actuator_efficiency` or adding
 reference actuator idle power again would double-count losses. There is no
 regeneration credit. Mission subtracts exactly the lowering overlap from the
-sum of cutting and total arm time. The existing actuator safety factor remains
-active: `actuator_force_margin = rated_force / safety_factor - F`.
+sum of cutting and total arm time. The actuator safety factor remains an explicit
+input: `actuator_force_margin = rated_force / safety_factor - F`. At the user's
+request its default and saved baseline value are now 1.0, so calculated demand
+is compared directly with the 4003.399 N catalog rating. This removes the model's
+additional actuator reserve; no undocumented manufacturer reserve is assumed.
+Structural safety/load factors remain separate and unchanged. Baseline
+`fill_fraction` remains 0.9. Changing this force acceptance threshold alone does
+not change the predicted force, actuator speed or motion time at fixed geometry.
 
 Pure public helpers reject out-of-domain stroke/load inputs. OpenMDAO adapters
 retain finite diagnostic trials for the optimizer, accompanied by negative

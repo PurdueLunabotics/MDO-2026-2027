@@ -8,7 +8,7 @@ import hashlib
 import openmdao.api as om
 from rover.calibration import ResponseTable
 from rover.components import scalar
-from rover.config import DESIGN, ASSUMPTIONS
+from rover.config import input_spec
 from rover.excavation import Excavation
 from rover.models import ModelSet
 from rover.problem import build_problem
@@ -31,7 +31,7 @@ class TableExcavation(Excavation):
         }
         # A dimensionless column does not make the response geometry-independent.
         for name,spec in self.table.data["conditions"].items():
-            config=DESIGN.get(name,ASSUMPTIONS.get(name))
+            config=input_spec(name)
             if name not in self.CONFIG_INPUTS or config is None or spec["units"] != (config[-1] or "1"):
                 raise ValueError(f"Unknown condition or incompatible units: {name}")
         super().setup()

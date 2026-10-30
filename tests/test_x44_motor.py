@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 import tempfile
 import numpy as np
 from openmdao.utils.assert_utils import assert_check_totals
@@ -12,6 +13,7 @@ from dataclasses import replace
 from rover.alternatives.x44_motor import CURVE
 from rover.motors import Gearmotor
 from rover.config import DESIGN, ASSUMPTIONS, configuration
+from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
 from rover.problem import build_problem
 from reporting.report import snapshot
 from reporting.html_report import write_report
@@ -147,11 +149,11 @@ class X44Tests(unittest.TestCase):
         before={n:get(n) for n in ("dig_energy","dig_power","dump_energy","dump_power",
                                   "mobility_energy","drive_peak_power","relocation_energy",
                                   "relocation_peak_power","drum_torque_margin","straight_motor_margin")}
-        dig_idle=2*get("actuator_idle_power")
+        dig_idle=6*get("actuator_idle_power")
         dump_idle=get("actuator_idle_power")
         drive_idle=4*get("actuator_idle_power")
         expected=[
-            ("dig_energy",dig_idle*get("dig_time")),
+            ("dig_energy",2*get("actuator_idle_power")*(get("pair_cutting_time")+2*get("drum_spinup_time"))+4*get("actuator_idle_power")*get("feed_time")),
             ("dig_power",dig_idle),
             ("dump_energy",dump_idle*get("dump_time")),
             ("dump_power",dump_idle),
@@ -183,6 +185,9 @@ class X44Tests(unittest.TestCase):
         for energy,rpm in (("dig_energy","drum_rpm"),("dump_energy","dump_rpm")):
             omega=value(rpm)*math.pi/30
             expected=.5*inertia*omega**2/value("drum_efficiency")
+            if energy == "dig_energy":
+                expected *= 2  # Conservative two starts per pair during staged excavation.
+                expected += np.asarray(outputs["feed_drive_energy"]).item()
             self.assertAlmostEqual(np.asarray(outputs[energy]).item(),expected,msg=energy)
         omega=value("drum_rpm")*math.pi/30
         motor=c.options["motor_model"].create(value,"drum")
@@ -214,9 +219,11 @@ class X44Tests(unittest.TestCase):
                         error=abs(np.asarray(changed[out]-base[out]).item())/max(1.,abs(np.asarray(base[out]).item()))
                         self.assertLess(error,1e-9,f'{slot}.{out} <- {n}')
 
+    @patch.dict(DESIGN, HISTORICAL_ACTUATOR_DESIGN)
     def test_historical_feasible_start_fails_new_bwr_climb_requirements(self):
         fixture=json.loads((ROOT/'tests/fixtures/x44_standard_feasible_start.json').read_text())
-        p=build_problem(fixture['inputs'],structure=fixture['structure'],motors=fixture['motors'],
+        inputs={n.replace('cf_tube_', 'cross_tube_'): v for n,v in fixture['inputs'].items()}
+        p=build_problem(inputs,structure=fixture['structure'],motors=fixture['motors'],
                         optimizer=fixture['optimizer'],maxiter=2,cobyla_radius=fixture['cobyla_radius'])
         self.addCleanup(p.cleanup)
         p.run_model();before=snapshot(p)

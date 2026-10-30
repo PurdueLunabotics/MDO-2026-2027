@@ -48,29 +48,62 @@ Wheel-center track width is now a design variable alongside wheelbase. Both are 
 
 The actuator attachment now uses two signed metre-valued coordinates relative to the drum axle: lin_act_side_arm_offset and lin_act_top_arm_offset. With arm direction u=(C-B)/L and its upward normal n=(-u_z,u_x), the pin is D=C+side*u+top*n. Positive side extends past the axle; positive top is above the arm. Rear geometry mirrors the front. Circle closure uses radius hypot(L+side,top), then rotates through -atan2(top,L+side) to recover the drum position. arm_length remains the pivot-to-axle distance. Both offsets are design variables with exploratory bounds [-0.15,0.15] m; generic defaults are zero and the requested baseline is +0.05 m for both. The old fraction is removed from live configuration.
 
-The same eccentric pin feeds virtual-work actuator force, plate-frame equilibrium, mass placement and report drawings. For positive side offset, a uniform tube continuation adds actual mass, gravity work, yaw inertia, physical length and beam load effects. Top offset transfers an eccentric couple into the tube; its normal bracket is assumed rigid and massless pending hardware/CAD data. Actuator catalog stroke/load domains, safety factors, triangle/toggle, mounting, pit-floor, envelope and existing drum/wheel clearance screens remain. At the user’s request actuator_body_margin is diagnostic only: the body/catalog installed-length reserve is computed but excluded from optimization and feasibility. The sweep retains 81 arm-angle samples. Raising/lowering time, simultaneous cutting overlap and one-time electrical loss accounting are unchanged. See [complete equations, interface migration, domains and limitations](docs/ARM_OFFSETS.md).
+The same eccentric pin feeds virtual-work actuator force, plate-frame equilibrium, mass placement and report drawings. For positive side offset, a uniform tube continuation adds actual mass, gravity work, yaw inertia, physical length and beam load effects. Top offset transfers an eccentric couple into the tube; its normal bracket is assumed rigid and massless pending hardware/CAD data. Actuator catalog stroke/load domains, safety factors, triangle/toggle, mounting, pit-floor, envelope and existing drum/wheel clearance screens remain. At the user’s request actuator_body_margin is diagnostic only: the body/catalog installed-length reserve is computed but excluded from optimization and feasibility. The sweep retains 81 arm-angle samples. One-time electrical loss accounting is retained. Moving excavation now charges sequential positioning with a conservative full-range arm allowance and zero lowering/cutting overlap; see the excavation section below. See [complete equations, interface migration, domains and limitations](docs/ARM_OFFSETS.md).
 
-## Reachable soil, storage and cut depth
+## Forward-feed excavation, storage and inlet depth
 
-drum_diameter is the OUTER cutting envelope. cut_depth is a design variable: radial scoop protrusion and maximum bite, distinct from total trench depth. For R=D/2 and extended shaft height z:
+The default `ModelSet.excavation` is `MovingExcavation`. The front pair cuts
+to `inlet_depth` below the original ground and the rear pair to twice that
+depth in the same tracks. Each pair removes one fresh layer of that depth.
+The same `inlet_depth` is the radial scoop protrusion; storage excludes it.
+The inlet spans the full axial width `drum_length` of each drum. There is no
+independent opening-width or partial-width engagement setting in this model.
+`drum_diameter` remains the OUTER cutting envelope.
+For R=D/2, d=inlet_depth, L=drum_length and n=scoops_per_revolution:
 
 ```text
-h=max(0,R-z)
-A(h)=R^2 acos((R-h)/R)-(R-h)*sqrt(2Rh-h^2), clipped at h=0 and h=2R
-fresh_volume=4*drum_length*A(h)
-storage_capacity=4*pi*(R-cut_depth)^2*drum_length*usable_volume_fraction*fill_fraction
-payload_mass=min(storage_capacity*stored_soil_density,
-                 fresh_volume*soil_density*capture)
-payload_volume=payload_mass/stored_soil_density
+front_dig_y=R-d; rear_dig_y=R-2*d; trench_depth=2*d
+inlet_width=L
+storage_capacity=4*pi*(R-d)^2*L*usable_volume_fraction*fill_fraction
+payload_mass=storage_capacity*stored_soil_density
+fresh_volume=payload_mass/(soil_density*capture_fraction)
+feed_distance=fresh_volume/(4*L*d)
+feed_per_scoop=60*feed_speed/(n*drum_rpm)
+feed_speed_limit=d*n*drum_rpm/60
+feed_margin=d-feed_per_scoop
 ```
 
-Partial fill is allowed: the optimizer chooses extension using the payload benefit and time, energy and mechanical costs. Only the endpoint intersection is credited. Extra soil swept by the lowering arc is omitted; repeatedly rotating in an excavated cavity cannot create fresh payload. This is an availability screen, not a cavity-evolution model. Excavation is stationary and each cycle relocates to a fresh lane. Storage and in-situ soil densities are distinct. New moving-dig or collapse models must account for soil supply, path, time, traction and energy explicitly.
+Storage is supplied by the required fresh lane, rather than the old stationary
+endpoint intersection. Storage and in-situ soil densities remain distinct.
+The front pair starts first, the rear enters the same lane after the station
+separation, and the front is raised when full while the rear finishes. Feed
+drive distance is productive lane length plus station separation; this avoids
+assuming a prepared entrance or crediting the front layer twice. No lowering,
+endcap, collapse or recutting soil is credited. Fresh-lane area and relocation
+remain explicit planning checks.
 
 The current model represents one full-width bucket-drum configuration. Alternate intake geometries need their own measured soil-supply and storage models.
 
-Scoop throughput is active width*cut_depth*scoop_opening*scoops_per_revolution*rpm/60. The drums rotate during the full actuator lowering stroke. Cutting duration is the larger of lowering time and fresh_volume/scoop_throughput, followed by drum startup time; any extra cutting duration is a dwell at full extension. Filling storage early does not shorten lowering, and continued rotation cannot create additional soil after the reachable volume is exhausted. Mission subtracts the full lowering interval once from summed actuator and drum durations, then raises the drums.
+The kinematic feed constraint requires forward advance per scoop <= `inlet_depth`;
+equivalently fresh flow `4*L*d*feed_speed` cannot exceed assumed scoop throughput
+`4*L*d^2*n*drum_rpm/60`. Overfeed retains its negative margin and raw
+force demand. This uncalibrated volume screen is not a measured plunge limit.
+The report shows the layered cut and feed-speed/RPM boundary. `dig_overlap_time`
+is zero. Full-range arm work/loads remain a conservative capability allowance,
+with sequential positioning time charged for the staged pass.
 
-Cut force=cut_pressure*active width*min(cut_depth,h)*cut_engagement. Bite is limited by scoop_depth_fraction*scoop_opening and a small-radius geometry screen. Empty weight screens penetration; residual horizontal imbalance must fit traction after upward tool reaction unloads wheels. Minimum reach and minimum payload constraints prevent a zero-excavation solution.
+Cut force=`cut_pressure*4*L*feed_per_scoop`, with the full drum width engaged.
+The radial geometry screen remains `R/4-inlet_depth >= 0`; the obsolete
+half-opening-depth heuristic is retired with the separate opening setting.
+The compatibility output `cut_depth` equals `inlet_depth` and supplies linkage
+breakout work; it is not an independent input. Feed wheel drive contributes
+electrical work/peak power to digging and has separate motor, power and traction
+reserves after tool unloading. Both imposed operating poses must be reachable.
+The additional `axle_ground_margin=-extended_y` requires maximum-extension axle
+reach to ground level, preserving the option of plunge/recovery without modeling
+those modes' soil forces, driveability or motor-body clearance. The old stationary
+model is no longer active by default. See [equations, domains, staging and
+limitations](docs/MOVING_EXCAVATION.md).
 
 ## Drum speed, torque and energy
 
@@ -92,23 +125,23 @@ own measured domains. Fr=1 is an acceleration scale, not a universal threshold.
 
 Drum gear ratio is independent of operating RPM. Continuous output torque=P_rated/omega_motor_rated*ratio*gear_efficiency, also bounded by a linear motor torque-speed envelope with stall twice rated and no-load twice rated speed. Peak cutting/spinup torque, continuous mechanical power and a service factor constrain the drive. Replace this generic envelope with actual voltage/current/thermal/gearbox data.
 
-Digging uses all drums; dumping uses one pair at a time. Conservative ring spin inertia is (drum assembly mass+payload)*R^2. Startup has duration, I*omega/time torque and I*omega^2/2 energy. No regenerative braking is credited. Peak uses full internal load. Dig energy uses a simple half-full mean internal torque through cutting; unloading uses a linear emptying approximation. dig_energy/dump_energy are electrical J including startup and idle. dig_power/dump_power are PEAK electrical W; do not multiply them by duration to estimate energy. Apply drivetrain efficiency exactly once.
+Both drum pairs take equal fresh layers during the staged forward pass; dumping uses one pair at a time. Conservative ring spin inertia is (drum assembly mass+payload)*R^2. Startup has duration, I*omega/time torque and I*omega^2/2 energy. No regenerative braking is credited. Peak uses full internal load. Dig energy uses a simple half-full mean internal torque through cutting; unloading uses a linear emptying approximation. dig_energy/dump_energy are electrical J including startup and idle. dig_power/dump_power are PEAK electrical W; do not multiply them by duration to estimate energy. Apply drivetrain efficiency exactly once.
 
 ## Level-ground ground clearance
 
-The user requires 6 inches (0.1524 m) after 20% wheel-radius compression and a
+The user requires 8 inches (0.2032 m) after 20% wheel-radius compression and a
 1-inch (0.0254 m) differential-bar allowance below the lower axle. With nominal
 wheel radius R, the existing bottom-pivot height is already above ground;
 the rocker axle is at R + rocker_pivot_offset. Each height locates the axle
 center, so its own outer radius must be subtracted to locate its underside:
 
 ```text
-bottom_axle_radius = cf_tube_inner_diameter/2 + cf_tube_wall
+bottom_axle_radius = cross_tube_inner_diameter/2 + cross_tube_wall
 rocker_axle_radius = axle_outer_diameter/2
 bottom_clearance = bottom_pivot_height - bottom_axle_radius - 0.20*R - 0.0254
 rocker_clearance = R + rocker_pivot_offset - rocker_axle_radius - 0.20*R - 0.0254
 ground_clearance = min(bottom_clearance, rocker_clearance)
-ground_clearance_margin = ground_clearance - 0.1524
+ground_clearance_margin = ground_clearance - 0.2032
 ```
 
 Equivalently, subtract R from the bottom height before applying the user's
@@ -117,7 +150,7 @@ offset formula `min(bottom_offset-bottom_axle_radius, rocker_offset-rocker_axle_
 The wheel radius is counted once and both existing coordinate definitions are retained.
 `GroundClearance` is selected through `ModelSet.ground_clearance` for both frame
 profiles. Reports include both axle radii and underside clearances, their minimum,
-and the active signed margin. Plate-frame radii follow the existing CF wall and
+and the active signed margin. Plate-frame radii follow the existing cross-tube wall and
 axle diameter design variables. The reference profile exposes the same nominal
 shaft dimension defaults as fixed clearance inputs, without changing its mass
 model. The three allowances/requirement remain fixed configuration inputs.
@@ -129,13 +162,18 @@ shape are not predicted by this screen.
 
 ## Structure and mass
 
+The actuator force acceptance uses `actuator_safety_factor=1.0` by user choice:
+calculated actuator demand is compared directly with its rated force. This
+does not change the separate structural load factor or structural safety factor.
+The saved baseline retains `fill_fraction=0.9`.
+
 The optional `--structure plate-frame` profile replaces the following reference
-screens with coordinate-driven two-force plate strips, transverse CF rod flexure,
+screens with coordinate-driven two-force plate strips, transverse aluminum cross-tube flexure,
 aluminum box rockers and drum arms, and a round suspension axle. It fixes the user-specified
-6.35 mm sheet and 25.4 mm CF ID; common spoke width and CF wall/span are optimized.
+6.35 mm sheet and 25.4 mm cross-tube ID; common spoke width and cross-tube wall/span are optimized.
 Only mirrored fully loaded level-ground gravity is in its structural load scope.
 Cutting/recovery and local/whole-plate instability require separate verification.
-CF properties remain provisional. Its mass placement, output interpretations,
+cross-tube properties remain provisional. Its mass placement, output interpretations,
 geometry failure domains and unchanged 5 mm envelope are documented in
 [PLATE_FRAME.md](docs/PLATE_FRAME.md). `ModelSet()` retains the reference below.
 
@@ -232,7 +270,7 @@ The optimizer checks this one half-loaded arm position only. Control software mu
 
 ## Fresh-site motion
 
-The requested fully loaded 0.40 m obstacle now has geometric reach and gravity
+The requested fully loaded 0.30 m obstacle now has geometric reach and gravity
 support constraints through `ModelSet.obstacle_stability`. The user confirmed
 centered side-rocker pivots and an average-angle differential, with an editable
 +0.10 m pivot height estimate above the axle line. The posed model preserves
@@ -261,7 +299,7 @@ Port names, units, margin sign and numerical reserves are unchanged; the legacy
 Independent camber/steering, deflection, other hardware and the actual crossing
 trajectory remain unverified. See [equations and domain](docs/OBSTACLE_TRAVERSAL.md#parallel-cylinder-clearance-default-revision-2).
 
-Empty relocation translates to a neighboring fresh lane with two 90-degree turns; rest-to-rest time, kinetic/scrub/rolling energy, torque and level-ground traction are charged. Lane offset must exceed total drum width. Each cycle reserves the rectangle enclosing both drum stations, including the center gap; cumulative area must fit available_excavation_area. A real site planner must still check maneuver space and legal-zone topology. Trench traversal currently requires wheel_diameter >= trench_depth; this is a geometric placeholder, not a traction or exit simulation. These area/path values are planning assumptions, not asserted competition rules.
+Empty relocation translates to a neighboring fresh lane with two 90-degree turns; rest-to-rest time, kinetic/scrub/rolling energy, torque and level-ground traction are charged. Lane offset must exceed total drum width. Each cycle reserves the rectangle enclosing the complete forward pass and both drum stations, including the center gap; cumulative area must fit available_excavation_area. A real site planner must still check maneuver space and legal-zone topology. Trench traversal currently requires wheel_diameter >= trench_depth; this is a geometric placeholder, not a traction or exit simulation. These area/path values are planning assumptions, not asserted competition rules.
 
 ## Mission and numerical verification
 
@@ -274,13 +312,13 @@ are additive to the endpoint obstacle and uneven-dump contracts. Slope and rock
 are separate cases; failed four-contact poses are not replaced with invented
 three-wheel poses. See [traversal equations](docs/OBSTACLE_TRAVERSAL.md#slope-and-intermediate-height-stability).
 
-Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, nominal actuator strokes, relocation and alignment, minus lowering/cutting overlap. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
+Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, conservative sequential actuator positioning, relocation and alignment. Moving excavation sets lowering/cutting overlap to zero. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
 
 Central whole-model FD supports deterministic replacement components. Tests audit omitted dependencies, geometry/conservation limits, mass properties, drive limits, invalid domains and complete optimization. Nonsmooth branches still exist; SLSQP is local and COBYLA is available. Failed final iterates remain labeled failed; numerical consistency/convergence is not empirical validation. Reports identify component factories. Old outputs must be rerun before comparison. Manual inspection still covers 3D packaging, E-stop, radio, materials, autonomy, dust, berm placement and legal zones.
 
 ## Evidence and interpretation
 
-- [NASA IPEx bucket-drum experiments](https://ntrs.nasa.gov/citations/20210025846): BP-1 tests with different drum sizes, cut depths and feed speeds measured collection, forces, torque and energy. They motivate shallow scoop engagement and future feed/RPM calibration; they do not calibrate this stationary plunge.
+- [NASA IPEx bucket-drum experiments](https://ntrs.nasa.gov/citations/20210025846): BP-1 tests with different drum sizes, cut depths and feed speeds measured collection, forces, torque and energy. They motivate shallow scoop engagement and future feed/RPM calibration; they do not calibrate this forward-feed model.
 - [RASSOR 2.0 design](https://ntrs.nasa.gov/citations/20210011366): opposing drums and drive hardware context; hardware/geometry differ here.
 - [Rotating-cylinder torque measurements](https://pmc.ncbi.nlm.nih.gov/articles/PMC4891708/): speed/fill dependence and nonmonotonic high-speed torque motivate limiting the response domain.
 - [Centrifugation experiments](https://doi.org/10.1088/1367-2630/13/5/053055): Froude is a regime indicator with fill/friction dependence.

@@ -4,6 +4,227 @@ Checked locally using the repository's `.venv`. This page
 describes the current implementation; Git history retains earlier run notes.
 Software verification is separate from physical calibration and validation.
 
+## Pre-push actuator-range consistency (2026-10-30)
+
+The current generic actuator commands start at 0.454/0.454/0.706 m, with all
+three search ranges constrained to 0.453898–0.707898 m. Historical numerical
+and geometry regressions explicitly select their original actuator defaults
+and ranges through `tests/historical_fixtures.py`; their original assertions
+are retained. The hardware-freeze example now uses an in-range 0.70 m extended
+command. A separate boundary test verifies that each current actuator range
+is enforced even when frozen, for both frame profiles. Production bounds
+and physical feasibility criteria were not relaxed to accommodate fixtures.
+
+The full 208-test suite passed in 322.192 s, including the new frozen-actuator
+boundary test. The ten targeted regression/freeze tests also pass. The fresh full-model derivative
+step-size check passed, followed by a bounded one-iteration optimizer smoke
+test that retained `failed_or_infeasible`. The current generic fixed evaluation
+has dry mass 45.30313382 kg and cycle time 883.92713786 s; its five retained
+failures are stowed length, ground clearance, empty/full climbing and turn
+traction. Results are under `results/pre_push_*` and remain outside Git.
+
+## Unified full-width inlet (2026-10-30)
+
+Moving excavation revision 2 / report schema 7 uses one `inlet_depth` for radial
+protrusion and each fresh layer's cut depth. Each inlet spans `drum_length`;
+the 0.15 partial-width force factor and separate opening/depth-ratio inputs
+are retired in this model. Front/rear depths below original grade are one/two
+inlet depths. Storage excludes the protrusion. Independent old input settings
+are retained only for explicitly selected stationary reference factories.
+
+The full 207-test suite passed in 504.600 s. The final four report tests also
+passed after the layout updates. The 15 focused physics/report tests pass,
+including the single-depth/full-width
+contract, legacy input migration/rejection, soil conservation, domain failure,
+smooth derivatives and one-time electrical losses. The full-model derivative
+step-size check also passed. Bounded generic SLSQP (`--maxiter 1`) and saved
+profile COBYLA trials remain `failed_or_infeasible`; no convergence is claimed.
+COBYLA raises its minimum evaluation budget to 37 (number of variables + 2),
+as reported by SciPy. All final physical and bound failures are retained.
+These are software/analytical checks, without new fitted data or hardware tests.
+
+The saved baseline in `results/moving_excavation_baseline.json` / `.html` now
+uses a 14 mm inlet depth and 340 mm full inlet width per drum. Front/rear
+depths below original grade are 14/28 mm. Dry mass (43.77803065 kg) and storage
+payload (118.48948426 kg) are unchanged from the same-input pre-change record
+`results/inlet_depth_before.json`: storage already excluded the 14 mm protrusion.
+The fresh lane increases from 2.55310244 to 6.38275610 m as the old independent
+35 mm layer becomes 14 mm. Full-width cutting force increases from 2.295 to
+15.3 N at the same feed/RPM. Cycle time is 1793.66559131 s, cycle energy
+140.99442607 Wh, and the complete-cycle margin is -893.66559131 s: no complete
+delivery cycle fits in the 900 s mission. Its eight failures remain stowed
+height, ground clearance, empty/full climbs, turn traction, complete-cycle time,
+asymmetric tipping and cross-tube bending.
+
+The generic fixed evaluation in `results/my_change_baseline.json` remains
+infeasible with its six existing packaging/clearance/climb/stability failures.
+Its cycle time is 891.60713786 s. The reference ground-clearance upper-bound
+conflict documented below remains unchanged. These bounded solver trials are
+verification exercises, not replacements for a design search or validation.
+
+## Initial forward-feed excavation (2026-10-30; superseded by unified inlet)
+
+The default excavation model now drives through a fresh lane with front/rear
+cut depths of one/two scoop openings. The same-track soil balance credits one
+fresh layer per pair, constrains advance per scoop against maximum bite and
+includes staged feed motion, wheel-drive work and ground-level axle reach.
+See [equations, staging, domain and limitations](MOVING_EXCAVATION.md).
+
+The full 205-test suite passed in 539.209 s. A subsequently added function-factory
+regression also passed, with all ten moving-physics tests passing in that focused
+rerun. The four new report tests pass. The tests cover independent
+soil/storage conservation, the feed/RPM boundary and raw overfeed failure,
+eccentric operating-pose closure, staged pass distance/time, work and one-time
+electrical losses, motor/response replacement, smooth derivatives, signed
+invalid-domain behavior, and the report's excavation/operating visuals. These
+are analytical/software checks. No soil dataset was fitted, hardware test was
+run, or quantitative physical prediction error established.
+
+The required generic fixed evaluation completed in
+`results/my_change_baseline.json` and `.html` with six failures retained:
+stowed length, ground clearance, empty/full BWR climbing, slope tipping and
+rock-sweep wheel loading. It remains infeasible. Its dry mass is
+45.2511338166 kg, payload is 23.1623343164 kg and cycle time is 630.283833239 s.
+All new moving-excavation margins pass at this input design.
+
+The required full-model total-derivative step-size check passed. The generic
+reference profile also has a pre-existing geometric infeasibility: its fixed
+rocker offset and shaft diameter bound the rocker underside clearance at
+`0.8*(0.359/2)+0.10-0.055/2-0.0254 = 0.1907 m`, even at the wheel-diameter
+upper bound. That is 12.5 mm below the 0.2032 m requirement. Neither the
+requirement nor the wheel cap was relaxed for excavation or optimization.
+
+The generic SLSQP cold-start run was manually interrupted after 72 complete
+recorded driver evaluations once this infeasibility was established; SciPy did
+not return a termination result. The last complete recorded trial was reevaluated
+and saved in `results/my_change_optimization.json`/`.html` with
+`optimizer_termination=interrupted_after_infeasibility_proof`,
+`optimizer_success=false`, `feasible=false` and `status=failed_or_infeasible`.
+It is not a converged candidate. Its ground-clearance margin is -12.5 mm;
+dry mass, both climbs, straight motor force, travel drum clearance, wheel/drum
+clearance, drum torque and ground-level axle reach also fail. The interruption
+and failed margins are recorded separately in
+`results/my_change_optimization_interrupted.log`; the original CLI log retains
+the successful derivative check. No completed optimizer result is claimed.
+
+The saved plate-frame/X44/PA-04 baseline evaluation completed in
+`results/moving_excavation_baseline.json` and `.html`, also infeasible. At
+`feed_speed=0.005 m/s`, front/rear depths are 35/70 mm. Dry mass is
+43.7780306485 kg and the modeled storage payload is 118.489484264 kg. The
+productive lane is 2.5531024405 m; staged drive distance is 3.9445085686 m.
+Cycle time is 1026.79916716 s against a 900 s mission, leaving a
+-126.799167163 s complete-cycle margin and no completed-cycle delivery credit.
+Cycle energy is 56.8368124147 Wh.
+
+Its eight failures are stowed height (-2.233536 mm), ground clearance
+(-99.2 mm), empty/full BWR climbing (-0.3437635423/-0.1218819442 normalized
+force-shortfall reserves), turn traction (-294.3967967658 N), complete-cycle
+time, asymmetric-pair tipping (-75.721404 mm) and cross-tube bending
+(-7.006841 MPa). Every new moving-excavation screen passes:
+
+| Screen | Signed reserve at saved baseline |
+| --- | --- |
+| Advance per scoop (`feed_margin`) | +13.375 mm |
+| Operating poses (`operating_reach_margin`) | +45.444394 mm |
+| Ground-level axle (`axle_ground_margin`) | +40.035833 mm |
+| Geometry domain (`excavation_domain_margin`) | +144.5 mm |
+| Feed motor force (`feed_motor_margin`) | +7177.006460 N |
+| Feed traction (`feed_traction_margin`) | +126.046960 N |
+| Feed power (`feed_power_margin`) | +2672.614765 W |
+
+`results/legacy_excavation_comparison.json` compares stationary and moving
+models at identical inputs for both profiles. Dry mass is unchanged exactly
+within each pair: 45.2511338166 kg for generic and 43.7780306485 kg for the
+saved baseline. Generic payload is unchanged; saved-baseline payload changes
+from 86.0099831355 to 118.489484264 kg because a fresh lane now supplies the
+storage target. Moving time/energy and sequential arm timing are charged
+explicitly. This comparison audits implementation and accounting; agreement
+with the former model is not physical validation.
+
+A profile optimization with `maxiter=40` completed in
+`results/moving_excavation_profile_optimization.json` with
+`optimizer_success=false`, `feasible=false` and status
+`failed_or_infeasible`. It did not converge. Its remaining physical and bound
+failures are retained in the JSON/report; it is not a feasible candidate.
+
+Historical regression tests now explicitly select their original zero-offset
+pin geometry, stationary reference or 400 mm obstacle where those fixtures
+define their independent limits and saved expectations. Test-only fixtures
+preserve the original assertions. They do not alter current production
+attachment bounds, obstacle requirements or the default moving model.
+
+## Actuator safety factor set to one (2026-10-29)
+
+At the user's request, `actuator_safety_factor` is now 1.0 in the model defaults
+and saved baseline. The PA-04 force limit is therefore its full 4003.399 N
+catalog rating. Force demand, chart speed/current, geometry and structural
+factors are unchanged. The user confirmed keeping baseline `fill_fraction=0.9`.
+This is an explicit acceptance-policy change; no manufacturer-internal reserve
+or new hardware validation is asserted. Historical motor regression cases now
+request their original 1.5 actuator factor explicitly, with their fixture data
+and numerical assertions unchanged. Existing reports retain their original
+assumptions until regenerated. No optimization or full-suite rerun was requested.
+
+The fixed baseline evaluation completed (`results/actuator_sf1_baseline.json`
+and `.html`), with remaining failures retained. Direct checks confirm the new
+force margin equals rated force minus demand, fill remains 0.9, and structural
+factors remain 2.0/1.5. The historical motor-interface regression passed in
+1.687 s (`results/actuator_sf1_motor_regression.log`). No optimization was run.
+
+## Aluminum transverse cross-tubes (2026-10-29)
+
+Changed the four former CF frame tubes to aluminum: density 2700 kg/m3,
+Young's modulus 69 GPa and yield screening strength 240 MPa, matching the
+existing aluminum assumptions. Retained tube dimensions, four-tube inventory,
+mass/CG/inertia ownership, beam equations, load/safety factors and constraints.
+Renamed live tube inputs/outputs to `cross_tube_*`; the bottom-pivot clearance
+radius, dependencies, report geometry/labels and maintained input files follow
+the new names. See PLATE_FRAME.md for the input/output migration. Earlier saved
+reports and the notes below remain historical; they do not validate aluminum
+hardware or current feasibility. No optimization convergence run was requested.
+
+Focused verification covered 34 tests: 32 passed in the initial run; the two
+historical reference/motor regressions then passed after explicitly freezing
+their original zero-offset linkage geometry (including its test-only bounds).
+Their original assertions/tolerances and fixture data are unchanged. Current
+production actuator inputs/bounds were preserved. Logs are
+`results/aluminum_tube_checks.log`, `aluminum_tube_legacy_motor.log` and
+`aluminum_tube_reference_drum.log`. Checks include independent four-annulus mass,
+yield/SF margin, insufficient strength and invalid material domains, connected
+ports, smooth derivatives, report geometry, and mass/energy accounting.
+No full suite or optimization was run.
+
+The fixed student evaluation completed and wrote
+`results/aluminum_tube_baseline.json` and `.html`. Four cross-tubes total
+0.2974912314 kg and their bending margin is +24.0378 MPa. The baseline remains
+infeasible: rover height, ground clearance, empty/full BWR climbing, turn
+traction and asymmetric tipping fail. A successful fixed evaluation or passing
+software check is not hardware calibration or a feasible optimized design.
+
+## Thirty-centimetre obstacle requirement (2026-10-29)
+
+Changed the shared `obstacle_height` default and saved baseline override from
+0.40 m to 0.30 m. This supplies `obstacle_drum_wheel_margin`, endpoint obstacle
+reach/tipping, the intermediate-height rock sweep and associated pose diagnostics.
+The sweep remains 41 samples, now 7.5 mm apart at the default height. Updated
+current documentation, report wording and model evidence. Historical unreachable
+40 cm regression cases now request that height explicitly, retaining their
+original failure assertions. Existing saved reports and numerical results below
+retain their original inputs. No optimization or full-suite rerun was performed
+for this value-only update. A direct configuration check confirmed 0.30 m in
+both the model defaults and saved baseline.
+
+## Eight-inch ground clearance requirement (2026-10-29)
+
+Raised `minimum_ground_clearance` from 0.1524 m (6 inches) to 0.2032 m
+(8 inches), including the helper default, margin scale, model metadata and
+current equations/model card. Axle radii, wheel compression and differential-bar
+deductions are unchanged. The independent eight-inch boundary test passed
+(`unittest discover -s tests -p test_ground_clearance.py -k eight_inch -v`).
+No optimization or full-suite rerun was performed for this value-only update.
+The results below and existing saved reports are historical six-inch snapshots;
+they do not verify feasibility under the new requirement.
+
 ## Axle underside radii in ground clearance (2026-10-29)
 
 The user confirmed subtracting each axle's outer radius before selecting the

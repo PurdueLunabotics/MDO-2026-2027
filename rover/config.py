@@ -9,7 +9,7 @@ import math
 
 # name: (initial value, lower bound, upper bound, OpenMDAO units)
 DESIGN = {
-    "lin_act_side_arm_offset": (0.0, -0.15, 0.15, "m"),
+    "lin_act_side_arm_offset": (-0.0508, -0.15, -0.0508, "m"),
     "lin_act_top_arm_offset": (0.0, -0.15, 0.15, "m"),
     "wheel_diameter": (0.30, 0.18, 0.359, "m"),
     "wheel_width": (0.10, 0.05, 0.359, "m"),
@@ -19,18 +19,19 @@ DESIGN = {
     "drive_gear_ratio": (100.0, 15.0, 180.0, None),
     "drum_motor_power": (100.0, 20.0, 400.0, "W"),  # each pair shares one
     "drum_rpm": (20.0, 5.0, 120.0, "rpm"),
+    "feed_speed": (0.005, 0.0001, 0.5, "m/s"),  # straight excavation ground speed; exploratory bounds
     "dump_rpm": (15.0, 5.0, 60.0, "rpm"),
     "drum_gear_ratio": (120.0, 30.0, 400.0, None),
-    "cut_depth": (0.012, 0.003, 0.025, "m"),  # scoop protrusion / maximum bite
+    "inlet_depth": (0.012, 0.003, 0.025, "m"),  # radial protrusion AND fresh-layer cut depth
     "frame_tube_diameter": (0.055, 0.025, 0.10, "m"),
     "frame_wall": (0.002, 0.001, 0.005, "m"),
     "arm_tube_diameter": (0.050, 0.025, 0.10, "m"),
     "arm_wall": (0.002, 0.001, 0.005, "m"),
     "battery_capacity": (50.0, 10.0, 300.0, "W*h"),
     "actuator_speed": (0.025, 0.005, 0.08, "m/s"),
-    "travel_actuator_length": (0.38, 0.30, 0.65, "m"),
-    "actuator_retracted_length": (0.45, 0.25, 0.65, "m"),  # compact starting pose
-    "actuator_extended_length": (0.68, 0.45, 1.05, "m"),
+    "travel_actuator_length": (0.454, 0.453898, 0.707898, "m"),
+    "actuator_retracted_length": (0.454, 0.453898, 0.707898, "m"),  # compact starting pose
+    "actuator_extended_length": (0.706, 0.453898, 0.707898, "m"),
     "top_pivot_height": (0.45, 0.35, 0.70, "m"),  # above level ground
     "actuator_pivot_x": (0.15, 0.02, 0.30, "m"),  # actuator mount; independent of arm pivot_x
     "bottom_pivot_height": (0.15, 0.09, 0.30, "m"),
@@ -43,7 +44,7 @@ DESIGN = {
 
 # name: (value, units). These are fixed during one optimization, but editable.
 ASSUMPTIONS = {
-    "minimum_ground_clearance": (0.1524, "m"),  # USER: 6 inches after deductions
+    "minimum_ground_clearance": (0.2032, "m"),  # USER: 8 inches after deductions
     "clearance_radius_deflection_fraction": (0.20, None),  # USER: radial compression, clearance screen only
     "differential_bar_clearance_allowance": (0.0254, "m"),  # USER: 1 inch below the lower axle
     # Fixed for each solve; CLI --set accepts degrees. Separate from static slope_angle.
@@ -64,7 +65,6 @@ ASSUMPTIONS = {
     "delivery_efficiency": (0.90, None),  # fraction retained ABOVE grade IN target
     "capture_fraction": (0.65, None),  # retained fraction of reachable fresh soil; uncalibrated
     "cut_pressure": (18000.0, "Pa"),  # effective cutting resistance, not BP-1 data
-    "cut_engagement": (0.15, None),  # fraction of full-width cut engaged
     "internal_lift_factor": (0.15, None),  # internal soil torque / (payload*g*radius)
     "vertical_cut_fraction": (0.50, None),
     "force_imbalance": (0.15, None),  # residual horizontal force after cancellation
@@ -104,7 +104,7 @@ ASSUMPTIONS = {
     "actuator_housing_allowance": (0.04, "m"),  # generic body-length diagnostic only, not a constraint
     "pit_depth": (0.45, "m"),
     "actuator_efficiency": (0.65, None),
-    "actuator_safety_factor": (1.50, None),
+    "actuator_safety_factor": (1.0, None),  # USER: compare demand directly with actuator rating
     "breakout_force": (100.0, "N"),  # each pair; preliminary extraction resistance
     "actuator_fixed_mass": (0.60, "kg"),
     "actuator_mass_per_force": (0.0004, "kg/N"),
@@ -112,8 +112,6 @@ ASSUMPTIONS = {
     "actuator_mass_per_length": (1.0, "kg/m"),
     "stored_soil_density": (1250.0, "kg/m**3"),
     "usable_volume_fraction": (0.90, None),
-    "scoop_opening": (0.035, "m"),
-    "scoop_depth_fraction": (0.50, None),  # empirical screen, not a universal law
     "scoops_per_revolution": (4.0, None),
     "max_dig_froude": (0.30, None),  # legacy diagnostic reference only; NOT enforced
     "max_dump_froude": (0.20, None),  # legacy diagnostic reference only; NOT enforced
@@ -132,7 +130,7 @@ ASSUMPTIONS = {
     "allowable_deflection": (0.005, "m"),
     "joint_mass": (2.0, "kg"),
     "differential_mass": (1.0, "kg"),
-    "obstacle_height": (0.40, "m"),  # fully loaded, travel pose, one wheel raised
+    "obstacle_height": (0.30, "m"),  # fully loaded, travel pose, one wheel raised
     "slope_angle": (math.pi/6, "rad"),  # USER: fully loaded 30-degree slope, travel pose
     "rocker_pivot_offset": (0.10, "m"),  # estimated above wheel-center line; editable
 }
@@ -148,8 +146,8 @@ PLATE_FRAME_DESIGN = {
     "arm_box_width": (0.0508, 0.025, 0.10, "m"),  # transverse; USER baseline: 2 inches
     "arm_box_height": (0.0508, 0.025, 0.10, "m"),  # section depth in arm-motion plane
     "arm_wall": (0.0015875, 0.001, 0.005, "m"),  # USER baseline: 1/16 inch
-    "cf_tube_span": (0.28, 0.16, 0.46, "m"),  # plate center-to-center spacing
-    "cf_tube_wall": (0.002, 0.001, 0.006, "m"),  # OD = fixed ID + 2*wall
+    "cross_tube_span": (0.28, 0.16, 0.46, "m"),  # plate center-to-center spacing
+    "cross_tube_wall": (0.002, 0.001, 0.006, "m"),  # OD = fixed ID + 2*wall
     "plate_spoke_width": (0.035, 0.012, 0.070, "m"),  # in-plane; all seven strips share it
     "rocker_box_width": (0.035, 0.020, 0.065, "m"),  # transverse dimension
     "rocker_box_height": (0.055, 0.025, 0.090, "m"),
@@ -160,16 +158,16 @@ PLATE_FRAME_DESIGN = {
 }
 PLATE_FRAME_ASSUMPTIONS = {
     "plate_thickness": (0.00635, "m"),  # USER: 1/4 inch 6061-T6 sheet
-    "cf_tube_inner_diameter": (0.0254, "m"),  # USER: connector requires 1 inch ID
+    "cross_tube_inner_diameter": (0.0254, "m"),  # USER: connector requires 1 inch ID
     "wheel_rocker_gap": (0.0127, "m"),  # USER: wheel inner face to rocker outer face
     "plate_hub_radius": (0.030, "m"),  # provisional central mounting pad
     "plate_cutout_clearance": (0.005, "m"),  # provisional minimum cutout inradius after strips
-    "frame_mount_clearance": (0.003, "m"),  # provisional material beyond CF tube envelope
+    "frame_mount_clearance": (0.003, "m"),  # provisional material beyond aluminum cross-tube envelope
     "minimum_axle_overhang": (0.010, "m"),  # provisional space between plate and rocker bearing
     "plate_buckling_k": (1.0, None),  # pinned-ended weak-axis strip screen, not whole-plate buckling
-    "cf_density": (1600.0, "kg/m**3"),  # PROVISIONAL: actual tube/layup not selected
-    "cf_flexural_modulus": (70e9, "Pa"),  # PROVISIONAL effective bending modulus, not fiber modulus
-    "cf_flexural_strength": (350e6, "Pa"),  # PROVISIONAL screening value; not a certified allowable
+    "cross_tube_density": (2700.0, "kg/m**3"),  # existing aluminum screening assumption
+    "cross_tube_youngs_modulus": (69e9, "Pa"),  # existing aluminum elastic modulus
+    "cross_tube_yield_strength": (240e6, "Pa"),  # existing aluminum screening value; verify actual stock/joints
 }
 
 X44_ASSUMPTIONS = {
@@ -188,19 +186,32 @@ PA04_ASSUMPTIONS = {
 }
 
 
-def configuration(structure="reference", motors="reference", actuators="reference"):
+# Only explicitly selected stationary reference components use these old ports.
+LEGACY_DRUM_DESIGN = {"cut_depth": (0.012, 0.003, 0.025, "m")}
+LEGACY_DRUM_ASSUMPTIONS = {"scoop_opening": (0.035, "m"),
+                           "scoop_depth_fraction": (0.50, None),
+                           "cut_engagement": (0.15, None)}
+
+
+def configuration(structure="reference", motors="reference", actuators="reference", *, excavation_mode="moving"):
     """Independent dictionaries per Problem; no mutation of reference config."""
     if structure not in ("reference", "plate-frame"):
         raise ValueError(f"Unknown structure profile {structure!r}")
     design, assumptions = dict(DESIGN), dict(ASSUMPTIONS)
+    if excavation_mode == "legacy":
+        design.pop("inlet_depth")
+        design.update(LEGACY_DRUM_DESIGN)
+        assumptions.update(LEGACY_DRUM_ASSUMPTIONS)
+    elif excavation_mode != "moving":
+        raise ValueError("excavation_mode must be moving or legacy")
     if structure == "reference":
         # Nominal shaft sizes for the underside-clearance screen only. The
         # plate-frame profile below already exposes these dimensions directly.
-        for name in ("cf_tube_inner_diameter", "cf_tube_wall", "axle_outer_diameter"):
+        for name in ("cross_tube_inner_diameter", "cross_tube_wall", "axle_outer_diameter"):
             entry = PLATE_FRAME_ASSUMPTIONS.get(name, PLATE_FRAME_DESIGN.get(name))
             assumptions[name] = (entry[0], entry[-1])
     if structure == "plate-frame":
-        # Generic frame tubes are replaced by explicit rockers, CF rods and axle.
+        # Generic frame tubes are replaced by explicit rockers, aluminum cross-tubes and axle.
         for name in ("frame_tube_diameter", "frame_wall", "arm_tube_diameter"):
             entry = design.pop(name)
             assumptions[name] = (entry[0], entry[-1])
@@ -230,9 +241,25 @@ def configuration(structure="reference", motors="reference", actuators="referenc
 
 def input_spec(name):
     """Unit/default lookup for adapters, including optional profile inputs."""
+    if name in LEGACY_DRUM_DESIGN or name in LEGACY_DRUM_ASSUMPTIONS:
+        return LEGACY_DRUM_DESIGN.get(name, LEGACY_DRUM_ASSUMPTIONS.get(name))
     return DESIGN.get(name, ASSUMPTIONS.get(name,
            PLATE_FRAME_DESIGN.get(name, PLATE_FRAME_ASSUMPTIONS.get(name,
            X44_ASSUMPTIONS.get(name, PA04_DESIGN.get(name, PA04_ASSUMPTIONS.get(name)))))))
+
+
+def migrate_inlet_inputs(values):
+    """Explicit migration of historical moving inputs; no hardware data invented."""
+    migrated, retired = dict(values), {}
+    if "cut_depth" in migrated:
+        if "inlet_depth" in migrated:
+            raise ValueError("Inputs mix cut_depth and inlet_depth; use inlet_depth only")
+        retired["cut_depth"] = migrated.pop("cut_depth")
+        migrated["inlet_depth"] = retired["cut_depth"]
+    for name in LEGACY_DRUM_ASSUMPTIONS:
+        if name in migrated:
+            retired[name] = migrated.pop(name)
+    return migrated, retired
 
 # name: (upper limit, units); guidebook section 13. These are stowed dimensions.
 REQUIREMENTS = {

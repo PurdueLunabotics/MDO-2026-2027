@@ -284,6 +284,26 @@ bounds; **assumptions** remain fixed. `--set` changes an input or starting value
 not whether it is optimized. These runs leave both maintained design files unchanged.
 The report-publishing command deliberately updates only the candidate JSON.
 
+Excavation now uses a straight forward pass. The front drum pair cuts to one
+`inlet_depth` below the original surface; the rear pair follows the same tracks
+at twice that depth, taking a second fresh layer. Inlet depth is also radial
+scoop protrusion, excluded from storage; the inlet spans each drum's full width.
+Set inlet depth in **m**, feed speed in **m/s** and
+drum rotation in **rpm**, for example:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --set inlet_depth=0.014 --set feed_speed=0.005 --set drum_rpm=20 --output results/moving_dig.json
+```
+
+The report shows the two soil layers and the maximum feed-speed/RPM boundary.
+Forward advance per scoop must not exceed `inlet_depth`; an overfeed run retains its failed
+check. Storage determines the required fresh lane length, and feeding drive
+work is included in digging energy. Maximum extension must also put the drum
+axle at ground level or lower for the requested plunge/recovery reach. That
+geometric check does not validate driving on the drums or motor-body clearance.
+See [moving-excavation equations and limits](docs/MOVING_EXCAVATION.md). Earlier
+saved reports describe the old excavation model until regenerated.
+
 Traversal timing is optional. Fixed timing remains the default (45 seconds each
 way unless overridden). Calculated timing selects separate BWR/motor-limited
 outbound and return profiles, treating `travel_speed` and `acceleration` as upper

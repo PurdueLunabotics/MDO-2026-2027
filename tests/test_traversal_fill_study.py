@@ -58,7 +58,7 @@ class TraversalFillStudyTests(unittest.TestCase):
 
     def test_fill_is_a_four_drum_capacity_ceiling_not_forced_payload(self):
         v = self.values
-        capacity = 4*math.pi*(v['drum_diameter']/2-v['cut_depth'])**2*v['drum_length']*v['usable_volume_fraction']
+        capacity = 4*math.pi*(v['drum_diameter']/2-v['inlet_depth'])**2*v['drum_length']*v['usable_volume_fraction']
         for fill in (.2,.9):
             out = self.evaluate(45,fill)['outputs']
             target = capacity*fill*v['stored_soil_density']

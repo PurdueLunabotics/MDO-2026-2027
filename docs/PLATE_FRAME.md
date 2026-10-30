@@ -1,6 +1,21 @@
 Current attachment interface: [axle-relative side/top offsets, revision 2](ARM_OFFSETS.md). The fraction-based attachment selection described in older sections below is historical; live models use signed metre-valued offsets, with automatic axial tube continuation and an assumed rigid, massless normal bracket.
 
-# Preliminary CF-tube / aluminum-plate frame
+# Preliminary aluminum cross-tube / aluminum-plate frame
+
+The four transverse tubes now use aluminum with the existing 2700 kg/m3,
+69 GPa and 240 MPa screening assumptions. Geometry, four-tube mass ownership,
+beam equations and safety factors are unchanged. This is a material/input-name
+change, not a new structural model or a stock certification.
+
+Input/output names changed: `cf_tube_*` becomes `cross_tube_*`, `cf_density`
+becomes `cross_tube_density`, `cf_flexural_modulus` becomes
+`cross_tube_youngs_modulus`, `cf_flexural_strength` becomes
+`cross_tube_yield_strength`, and `cf_bending_*` becomes `cross_tube_bending_*`.
+Update external input files/scripts accordingly; old names are not aliases.
+The maintained baseline and historical-candidate input files use the new names
+and aluminum values; the latter has not been reoptimized. Historical saved
+reports/fixtures retain their original material and predictions. The motor-only
+fixture test explicitly supplies its old properties for regression comparison.
 
 Select the coordinated optional profile with:
 
@@ -22,22 +37,23 @@ sizing or mass/load fixed-point solve is hidden inside a component.
 ## Known hardware and provisional choices
 
 The student specified 1/4 inch (0.00635 m) 6061-T6 plates, 1 inch (0.0254 m)
-CF tube ID, aluminum box rockers, a 1/2 inch (0.0127 m) wheel-to-rocker gap,
+aluminum cross-tube ID, aluminum box rockers, a 1/2 inch (0.0127 m) wheel-to-rocker gap,
 bonded inserts plus single bolts, and arm/actuator bushings rotating around the
 tubes. Top tubes carry actuator loads; bottom tubes carry arm-pivot loads.
 Tube loads act on their sides, not along the transverse tube axes. Drum arms
 now use aluminum box tube; the user-selected baseline is 2 x 2 inches outside,
 1/16 inch wall (50.8 x 50.8 x 1.5875 mm). The previous round arms already used
-the aluminum material inputs; CF properties apply to transverse rods only.
+the aluminum material inputs. The transverse tubes now also use aluminum;
+their separate `cross_tube_*` material inputs start at the same screening values.
 
 The following remain explicit assumptions, NOT measured or selected products:
 
 | Choice | Initial model |
 | --- | --- |
 | Plate topology | Two identical plates, each with four radial and three perimeter strips joining S, front/rear A and front/rear B; three cutouts |
-| CF properties | Density 1600 kg/m3, effective bending modulus 70 GPa, flexural strength 350 MPa; all provisional |
+| Cross-tube properties | Aluminum: density 2700 kg/m3, Young's modulus 69 GPa, yield screening strength 240 MPa; actual stock/joints unverified |
 | Central pad | 30 mm radius; mass counted as a solid disk |
-| Mount material reserve | CF OD/2 plus 3 mm |
+| Mount material reserve | cross-tube OD/2 plus 3 mm |
 | Minimum cutout inradius | 5 mm after allowing half strip width |
 | Axle space at each end | 10 mm minimum between plate outside face and rocker bearing center |
 | Metal properties | Retain existing 2700 kg/m3, 69 GPa, 240 MPa screening inputs |
@@ -46,16 +62,16 @@ The following remain explicit assumptions, NOT measured or selected products:
 
 Kaiser's 6061 sheet/plate data lists typical T6/T651 yield strength 276 MPa,
 modulus 68.3 GPa and density 2700 kg/m3. The retained 240 MPa screening value
-is not an actual purchased-stock allowable or a certified minimum. Actual CF
-properties must come from the selected tube/layup, not fiber modulus alone.
+is not an actual purchased-stock allowable or a certified minimum. Cross-tube
+properties and joint allowables must be checked against the selected aluminum stock.
 
 Source: [Kaiser 6061 sheet/plate technical data](https://online.kaiseraluminum.com/depot/PublicProductInformation/Document/1015/Kaiser_Aluminum_6061_Sheet_Coil_and_Plate.pdf).
 No experimental dataset or fitted relationship was introduced.
 
 ## Adjustable dimensions and geometry
 
-Plate thickness and CF ID are fixed assumptions. Profile design variables add
-common in-plane `plate_spoke_width`, `cf_tube_span`, `cf_tube_wall`,
+Plate thickness and cross-tube ID are fixed assumptions. Profile design variables add
+common in-plane `plate_spoke_width`, `cross_tube_span`, `cross_tube_wall`,
 `rocker_box_width`, `rocker_box_height`, `rocker_wall`, `axle_outer_diameter`,
 `axle_wall` and `rocker_pivot_offset`. The old generic frame diameter/wall are
 inactive fixed entries in this profile. Arm variables are `arm_box_width`,
@@ -71,7 +87,7 @@ it must explicitly provide box width/height instead; the builder rejects a lone
 old diameter rather than silently ignoring the requested section. The reference
 model keeps its original round-arm input. Historical round-arm factories remain
 available for explicit comparisons and the strict motor-interface regression.
-`cf_tube_outer_diameter = cf_tube_inner_diameter + 2*cf_tube_wall` is reported.
+`cross_tube_outer_diameter = cross_tube_inner_diameter + 2*cross_tube_wall` is reported.
 All new starting values/bounds are exploratory; no claim of COTS availability.
 
 Side-elevation nodes (x forward, z up, metres above original level ground):
@@ -112,7 +128,7 @@ For transverse packaging:
 
 ```text
 rocker_bearing_span = track_width - wheel_width - 2*wheel_rocker_gap - rocker_box_width
-frame_packing_margin = (rocker_bearing_span-cf_tube_span-plate_thickness)/2
+frame_packing_margin = (rocker_bearing_span-cross_tube_span-plate_thickness)/2
                        - minimum_axle_overhang
 ```
 
@@ -125,7 +141,7 @@ degree of freedom in this profile.
 
 ## Mass boundaries and placement
 
-Structure mass includes four sloping half-rockers, four CF rods, two plates,
+Structure mass includes four sloping half-rockers, four aluminum cross-tubes, two plates,
 one transverse aluminum round axle and the existing joint/differential allowances.
 Rocker mass remains a SUBSET of structure mass. Aluminum arm linear mass enters
 LinkageGeometry's two-arm mass once. Four wheels and four drums/two drum motor
@@ -161,25 +177,26 @@ its midpoint. The reaction on the chassis at A is the opposite actuator force;
 the reaction at B is actuator force plus the drum/arm gravity vector. Their sum
 is exactly the drum/arm gravity vector. Other hardware weight is included in
 overall suspension loading but detailed actuator weight loading at the bushings
-is omitted from this preliminary arm/CF calculation.
+is omitted from this preliminary arm/cross-tube calculation.
 
 Each transverse tube sends half its point-force reaction to each plate. Its own
 distributed weight is included. The tube flexure screen uses two half-span
 cantilevers receiving half the midpoint force each:
 
 ```text
-l = cf_tube_span/2
+l = cross_tube_span/2
 M_vector = (F/2)*l + q_vector*l2/2
-displacement_vector = ((F/2)*l3/3 + q_vector*l4/8)/(E_CF*I_CF)
-CF bending stress = norm(M_vector)*OD/(2*I_CF)
+displacement_vector = ((F/2)*l3/3 + q_vector*l4/8)/(cross_tube_youngs_modulus*I_cross)
+cross_tube_bending_stress = norm(M_vector)*OD/(2*I_cross)
+cross_tube_bending_margin = cross_tube_yield_strength/SF - cross_tube_bending_stress
 ```
 
 These are independent flexure screens. Tube-end bending moments are NOT applied
 to the axial plate model; out-of-plane plate bending and actual rotational joint
 restraint are outside it. It is not an assembled 3D equilibrium/stiffness model.
-Ideal rotating bushings do not add a torque about the tube axis. CF allowable is
-an effective flexural strength assumption, separately constrained from aluminum
-yield. CF local wall instability, shear/delamination and inserts are unverified.
+Ideal rotating bushings do not add a torque about the tube axis. The cross-tube
+margin now uses aluminum yield strength divided by the same safety factor.
+Cross-tube local wall instability, shear, joints and inserts remain unverified.
 
 For the plate, solve axial elastic truss equilibrium with A=t*w and stiffness
 E*A/l. Strip self-weight is distributed to its endpoints. Central support S is
@@ -219,8 +236,8 @@ existing aluminum density, modulus and yield screening inputs. Stock corner
 radii, alloy/temper certification, local wall buckling, torsion, mount/weld
 strength and actual arm collision envelopes require separate verification.
 
-`structure_stress` is an eighth-norm envelope of ALUMINUM arm/rocker/axle/plate
-stress; `cf_bending_margin` is separate. `structure_buckling_margin` is the minimum
+`structure_stress` is an eighth-norm envelope of aluminum arm/rocker/axle/plate
+stress; aluminum `cross_tube_bending_margin` remains separate. `structure_buckling_margin` is the minimum
 of weak-axis plate-strip, rocker and arm Euler screens. Rocker/arm effective
 length is twice their cantilever length; their compression comes from the same
 applied forces used for stress. Separate plate_buckling_margin,
@@ -249,7 +266,7 @@ N2 sources, reference preservation, mission energy and smooth total derivatives.
 JSON and HTML include profile inputs, materials/evidence, new margins and local
 displacements. A separate SVG shows the selected plate member topology.
 
-Numerical feasibility remains conditional on the stated assumptions. No CF tube
+Numerical feasibility remains conditional on the stated assumptions. No aluminum cross-tube
 has been selected or tested; no plate FEA or hardware validation was performed.
 Connectors and recovery/cutting verification remain outside this profile.
 

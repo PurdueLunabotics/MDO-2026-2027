@@ -18,7 +18,7 @@ HARDWARE = {
     "wheel_width": .18,
     "travel_actuator_length": .50,
     "actuator_retracted_length": .508,
-    "actuator_extended_length": .726,
+    "actuator_extended_length": .70,
 }
 
 
@@ -86,6 +86,17 @@ class FreezeDesignTests(unittest.TestCase):
             build_problem(freeze=configuration()[0])
         p = self.problem(freeze="wheel_width")
         self.assertNotIn("wheel_width", p.design_specs)
+
+    def test_current_actuator_length_bounds_are_enforced_when_frozen(self):
+        for structure in ("reference", "plate-frame"):
+            design, _ = configuration(structure)
+            for name in ("travel_actuator_length", "actuator_retracted_length", "actuator_extended_length"):
+                _, lower, upper, _ = design[name]
+                self.assertEqual((lower, upper), (.453898, .707898))
+                for value in (lower-1e-6, upper+1e-6):
+                    with self.subTest(structure=structure, name=name, value=value):
+                        with self.assertRaisesRegex(ValueError, "positive bounds"):
+                            build_problem({name: value}, structure=structure, freeze=[name])
 
     def test_cli_uses_file_then_set_values_and_identifies_fixed_inputs_in_report(self):
         design, _ = configuration("plate-frame", "x44-standard")

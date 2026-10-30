@@ -167,7 +167,7 @@ class TraversalStability(Discipline):
     model_evidence = {"revision": 1, "status": "analytical quasi-static screen; no experimental validation",
                       "loading": "all four drums loaded; fixed travel arms; slope and rock tested separately",
                       "slope": "user requirement 30 degrees, planar rigid contact, every heading; friction/holding torque assumed",
-                      "rock": "user retained one raised wheel; 41 heights from zero to 0.40 m, each wheel in turn",
+                      "rock": "user retained one raised wheel; 41 heights from zero to obstacle_height (default 0.30 m), each wheel in turn",
                       "reaction": "ideal frictionless average-angle differential gives equal left/right pitch moments; reject negative platform reaction",
                       "omissions": "real rock profile, combined slope/rock, post-lift contact sequence, joint stops/strength, sliding, motor torque, impact and moving payload"}
 

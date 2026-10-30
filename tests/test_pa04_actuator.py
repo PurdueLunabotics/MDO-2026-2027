@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import openmdao.api as om
@@ -18,6 +19,7 @@ from rover.alternatives.pa04_actuator import (
     catalog_geometry, load_performance, cycle_performance, verify_source_data,
 )
 from rover.config import configuration, DESIGN, ASSUMPTIONS
+from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
 from rover.problem import build_problem
 from reporting.case_inputs import read_case
 from reporting.report import snapshot
@@ -109,9 +111,9 @@ class PA04Tests(unittest.TestCase):
         v = lambda n: p.get_val(n).item()
         self.assertAlmostEqual(v('linkage_mass'), 2*(v('actuator_unit_mass')+v('arm_linear_mass')*v('arm_length')))
         self.assertAlmostEqual(v('dry_mass'), sum(v(n) for n in ('fixed_mass', 'structure_mass', 'wheel_mass', 'drive_mass', 'drum_mass', 'battery_mass', 'linkage_mass')))
-        self.assertAlmostEqual(v('actuation_time'), v('lowering_time')+v('actuator_raising_time'))
-        self.assertAlmostEqual(v('dig_overlap_time'), v('lowering_time'))
-        self.assertAlmostEqual(v('cycle_time'), sum(v(n) for n in ('dig_time', 'dump_time', 'travel_time', 'turn_time', 'actuation_time', 'relocation_time', 'overhead_time'))-v('lowering_time'))
+        self.assertAlmostEqual(v('actuation_time'), 2*(v('lowering_time')+v('actuator_raising_time')))
+        self.assertEqual(v('dig_overlap_time'), 0)
+        self.assertAlmostEqual(v('cycle_time'), sum(v(n) for n in ('dig_time', 'dump_time', 'travel_time', 'turn_time', 'actuation_time', 'relocation_time', 'overhead_time')))
         energy = sum(v(n) for n in ('dig_energy', 'dump_energy', 'mobility_energy', 'relocation_energy', 'arm_energy'))
         self.assertAlmostEqual(v('cycle_energy')*3600, energy+v('electronics_power')*v('cycle_time'))
         before = [v(n) for n in ('linkage_mass', 'arm_energy', 'arm_peak_power', 'actuation_time')]
@@ -218,6 +220,7 @@ class PA04Tests(unittest.TestCase):
             self.assertIn('PA-04 actuators', output.with_suffix('.html').read_text(encoding='utf-8'))
         self.assertEqual(before, source.read_bytes())
 
+    @patch.dict(DESIGN, HISTORICAL_ACTUATOR_DESIGN)
     def test_catalog_actuators_compose_with_physical_arm_extension(self):
         ordinary = self.problem(structure='plate-frame')
         extended = self.problem(structure='plate-frame', attachment_max=1.5)
@@ -239,7 +242,7 @@ class PA04Tests(unittest.TestCase):
         expected_force = (expected_force+v('breakout_force'))*v('actuator_leverage_max')
         self.assertAlmostEqual(v('linkage_mass'), expected_mass)
         self.assertAlmostEqual(v('required_actuator_force'), expected_force)
-        self.assertAlmostEqual(v('actuation_time'), v('lowering_time')+v('actuator_raising_time'))
+        self.assertAlmostEqual(v('actuation_time'), 2*(v('lowering_time')+v('actuator_raising_time')))
         # A PA-04 seed retains the frozen force even for an inward pin.
         from studies.linkage_multistart import geometry_seed, make_problem
         seed = geometry_seed({'final': a, 'model_metadata': ordinary.model_metadata}, .9, 'matched', 0.)

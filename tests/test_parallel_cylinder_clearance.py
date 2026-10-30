@@ -137,7 +137,8 @@ class ParallelCylinderTests(unittest.TestCase):
             self.assertAlmostEqual(math.dist(points[i],points[j]),math.dist(transformed[i],transformed[j]),places=12)
 
     def test_rock_figure_has_actual_pose_and_flagged_unreachable_example(self):
-        p=build_problem({'wheelbase':.46})
+        # Freeze the original 400 mm drawing fixture independently of defaults.
+        p=build_problem({'wheelbase':.46, 'obstacle_height':.40})
         self.addCleanup(p.cleanup)
         p.run_model()
         values=values_from_snapshot(snapshot(p))

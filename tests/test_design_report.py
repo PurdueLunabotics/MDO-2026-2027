@@ -112,15 +112,15 @@ class DesignReportTests(unittest.TestCase):
         self.assertEqual(len(members('actuator')), 2)
         self.assertEqual(len(members('rocker')), 2)
         self.assertEqual(len(members('rocker-axle')), 1)
-        self.assertEqual(len(members('cf-connector')), 4)
+        self.assertEqual(len(members('cross-tube')), 4)
         self.assertEqual(len(members('frame-plate')), 2)
         scale = float(wheels[0].get('width'))/values['wheel_diameter']
         plan_center = sum(float(d.get('y'))+float(d.get('height'))/2 for d in drums)/4
         for arm in members('arm'):
             self.assertAlmostEqual(float(arm.get('height'))/scale, values['arm_box_width'], places=5)
             self.assertAlmostEqual(float(arm.get('y'))+float(arm.get('height'))/2, plan_center, places=3)
-        for tube in members('cf-connector'):
-            self.assertAlmostEqual(float(tube.get('height'))/scale, values['cf_tube_span'], places=5)
+        for tube in members('cross-tube'):
+            self.assertAlmostEqual(float(tube.get('height'))/scale, values['cross_tube_span'], places=5)
         # Both pictures use one linkage per shaft-linked pair, centered in y.
         for member in chassis_members(values):
             if member['kind'] in ('arm','actuator'):
@@ -132,7 +132,7 @@ class DesignReportTests(unittest.TestCase):
         values = values_from_snapshot(self.state)
         root = ET.fromstring(obstacle_pose_svg(values))
         layers = [n for n in root.iter() if n.get('data-depth') is not None]
-        for kind, count in (('arm',2),('actuator',2),('cf-connector',4),('wheel',4),('drum',4)):
+        for kind, count in (('arm',2),('actuator',2),('cross-tube',4),('wheel',4),('drum',4)):
             self.assertEqual(sum(n.get('data-part') == kind for n in layers), count)
         self.assertEqual([float(n.get('data-depth')) for n in layers],
                          sorted(float(n.get('data-depth')) for n in layers))

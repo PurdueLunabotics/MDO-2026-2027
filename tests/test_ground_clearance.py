@@ -9,17 +9,17 @@ from reporting.report import snapshot
 
 
 class GroundClearanceTests(unittest.TestCase):
-    def test_six_inch_boundary_from_independent_inch_geometry(self):
-        # Independent inches: bottom=8.5-0.5-1-1=6;
-        # rocker=5+4.75-0.75-1-1=7, including each distinct shaft radius.
+    def test_eight_inch_boundary_from_independent_inch_geometry(self):
+        # Independent inches: bottom=10.5-0.5-1-1=8;
+        # rocker=5+6.75-0.75-1-1=9, including each distinct shaft radius.
         radii={'bottom_axle_radius':.5*.0254,'rocker_axle_radius':.75*.0254}
-        out=axle_ground_clearance(10*.0254,8.5*.0254,4.75*.0254,**radii)
-        self.assertAlmostEqual(out['bottom_pivot_ground_clearance']/.0254,6.)
-        self.assertAlmostEqual(out['rocker_pivot_ground_clearance']/.0254,7.)
+        out=axle_ground_clearance(10*.0254,10.5*.0254,6.75*.0254,**radii)
+        self.assertAlmostEqual(out['bottom_pivot_ground_clearance']/.0254,8.)
+        self.assertAlmostEqual(out['rocker_pivot_ground_clearance']/.0254,9.)
         self.assertAlmostEqual(out['ground_clearance_margin'],0.,places=14)
-        # Now the rocker controls: 5+2.75-0.75-1-1=5 inches.
-        out=axle_ground_clearance(10*.0254,10.5*.0254,2.75*.0254,**radii)
-        self.assertAlmostEqual(out['ground_clearance']/.0254,5.)
+        # Now the rocker controls: 5+4.75-0.75-1-1=7 inches.
+        out=axle_ground_clearance(10*.0254,12.5*.0254,4.75*.0254,**radii)
+        self.assertAlmostEqual(out['ground_clearance']/.0254,7.)
         self.assertAlmostEqual(out['ground_clearance_margin']/.0254,-1.)
 
     def test_zero_deductions_and_rigid_translation(self):
@@ -61,7 +61,7 @@ class GroundClearanceTests(unittest.TestCase):
                 self.assertFalse(state['constraints']['ground_clearance_margin']['passed'])
                 self.assertEqual(state['outputs']['ground_clearance']['units'],'m')
                 self.assertAlmostEqual(p.get_val('bottom_pivot_axle_radius').item(),
-                    p.get_val('cf_tube_inner_diameter').item()/2+p.get_val('cf_tube_wall').item())
+                    p.get_val('cross_tube_inner_diameter').item()/2+p.get_val('cross_tube_wall').item())
                 self.assertAlmostEqual(p.get_val('rocker_pivot_axle_radius').item(),
                     p.get_val('axle_outer_diameter').item()/2)
                 self.assertTrue(all(not s.startswith('_auto_ivc') for s in p.model._conn_global_abs_in2out.values()))
@@ -74,13 +74,13 @@ class GroundClearanceTests(unittest.TestCase):
             # Finite differences stay away from the min-branch equality.
             checks=p.check_totals(of=['ground_clearance','ground_clearance_margin'],
                 wrt=['wheel_diameter','bottom_pivot_height','rocker_pivot_offset',
-                     'cf_tube_inner_diameter','cf_tube_wall','axle_outer_diameter'],
+                     'cross_tube_inner_diameter','cross_tube_wall','axle_outer_diameter'],
                 method='fd',form='central',step=3e-5,step_calc='rel_avg',out_stream=None)
             assert_check_totals(checks,atol=1e-8,rtol=1e-6)
             c=p.model.ground_clearance
             self.assertIn('bottom_pivot_height',c.DEPENDENCIES['ground_clearance_margin'])
             self.assertIn('rocker_pivot_offset',c.DEPENDENCIES['ground_clearance_margin'])
-            self.assertIn('cf_tube_wall',c.DEPENDENCIES['ground_clearance_margin'])
+            self.assertIn('cross_tube_wall',c.DEPENDENCIES['ground_clearance_margin'])
             self.assertIn('axle_outer_diameter',c.DEPENDENCIES['ground_clearance_margin'])
             h=1e-5;args=[.3,bottom,.08]
             partials=[]

@@ -37,7 +37,7 @@ def validate_interfaces(problem):
         component = getattr(problem.model, slot)
         outputs = component.get_io_metadata(
             iotypes="output", metadata_keys=["units", "shape"], return_rel_names=True)
-        for name, units in reference.OUTPUT_UNITS.items():
+        for name, units in getattr(reference, "REQUIRED_OUTPUT_UNITS", reference.OUTPUT_UNITS).items():
             if name not in outputs:
                 raise ValueError(f"Replacement {slot} is missing required output {name}")
             if not same_native_units(outputs[name]["units"], units):

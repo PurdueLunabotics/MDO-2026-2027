@@ -2,7 +2,7 @@
 
 
 def chassis_members(values):
-    """One centered arm/actuator per front/rear drum pair, plus four CF rods.
+    """One centered arm/actuator per front/rear drum pair, plus four aluminum cross-tubes.
 
     Coordinates are the existing level-chassis x/y/z stations. Arm width comes
     from the section; actuator line thickness remains a schematic style.
@@ -24,12 +24,12 @@ def chassis_members(values):
                     dict(kind='actuator', station=station, start=upper, end=pin, width=None)]
         if top != 0:
             members.append(dict(kind='offset-bracket',station=station,start=(sign*qx,0.,qz),end=pin,width=None))
-        if 'cf_tube_span' in values:
-            half = values['cf_tube_span']/2
-            od = values['cf_tube_inner_diameter']+2*values['cf_tube_wall']
+        if 'cross_tube_span' in values:
+            half = values['cross_tube_span']/2
+            od = values['cross_tube_inner_diameter']+2*values['cross_tube_wall']
             for level, point in (('upper', upper), ('lower', base)):
                 x,_,z = point
-                members.append(dict(kind='cf-connector', station=station+'-'+level,
+                members.append(dict(kind='cross-tube', station=station+'-'+level,
                                     start=(x,-half,z), end=(x,half,z), width=od))
     return members
 

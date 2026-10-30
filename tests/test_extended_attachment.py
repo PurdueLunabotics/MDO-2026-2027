@@ -1,14 +1,19 @@
 """Overhang equilibrium, beam limit, mass/energy accounting and failures."""
 import math
 import unittest
+from unittest.mock import patch
 import numpy as np
 from openmdao.utils.assert_utils import assert_check_totals
 from rover.problem import build_problem
+from rover.config import DESIGN
 from rover.linkage import attachment_point
 from rover.alternatives.extended_attachment import physical_length, extended_mount_loads,extended_beam_screen
 from reporting.report import snapshot
 
 
+# The overhang fixture intentionally exercises both signs, independently of
+# the current hardware's negative-only pin-offset selection.
+@patch.dict(DESIGN, {'lin_act_side_arm_offset': (0., -.15, .15, 'm')})
 class ExtendedAttachmentTests(unittest.TestCase):
     def problem(self,values=None,**options):
         p=build_problem(values,structure='plate-frame',**options)
@@ -63,7 +68,9 @@ class ExtendedAttachmentTests(unittest.TestCase):
             self.assertAlmostEqual(math.hypot(x-v['actuator_pivot_x'],z-v['top_pivot_height']),v[name],places=10)
         empty=(get('drum_mass')/2+mu*(1.2*L)**2/(2*L))*get('gravity')
         loaded=empty+get('payload_mass')/2*get('gravity')
-        expected=2*((loaded+empty)*max(get('travel_y')-get('extended_y'),0.)+get('breakout_force')*get('cut_depth'))/get('actuator_efficiency')+2*get('actuator_idle_power')*get('actuation_time')
+        # Sequential elapsed time doubles, while summed two-motor active time
+        # and the already-total electrical energy retain the original boundary.
+        expected=2*((loaded+empty)*max(get('travel_y')-get('extended_y'),0.)+get('breakout_force')*get('cut_depth'))/get('actuator_efficiency')+get('actuator_idle_power')*get('actuation_time')
         self.assertAlmostEqual(get('arm_energy'),expected,places=8)
         self.assertEqual(get('frame_load_solution_valid'),1.)
         # Subtract tails and independently add their centroid and yaw inertia.

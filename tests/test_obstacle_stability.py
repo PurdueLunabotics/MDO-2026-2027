@@ -1,11 +1,14 @@
 """Independent gravity balance and invalid support-domain checks."""
 import math
 import unittest
+from unittest.mock import patch
 
 from rover.alternatives.obstacle_stability import projected_support_margin, raised_wheel_pose, posed_loaded_cg
 from rover.problem import build_problem
 from reporting.report import snapshot
 from rover.config import DESIGN
+from rover.models import ModelSet
+from rover.excavation import Excavation
 from openmdao.utils.assert_utils import assert_check_totals
 
 
@@ -89,7 +92,15 @@ class ObstacleSupportTests(unittest.TestCase):
     def test_zero_height_cg_and_mass_boundary(self):
         # This checks the zero-articulation LEVEL-ground limit independently
         # of the separate, newly required 30-degree incline.
-        p=build_problem({"obstacle_height":0, "slope_angle":0})
+        # Keep this historical whole-model failure-set fixture explicit. The
+        # zero-offset geometry and stationary reference supply its original CG;
+        # production attachment bounds and moving excavation remain unchanged.
+        with patch.dict(DESIGN, {
+            "lin_act_side_arm_offset": (0., -.15, .15, "m"),
+            "lin_act_top_arm_offset": (0., -.15, .15, "m"),
+        }):
+            p=build_problem({"obstacle_height":0, "slope_angle":0},
+                            models=ModelSet(excavation=Excavation))
         self.addCleanup(p.cleanup)
         p.run_model()
         v=lambda n:p.get_val(n).item()
@@ -106,7 +117,7 @@ class ObstacleSupportTests(unittest.TestCase):
                                   "ground_clearance_margin"})
 
     def test_invalid_reach_stays_failed_and_finite(self):
-        p=build_problem()
+        p=build_problem({"obstacle_height":.40})
         self.addCleanup(p.cleanup)
         p.run_model()
         report=snapshot(p)

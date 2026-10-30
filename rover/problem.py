@@ -5,7 +5,7 @@ import hashlib
 from pathlib import Path
 from dataclasses import replace
 import openmdao.api as om
-from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS, ROUTE, configuration
+from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS, ROUTE, configuration, migrate_inlet_inputs
 from .components import Mission
 from .models import ModelSet, plate_frame_models, traversal_models, extended_attachment_models
 from .contracts import validate_interfaces
@@ -14,7 +14,7 @@ from .contracts import validate_interfaces
 # Climb acceptance is strict: a zero reserve or failed solution does not pass.
 STRICT_SLOPE_MARGINS = {"empty_slope_traversal_margin": "empty", "loaded_slope_traversal_margin": "loaded"}
 MARGINS = {
-    "ground_clearance_margin": (0.1524, "m"),
+    "ground_clearance_margin": (0.2032, "m"),
     "empty_slope_traversal_margin": (1.0, None),
     "loaded_slope_traversal_margin": (1.0, None),
     "drum_power_margin": (200.0, "W"),
@@ -69,7 +69,17 @@ MARGINS = {
 
 PLATE_FRAME_MARGINS = {"plate_geometry_margin": (0.1, "m"), "frame_packing_margin": (0.1, "m"),
                       "plate_stress_margin": (1e8, "Pa"), "plate_buckling_margin": (10000., "N"),
-                      "cf_bending_margin": (1e8, "Pa")}
+                      "cross_tube_bending_margin": (1e8, "Pa")}
+
+MOVING_EXCAVATION_MARGINS = {
+    "feed_margin": (0.012, "m"),
+    "operating_reach_margin": (0.1, "m"),
+    "axle_ground_margin": (0.15, "m"),
+    "excavation_domain_margin": (0.1, "m"),
+    "feed_motor_margin": (300., "N"),
+    "feed_traction_margin": (300., "N"),
+    "feed_power_margin": (400., "W"),
+}
 
 
 def validate(values, design=None, assumptions=None, attachment_max=1.):
@@ -137,7 +147,15 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         cobyla_radius = .02
     if cobyla_radius is not None and (optimizer != "COBYLA" or not math.isfinite(cobyla_radius) or cobyla_radius <= 0):
         raise ValueError("cobyla_radius needs a positive finite value and optimizer='COBYLA'.")
-    design, assumptions = configuration(structure, motors, actuators)
+    models = models or (plate_frame_models() if structure == "plate-frame" else ModelSet())
+    models = traversal_models(models, traversal_mode)
+    excavation_component = models.excavation()
+    moving_excavation = getattr(excavation_component, "MOVING_EXCAVATION", False)
+    design, assumptions = configuration(structure, motors, actuators,
+        excavation_mode="moving" if moving_excavation else "legacy")
+    retired_excavation_inputs = {}
+    if moving_excavation:
+        overrides, retired_excavation_inputs = migrate_inlet_inputs(overrides or {})
     if isinstance(attachment_max,bool) or not math.isfinite(attachment_max) or not 1 <= attachment_max <= 1.5:
         raise ValueError('attachment_max must be finite and between 1 and 1.5')
     if attachment_max>1 and structure!='plate-frame':
@@ -165,13 +183,20 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     if actuators == "pa04-900":
         margins.update(actuator_stroke_domain_margin=(.5, "m"), actuator_curve_margin=(4000., "N"))
     ignored_constraints = set([ignore_constraints] if isinstance(ignore_constraints, str) else ignore_constraints or ())
+    if moving_excavation:
+        margins.pop("dig_reach_margin")
+        margins.update(MOVING_EXCAVATION_MARGINS)
+        diagnostic_screens["dig_reach_margin"] = (
+            "Compatibility alias of operating_reach_margin; use the active operating_reach_margin and axle_ground_margin checks.")
+    else:
+        # Explicit legacy replacements do not acquire an inactive optimizer variable.
+        entry = design.pop("feed_speed")
+        assumptions["feed_speed"] = (entry[0], entry[-1])
     unknown = ignored_constraints - set(margins)
     if unknown:
         raise ValueError("--ignore-constraint requires an active margin name; "
                          f"unknown or unavailable: {', '.join(sorted(unknown))}. "
                          "Mass/dimension limits and design bounds cannot be excluded.")
-    models = models or (plate_frame_models() if structure == "plate-frame" else ModelSet())
-    models = traversal_models(models, traversal_mode)
     if actuators == "pa04-900":
         from .linkage import LinkageGeometry, LinkageLoads
         from .alternatives.pa04_actuator import PA04LinkageGeometry, PA04LinkageLoads, verify_source_data
@@ -179,6 +204,9 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         if models.linkage not in (LinkageGeometry, PA04LinkageGeometry) or models.linkage_loads not in (LinkageLoads, PA04LinkageLoads):
             raise ValueError("PA-04 profile needs PA04LinkageGeometry/Loads; a custom linkage was not replaced.")
         models = replace(models, linkage=PA04LinkageGeometry, linkage_loads=PA04LinkageLoads)
+    if moving_excavation:
+        from .alternatives.staged_linkage_loads import staged_load_factory
+        models = replace(models, linkage_loads=staged_load_factory(models.linkage_loads))
     # A round outside diameter is not a box width/height specification. Require
     # explicit case migration rather than silently ignoring old arm geometry.
     if (structure == 'plate-frame' and 'arm_tube_diameter' in (overrides or {})
@@ -213,19 +241,35 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         raise ValueError("Actuator pin axial station must be beyond the chassis pivot")
     problem = om.Problem(reports=False)
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
-    problem.model_metadata = {"schema_version": 5, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
+    problem.model_metadata = {"schema_version": 7, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
+                              "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                               "traversal_mode": traversal_mode,
                               "optimize_attachment": optimize_attachment,
                               "attachment_max": attachment_max,
                               "configuration": {"design": design, "assumptions": assumptions, "margins": margins,
                                                 "frozen_design": frozen_design,
                                                 "ignored_optimizer_constraints": sorted(ignored_constraints),
+                                                "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                                                 "traversal_mode": traversal_mode, "attachment_max": attachment_max},
                               "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": solver_tol, "cobyla_radius": cobyla_radius},
                               "diagnostic_only_screens": diagnostic_screens,
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
                               "source_files_sha256": {p.relative_to(Path(__file__).parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                                                        for p in sorted(Path(__file__).parent.rglob("*.py"))}}
+    if moving_excavation:
+        problem.model_metadata["excavation_operation"] = {
+            "front_depth": "inlet_depth", "rear_depth": "2*inlet_depth",
+            "inlet_width": "drum_length; full axial width of each drum engaged",
+            "fresh_layer_per_pair": "inlet_depth; rear follows front in the same tracks",
+            "storage_radius": "drum_diameter/2 - inlet_depth; inlet protrusion excluded",
+            "feed_screen": "60*feed_speed/(scoops_per_revolution*drum_rpm) <= inlet_depth",
+            "input_migration": {"retired_inputs": retired_excavation_inputs,
+                "policy": "Legacy cut_depth becomes inlet_depth. Separate scoop_opening, scoop_depth_fraction and partial-width cut_engagement are retired; front/rear depths follow inlet_depth and full width is enforced."},
+            "entry_exit": "Staged front/rear lowering and raising; both cut the same lane, travel includes station separation. No plunge/endcap soil credit.",
+            "arm_accounting": "Full capability-sweep loads/work retained as conservative envelopes; sum both arms' motion durations for staged positioning; no lowering/cutting overlap credit.",
+            "recovery": "Maximum-extension axle reaches ground; actual driving on drums and motor-body clearance unverified.",
+            "calibration": "No fitted data added; existing capture, cutting, rolling and efficiency assumptions remain uncalibrated.",
+        }
     if actuators == "pa04-900":
         problem.model_metadata["actuator_performance"] = {
             "manifest": "data/actuators/manifest.json", "voltage_V": 12,
@@ -278,7 +322,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         "ditch_status": "unverified: width/radius and crossing contact sequence unknown"}
     model = problem.model
     def add_discipline(slot):
-        component = getattr(models,slot)()
+        component = excavation_component if slot == "excavation" else getattr(models,slot)()
         # Preserve the selected discipline (including student replacements).
         # Motor hardware changes only its declared provider/inventory options.
         if motors == "x44-standard":

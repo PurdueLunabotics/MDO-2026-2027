@@ -3,6 +3,7 @@ import json
 import math
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import numpy as np
@@ -11,6 +12,8 @@ from openmdao.visualization.n2_viewer.n2_viewer import _get_viewer_data
 from rover.linkage import attachment_point, drum_pose, sweep_poses
 from rover.alternatives.offset_attachment import offset_mount_loads, offset_beam_screen
 from rover.problem import build_problem
+from rover.config import DESIGN
+from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
 from reporting.report import snapshot
 from reporting.html_report import geometry_svg, values_from_snapshot
 from reporting.frame_members import chassis_members
@@ -19,7 +22,13 @@ from reporting.case_inputs import read_case
 
 class ArmAttachmentTests(unittest.TestCase):
     def problem(self, **overrides):
-        p = build_problem(overrides)
+        # Explicit original offset-domain fixture for zero/positive-pin limits.
+        # Current hardware search bounds are preserved in production config.
+        with patch.dict(DESIGN, {
+            'lin_act_side_arm_offset': (0., -.15, .15, 'm'),
+            'lin_act_top_arm_offset': (0., -.15, .15, 'm'),
+        }):
+            p = build_problem(overrides)
         self.addCleanup(p.cleanup)
         p.run_model()
         return p
@@ -50,7 +59,7 @@ class ArmAttachmentTests(unittest.TestCase):
                     self.assertEqual(diagnostic['outputs']['actuator_body_margin']['value'],-1000.)
                     self.assertEqual(diagnostic['constraints'],report['constraints'])
                     self.assertEqual(diagnostic['feasible'],report['feasible'])
-                    self.assertEqual(p.model_metadata['schema_version'],5)
+                    self.assertEqual(p.model_metadata['schema_version'],7)
 
     def test_signed_local_coordinates_and_zero_offset_limit(self):
         for angle in (-1.1,0.,.8):
@@ -112,6 +121,7 @@ class ArmAttachmentTests(unittest.TestCase):
         self.assertAlmostEqual(compression,P)
         with self.assertRaises(ValueError):offset_mount_loads((0,0),(2,0),(1,0),W,0.,0.,0.)
 
+    @patch.dict(DESIGN, HISTORICAL_ACTUATOR_DESIGN)
     def test_invalid_offsets_and_unreachable_triangle_remain_failed(self):
         for overrides in ({"actuator_attachment_fraction":1.},{"lin_act_side_arm_offset":.151},
                           {"lin_act_top_arm_offset":float("nan")},{"lin_act_top_arm_offset":-.151}):

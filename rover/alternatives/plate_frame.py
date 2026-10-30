@@ -1,11 +1,11 @@
-"""Preliminary loaded-gravity plate/CF/box-rocker frame, selected via ModelSet.
+"""Preliminary loaded-gravity plate/aluminum-cross-tube/box-rocker frame, selected via ModelSet.
 
 Two monolithic plates are approximated by identical axial trusses: four radial
 strips plus three perimeter strips. The lower boundary passes through the hub,
 allowing it to share the lower mounts' elevation. This is a provisional topology,
 not a reconstruction of CAD cutouts. Central pins release in-plane rotation;
 only balanced, mirrored fully loaded gravity cases are supported. Plate bending,
-whole-plate buckling, joints, CF local buckling and recovery/cutting are omitted.
+whole-plate buckling, joints, cross-tube local buckling and recovery/cutting are omitted.
 Pure helpers below do all physics; adapters only move scalar ports.
 """
 import math
@@ -71,7 +71,7 @@ def plate_geometry(values):
     if not np.isfinite(nodes).all() or min(lengths) <= 1e-9:
         raise ValueError("Degenerate plate mounting geometry.")
     w, t, hub = v("plate_spoke_width"), v("plate_thickness"), v("plate_hub_radius")
-    od = v("cf_tube_inner_diameter")+2*v("cf_tube_wall")
+    od = v("cross_tube_inner_diameter")+2*v("cross_tube_wall")
     mount = od/2+v("frame_mount_clearance")
     # Three triangular cutouts. Signed areas preserve this non-crossing
     # topology; a flipped/collapsed triangle is rejected, not made valid by abs().
@@ -86,12 +86,12 @@ def plate_geometry(values):
                 min(lengths[:4])-hub-mount-w/2,
                 min(lengths[4:])-2*mount-w,
                 min(nodes[2, 1], nodes[4, 1])-mount]
-    packing = (rocker_span-v("cf_tube_span")-t)/2-v("minimum_axle_overhang")
+    packing = (rocker_span-v("cross_tube_span")-t)/2-v("minimum_axle_overhang")
     # Sum-of-strips inventory deliberately retains junction overlap; add a hub
     # disk. Conservative mass inventory, not exact boolean-union CAD volume.
     plate_mass = v("tube_density")*t*(w*sum(lengths)+math.pi*hub**2)
     return {"nodes": nodes, "lengths": lengths, "plate_mass": plate_mass,
-            "rocker_span": rocker_span, "cf_od": od,
+            "rocker_span": rocker_span, "cross_tube_od": od,
             "geometry_margin": float(min(reserves)), "packing_margin": packing,
             "valid": min(*reserves, packing) >= 0}
 
@@ -102,41 +102,41 @@ def geometry_inventory(values, arm_section=round_arm_section):
     ar, _, _ = box_section(v("rocker_box_width"), v("rocker_box_height"), v("rocker_wall"))
     arm = arm_section(values)
     ax, _, _ = tube_section(v("axle_outer_diameter"), v("axle_wall"))
-    ac, _, _ = tube_section(g["cf_od"], v("cf_tube_wall"))
+    ac, _, _ = tube_section(g["cross_tube_od"], v("cross_tube_wall"))
     half = math.hypot(v("wheelbase")/2, v("rocker_pivot_offset"))
     rocker_mass = 4*half*ar*v("tube_density")
-    cf_mass = 4*v("cf_tube_span")*ac*v("cf_density")
+    cross_tube_mass = 4*v("cross_tube_span")*ac*v("cross_tube_density")
     axle_mass = max(g["rocker_span"], 1e-6)*ax*v("tube_density")
-    sprung_mass = 2*g["plate_mass"]+cf_mass+axle_mass+v("joint_mass")+v("differential_mass")
+    sprung_mass = 2*g["plate_mass"]+cross_tube_mass+axle_mass+v("joint_mass")+v("differential_mass")
     shaft_z = g["nodes"][0, 1]
     strip_mass = v("tube_density")*v("plate_thickness")*v("plate_spoke_width")*g["lengths"]
     strip_mids = np.array([(g["nodes"][i]+g["nodes"][j])/2 for i, j in PLATE_EDGES])
     hub_mass = g["plate_mass"]-sum(strip_mass)
     plate_mz = float(strip_mass @ strip_mids[:, 1])+hub_mass*shaft_z
-    cf_z = (v("top_pivot_height")+v("bottom_pivot_height"))/2
-    sprung_mz = 2*plate_mz+cf_mass*cf_z+(axle_mass+v("joint_mass")+v("differential_mass"))*shaft_z
+    cross_tube_z = (v("top_pivot_height")+v("bottom_pivot_height"))/2
+    sprung_mz = 2*plate_mz+cross_tube_mass*cross_tube_z+(axle_mass+v("joint_mass")+v("differential_mass"))*shaft_z
     rocker_z = v("wheel_diameter")/2+v("rocker_pivot_offset")/2
     # Line-member mass moments; joints/differential are lumps at shaft origin.
     # Plate widths' in-plane local inertia w2/12 is an inventory approximation.
     plate_izz = 0.0
     for mass, (i, j), length in zip(strip_mass, PLATE_EDGES, g["lengths"]):
         xi, xj = g["nodes"][i, 0], g["nodes"][j, 0]
-        plate_izz += mass*((xi*xi+xi*xj+xj*xj)/3+v("cf_tube_span")**2/4+v("plate_spoke_width")**2/12)
-    plate_izz += hub_mass*(v("cf_tube_span")**2/4+v("plate_hub_radius")**2/4)
-    cf_izz = cf_mass*(v("cf_tube_span")**2/12+(v("actuator_pivot_x")**2+v("pivot_x")**2)/2)
+        plate_izz += mass*((xi*xi+xi*xj+xj*xj)/3+v("cross_tube_span")**2/4+v("plate_spoke_width")**2/12)
+    plate_izz += hub_mass*(v("cross_tube_span")**2/4+v("plate_hub_radius")**2/4)
+    cross_tube_izz = cross_tube_mass*(v("cross_tube_span")**2/12+(v("actuator_pivot_x")**2+v("pivot_x")**2)/2)
     rocker_izz = rocker_mass*(v("wheelbase")**2/12+g["rocker_span"]**2/4+v("rocker_box_width")**2/12)
     total = sprung_mass+rocker_mass
     return {**g, "structure_mass": total, "rocker_mass": rocker_mass,
             "arm_linear_mass": arm['area']*v("tube_density"),
             "arm_envelope_radius": math.hypot(values.get("arm_box_width",arm["depth"]), arm["depth"])/2 if "arm_box_width" in values else arm["depth"]/2,
-            "plate_mass_total": 2*g["plate_mass"], "cf_tube_mass_total": cf_mass,
+            "plate_mass_total": 2*g["plate_mass"], "cross_tube_mass_total": cross_tube_mass,
             "suspension_axle_mass": axle_mass, "suspension_bearing_span": g["rocker_span"],
-            "cf_tube_outer_diameter": g["cf_od"],
+            "cross_tube_outer_diameter": g["cross_tube_od"],
             "plate_geometry_margin": g["geometry_margin"], "frame_packing_margin": g["packing_margin"],
             "plate_geometry_valid": float(g["valid"]),
             "structure_cg_z": (sprung_mz+rocker_mass*rocker_z)/total,
             "structure_sprung_cg_z": sprung_mz/sprung_mass,
-            "structure_yaw_inertia": 2*plate_izz+cf_izz+axle_mass*g["rocker_span"]**2/12+rocker_izz,
+            "structure_yaw_inertia": 2*plate_izz+cross_tube_izz+axle_mass*g["rocker_span"]**2/12+rocker_izz,
             "frame_section_margin": min(min(v("rocker_box_width"), v("rocker_box_height"))/4-v("rocker_wall"),
                                          v("axle_outer_diameter")/4-v("axle_wall")),
             "arm_section_margin": arm['section_margin']}
@@ -265,7 +265,7 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
     v = values.__getitem__
     g = geometry_inventory(values, arm_section=arm_section)
     for name in ("gravity", "structure_safety_factor", "structure_load_factor", "tube_youngs_modulus",
-                 "tube_yield_strength", "cf_flexural_modulus", "cf_flexural_strength", "plate_buckling_k", "allowable_deflection"):
+                 "tube_yield_strength", "cross_tube_youngs_modulus", "cross_tube_yield_strength", "plate_buckling_k", "allowable_deflection"):
         if not math.isfinite(v(name)) or v(name) <= 0:
             raise ValueError(f"Invalid frame load/material input {name}.")
     for name in ("dry_mass", "payload_mass", "drum_mass", "wheel_mass", "drive_mass"):
@@ -275,7 +275,7 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
         raise ValueError("Dry mass cannot be smaller than its unsprung subset.")
     sf, factor, grav = v("structure_safety_factor"), v("structure_load_factor"), v("gravity")
     e, strength = v("tube_youngs_modulus"), v("tube_yield_strength")
-    ac, ic, _ = tube_section(g["cf_od"], v("cf_tube_wall"))
+    ac, ic, _ = tube_section(g["cross_tube_od"], v("cross_tube_wall"))
     arm = arm_section(values)
     aa, ia = arm['area'], arm['bending_inertia']
     ar, ir, iw = box_section(v("rocker_box_width"), v("rocker_box_height"), v("rocker_wall"))
@@ -292,9 +292,9 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
     beam_model = arm_mechanics.beam_screen
     b, a = g["nodes"][2], g["nodes"][1]
     loads, actuator_forces = [], []
-    cf_stress, arm_stress, arm_deflection, arm_compression, tube_motion = [], [], [], [], []
-    span, half = v("cf_tube_span"), v("cf_tube_span")/2
-    distributed = np.array([0., -ac*v("cf_density")*grav*factor])
+    cross_tube_stress, arm_stress, arm_deflection, arm_compression, tube_motion = [], [], [], [], []
+    span, half = v("cross_tube_span"), v("cross_tube_span")/2
+    distributed = np.array([0., -ac*v("cross_tube_density")*grav*factor])
     for c in poses:
         upper, lower, actuator = mount_model(b, a, c, pair_weight, arm_weight, v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
         actuator_forces.append(float(np.linalg.norm(actuator)))
@@ -311,8 +311,8 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
         for force in (upper, lower):
             # Two half-span cantilever flexure screens, each receiving F/2.
             moment = force*half/2+distributed*half**2/2
-            cf_stress.append(np.linalg.norm(moment)*g["cf_od"]/(2*ic))
-            displacements.append((force*half**3/6+distributed*half**4/8)/(v("cf_flexural_modulus")*ic))
+            cross_tube_stress.append(np.linalg.norm(moment)*g["cross_tube_od"]/(2*ic))
+            displacements.append((force*half**3/6+distributed*half**4/8)/(v("cross_tube_youngs_modulus")*ic))
         tube_motion.append(displacements)
         sigma, delta, _, compressive = beam_model(v("arm_length"), v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"),
                                         np.asarray(c)-b, actuator, pair_weight, arm_weight,
@@ -360,8 +360,8 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
             "structure_deflection": deflection, "structure_deflection_margin": v("allowable_deflection")-deflection,
             "structure_buckling_margin": min(buckling, rocker_buckling, arm_buckling), "plate_stress": plate_stress,
             "plate_stress_margin": strength/sf-plate_stress, "plate_buckling_margin": buckling,
-            "cf_bending_stress": float(max(cf_stress)),
-            "cf_bending_margin": v("cf_flexural_strength")/sf-float(max(cf_stress)),
+            "cross_tube_bending_stress": float(max(cross_tube_stress)),
+            "cross_tube_bending_margin": v("cross_tube_yield_strength")/sf-float(max(cross_tube_stress)),
             "frame_mount_relative_deflection": mount_delta,
             "rocker_buckling_margin": rocker_buckling, "arm_buckling_margin": arm_buckling,
             "rocker_deflection": rocker_delta, "axle_deflection": axle_delta,
@@ -372,19 +372,19 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
             "frame_load_solution_valid": 1.0}
 
 
-GEOMETRY_INPUTS = names("wheelbase track_width wheel_diameter wheel_width rocker_pivot_offset pivot_x actuator_pivot_x top_pivot_height bottom_pivot_height arm_tube_diameter arm_wall tube_density joint_mass differential_mass cf_tube_span cf_tube_wall cf_tube_inner_diameter cf_density plate_spoke_width plate_thickness plate_hub_radius plate_cutout_clearance frame_mount_clearance minimum_axle_overhang wheel_rocker_gap rocker_box_width rocker_box_height rocker_wall axle_outer_diameter axle_wall")
-EXTRA_GEOMETRY_OUTPUTS = {"plate_mass_total": "kg", "cf_tube_mass_total": "kg", "suspension_axle_mass": "kg",
-                          "suspension_bearing_span": "m", "cf_tube_outer_diameter": "m",
+GEOMETRY_INPUTS = names("wheelbase track_width wheel_diameter wheel_width rocker_pivot_offset pivot_x actuator_pivot_x top_pivot_height bottom_pivot_height arm_tube_diameter arm_wall tube_density joint_mass differential_mass cross_tube_span cross_tube_wall cross_tube_inner_diameter cross_tube_density plate_spoke_width plate_thickness plate_hub_radius plate_cutout_clearance frame_mount_clearance minimum_axle_overhang wheel_rocker_gap rocker_box_width rocker_box_height rocker_wall axle_outer_diameter axle_wall")
+EXTRA_GEOMETRY_OUTPUTS = {"plate_mass_total": "kg", "cross_tube_mass_total": "kg", "suspension_axle_mass": "kg",
+                          "suspension_bearing_span": "m", "cross_tube_outer_diameter": "m",
                           "plate_geometry_margin": "m", "frame_packing_margin": "m", "plate_geometry_valid": None,
                           "structure_cg_z": "m", "structure_sprung_cg_z": "m", "structure_yaw_inertia": "kg*m**2"}
-EVIDENCE = {"revision": 2, "status": "analytical preliminary frame; NOT hardware validated",
-            "hardware": "user: 6.35 mm 6061-T6 plates, 25.4 mm ID CF rods, aluminum box rockers; bonded inserts/bolts and rotating bushings",
+EVIDENCE = {"revision": 3, "status": "analytical preliminary frame; NOT hardware validated",
+            "hardware": "user: 6.35 mm 6061-T6 plates, 25.4 mm ID aluminum cross-tubes, aluminum box rockers; bonded inserts/bolts and rotating bushings",
             "topology": "PROVISIONAL: four radial and three perimeter strips; lower boundary B+-S-B-, three triangular cutouts; no hub/lower-mount vertical ordering",
-            "CF": "density/modulus/flexural strength are explicit provisional assumptions; no product/layup selected",
+            "cross_tubes": "aluminum: 2700 kg/m3, 69 GPa Young's modulus, 240 MPa yield screening default; actual stock/joint allowables unverified",
             "loading": "all four drums loaded, mirrored level-ground gravity, sampled compact/travel-to-dig poses; load factor retained",
             "plate_support": "central pin; exact free-rotation gauge, zero artificial reaction; reject unbalanced moments",
             "mass": "strip inventory + hub disk retains overlapping junction material; joint/differential allowances retained",
-            "omissions": "whole-plate and local box/CF wall buckling, plate junction bending, joints/inserts, differential torque, fatigue, dynamic/obstacle load redistribution, cutting and self-recovery",
+            "omissions": "whole-plate and local box/cross-tube wall buckling, plate junction bending, joints/inserts, differential torque, fatigue, dynamic/obstacle load redistribution, cutting and self-recovery",
             "deflection": "eighth-norm envelope of rocker-end, axle-overhang, arm-tip relative flexure and upper/lower mount relative displacement; not assembled-frame displacement",
             "buckling": "pinned weak-axis Euler strips; not validated whole-plate buckling capacity"}
 
@@ -405,11 +405,11 @@ class PlateStructureGeometry(Discipline):
 class PlateStructureLoads(Discipline):
     ARM_SECTION = staticmethod(round_arm_section)
     ARM_MECHANICS = None
-    CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cf_flexural_modulus cf_flexural_strength plate_buckling_k allowable_deflection lin_act_side_arm_offset lin_act_top_arm_offset actuator_retracted_length travel_actuator_length actuator_extended_length")))
+    CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cross_tube_youngs_modulus cross_tube_yield_strength plate_buckling_k allowable_deflection lin_act_side_arm_offset lin_act_top_arm_offset actuator_retracted_length travel_actuator_length actuator_extended_length")))
     COUPLED_INPUTS = {"dry_mass": "kg", "payload_mass": "kg", "drum_mass": "kg", "wheel_mass": "kg", "drive_mass": "kg"}
     OUTPUT_UNITS = {**StructureLoads.OUTPUT_UNITS,
                     "plate_stress": "Pa", "plate_stress_margin": "Pa", "plate_buckling_margin": "N",
-                    "cf_bending_stress": "Pa", "cf_bending_margin": "Pa",
+                    "cross_tube_bending_stress": "Pa", "cross_tube_bending_margin": "Pa",
                     "frame_mount_relative_deflection": "m", "rocker_deflection": "m", "axle_deflection": "m", "arm_deflection": "m",
                     "rocker_buckling_margin": "N", "arm_buckling_margin": "N",
                     "frame_gravity_actuator_force": "N", "frame_nominal_wheel_reaction": "N",
@@ -425,9 +425,9 @@ class PlateStructureLoads(Discipline):
             # Explicit failed arithmetic guard for driver trials at mechanisms or
             # toggles. Never substitute a different feasible frame/physics model.
             result = {n: 0. for n in self.OUTPUT_UNITS}
-            for n in ("structure_stress", "plate_stress", "cf_bending_stress"):
+            for n in ("structure_stress", "plate_stress", "cross_tube_bending_stress"):
                 result[n] = 1e12
-            for n in ("structure_stress_margin", "plate_stress_margin", "cf_bending_margin"):
+            for n in ("structure_stress_margin", "plate_stress_margin", "cross_tube_bending_margin"):
                 result[n] = -1e12
             result.update(structure_deflection=1e3, structure_deflection_margin=-1e3,
                           structure_buckling_margin=-1e9, plate_buckling_margin=-1e9)

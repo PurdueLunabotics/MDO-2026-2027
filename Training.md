@@ -53,7 +53,7 @@ the sizing outside `compute()`.
 
 Use the **generic reference profile** for this exercise. The saved
 `design_baseline.json` selects `plate-frame`, whose `PlateStructureLoads`
-component has different plate, rocker, and CF-tube assumptions. Do not replace
+component has different plate, rocker, and aluminum cross-tube assumptions. Do not replace
 that coordinated profile with the reference tube component.
 
 ## 2. Open PowerShell and start a branch from main
@@ -172,7 +172,8 @@ deformation to the deflection model.
 Use only straight, prismatic, homogeneous, isotropic circular tubes in the
 small-deflection elastic regime. Local wall buckling, joints, fatigue,
 stress concentrations, and detailed load sharing remain omitted. In
-particular, do not apply this isotropic example to the plate profile's CF rods.
+particular, do not replace the plate profile's cross-tube load-path calculation
+with this generic-frame exercise merely because both now use aluminum.
 
 ## 5. Write the physics as a pure helper
 

@@ -32,6 +32,28 @@ class PlateFrameTests(unittest.TestCase):
         p.run_model()
         return p
 
+    def test_aluminum_cross_tube_material_and_four_tube_mass(self):
+        values = inputs()
+        self.assertEqual(values['cross_tube_density'], 2700.)
+        self.assertEqual(values['cross_tube_youngs_modulus'], 69e9)
+        self.assertEqual(values['cross_tube_yield_strength'], 240e6)
+        inner = values['cross_tube_inner_diameter']
+        outer = inner + 2*values['cross_tube_wall']
+        expected = 4*values['cross_tube_span']*math.pi*(outer**2-inner**2)/4*2700.
+        inventory = geometry_inventory(values)
+        self.assertAlmostEqual(inventory['cross_tube_mass_total'], expected)
+        doubled = geometry_inventory({**values, 'cross_tube_density': 5400.})
+        self.assertAlmostEqual(doubled['structure_mass']-inventory['structure_mass'], expected)
+        loads = evaluate_frame_loads(values)
+        self.assertAlmostEqual(loads['cross_tube_bending_margin'],
+            240e6/values['structure_safety_factor']-loads['cross_tube_bending_stress'])
+        weak = evaluate_frame_loads({**values, 'cross_tube_yield_strength': 1.})
+        self.assertLess(weak['cross_tube_bending_margin'], 0.)
+        for name in ('cross_tube_density', 'cross_tube_youngs_modulus', 'cross_tube_yield_strength'):
+            for bad in (0., -1., math.nan):
+                with self.subTest(name=name,value=bad), self.assertRaises(ValueError):
+                    evaluate_frame_loads({**values, name: bad})
+
     def test_box_section_independent_rectangle_subtraction(self):
         area, ix, iz = box_section(.04, .06, .003)
         self.assertAlmostEqual(area, .04*.06-.034*.054)
@@ -135,18 +157,18 @@ class PlateFrameTests(unittest.TestCase):
         self.assertGreater(wider["plate_mass_total"], first["plate_mass_total"])
         self.assertLess(wider["plate_geometry_margin"], first["plate_geometry_margin"])
         self.assertGreater(first["structure_mass"], first["rocker_mass"])
-        self.assertAlmostEqual(first["cf_tube_outer_diameter"], .0254+2*.002)
+        self.assertAlmostEqual(first["cross_tube_outer_diameter"], .0254+2*.002)
         self.assertAlmostEqual(first["suspension_bearing_span"], .54-.10-2*.0127-.035)
 
     def test_invalid_shape_and_wheel_packing_remain_failed(self):
-        bad = plate_geometry(inputs(cf_tube_span=.46))
+        bad = plate_geometry(inputs(cross_tube_span=.46))
         self.assertFalse(bad["valid"])
         self.assertLess(bad["packing_margin"], 0)
         # Above the upper mounts the cutout flips; geometry must stay failed.
         bad = plate_geometry(inputs(bottom_pivot_height=.50))
         self.assertFalse(bad["valid"])
         self.assertLess(bad["geometry_margin"], 0)
-        p = self.problem(cf_tube_span=.46)
+        p = self.problem(cross_tube_span=.46)
         report = snapshot(p)
         self.assertFalse(report["constraints"]["frame_packing_margin"]["passed"])
         self.assertFalse(report["feasible"])
@@ -169,10 +191,10 @@ class PlateFrameTests(unittest.TestCase):
         failed = evaluate_frame_loads(inputs(plate_thickness=.0005))
         self.assertLess(failed["plate_buckling_margin"], 0)
 
-    def test_cf_span_tradeoff_and_nominal_wheel_load(self):
-        short = evaluate_frame_loads(inputs(cf_tube_span=.20))
-        long = evaluate_frame_loads(inputs(cf_tube_span=.30))
-        self.assertGreater(long["cf_bending_stress"], short["cf_bending_stress"])
+    def test_cross_tube_span_tradeoff_and_nominal_wheel_load(self):
+        short = evaluate_frame_loads(inputs(cross_tube_span=.20))
+        long = evaluate_frame_loads(inputs(cross_tube_span=.30))
+        self.assertGreater(long["cross_tube_bending_stress"], short["cross_tube_bending_stress"])
         self.assertLess(long["axle_deflection"], short["axle_deflection"])
         self.assertAlmostEqual(short["frame_nominal_wheel_reaction"], (50+20)*9.80665/4)
         self.assertEqual(short["frame_load_solution_valid"], 1)
@@ -192,10 +214,10 @@ class PlateFrameTests(unittest.TestCase):
         report = snapshot(p)
         self.assertIn("plate_spoke_width", report["design"])
         self.assertNotIn("plate_thickness", report["design"])
-        self.assertNotIn("cf_tube_inner_diameter", report["design"])
+        self.assertNotIn("cross_tube_inner_diameter", report["design"])
         self.assertNotIn("frame_tube_diameter", report["design"])
         self.assertEqual(report["assumptions"]["plate_thickness"]["value"], .00635)
-        self.assertEqual(report["assumptions"]["cf_tube_inner_diameter"]["value"], .0254)
+        self.assertEqual(report["assumptions"]["cross_tube_inner_diameter"]["value"], .0254)
         total = sum(p.get_val(n).item() for n in ("fixed_mass", "wheel_mass", "drum_mass", "drive_mass", "battery_mass", "structure_mass", "linkage_mass"))
         self.assertAlmostEqual(p.get_val("dry_mass").item(), total)
         self.assertAlmostEqual(p.get_val("loaded_sprung_mass").item()+p.get_val("wheel_mass").item()+p.get_val("drive_mass").item()+p.get_val("rocker_mass").item(), total+p.get_val("payload_mass").item())
@@ -247,7 +269,7 @@ class PlateFrameTests(unittest.TestCase):
                           "openmdao_version": "test", "model_metadata": p.model_metadata}, output)
             html = output.with_suffix(".html").read_text(encoding="utf-8")
             self.assertIn("plate_spoke_width", html)
-            self.assertIn("cf_bending_margin", html)
+            self.assertIn("cross_tube_bending_margin", html)
             self.assertIn("PROVISIONAL", html)
             self.assertIn("Removed screens: diagnostics only", html)
             self.assertTrue((Path(folder)/"plate_frame.svg").exists())
@@ -262,7 +284,7 @@ class PlateFrameTests(unittest.TestCase):
         self.assertFalse(snapshot(p)["feasible"])
         self.assertFalse(snapshot(p)["constraints"]["loaded_slope_traversal_margin"]["passed"])
         self.assertEqual(p.get_val("plate_thickness").item(), .00635)
-        self.assertEqual(p.get_val("cf_tube_inner_diameter").item(), .0254)
+        self.assertEqual(p.get_val("cross_tube_inner_diameter").item(), .0254)
 
 
 if __name__ == "__main__":

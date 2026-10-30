@@ -9,6 +9,7 @@ inside OpenMDAO. See docs/MODEL_DEVELOPMENT.md and examples/empirical_excavation
 from dataclasses import dataclass, replace
 from typing import Callable
 from .excavation import Excavation
+from .alternatives.moving_excavation import MovingExcavation
 from .structure import StructureGeometry, StructureLoads
 from .mass_properties import MassProperties
 from .relocation import SiteRelocation
@@ -33,7 +34,7 @@ class ModelSet:
     wheel_mass: Callable = WheelMass
     drum_mass: Callable = DrumMass
     geometry: Callable = GeometryMass
-    excavation: Callable = Excavation
+    excavation: Callable = MovingExcavation
     linkage_loads: Callable = LinkageLoads
     mass_properties: Callable = MassProperties
     structure_loads: Callable = StructureLoads

@@ -12,6 +12,9 @@ from openmdao.utils.assert_utils import assert_check_totals
 from rover.components import Mission, travel_profile
 from rover.config import DESIGN, ASSUMPTIONS
 from rover.problem import build_problem, MARGINS
+from rover.models import ModelSet
+from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
+from rover.excavation import Excavation
 from reporting.report import snapshot
 from rover.dependencies import dependencies
 from rover.mobility import route_profiles
@@ -19,9 +22,13 @@ from reporting.html_report import geometry_svg, values_from_snapshot, write_repo
 from openmdao.visualization.n2_viewer.n2_viewer import _get_viewer_data
 
 
+# These legacy geometry regressions assume an actuator pin at the drum axle.
+# Keep their original fixture independent of the selected hardware search bounds.
+@patch.dict(DESIGN, {**HISTORICAL_ACTUATOR_DESIGN,
+                     'lin_act_side_arm_offset': (0., -.15, .15, 'm')})
 class RoverTests(unittest.TestCase):
-    def problem(self, **overrides):
-        p = build_problem(overrides)
+    def problem(self, *, models=None, **overrides):
+        p = build_problem(overrides, models=models)
         self.addCleanup(p.cleanup)
         p.run_model()
         return p
@@ -63,12 +70,14 @@ class RoverTests(unittest.TestCase):
         p.run_model()
         self.assertAlmostEqual(p.get_val("construction_points").item(), 215.419444444, places=6)
 
+    @patch.dict(DESIGN, {'lin_act_side_arm_offset': (0., -.15, .15, 'm')})
     def test_four_drums_and_sequential_dump(self):
-        p = self.problem()
+        # This original drum regression retains its zero-offset linkage geometry.
+        p = self.problem(obstacle_height=.40, models=ModelSet(excavation=Excavation))
         # Reachable soil, not nominal capacity, limits the stationary plunge.
         self.assertLess(p.get_val("payload_mass").item(), p.get_val("storage_capacity").item()*1250)
-        # The original 0.40 m wheelbase no longer meets the new 0.40 m obstacle
-        # pose requirement. Preserve that failure while checking drum behavior.
+        # Keep the historical unreachable 0.40 m obstacle regression explicit,
+        # independently of the current 0.30 m default, while checking drums.
         report=snapshot(p)
         self.assertFalse(report["feasible"])
         self.assertFalse(report["constraints"]["obstacle_pose_margin"]["passed"])
@@ -130,7 +139,8 @@ class RoverTests(unittest.TestCase):
             self.assertAlmostEqual(speed * (duration - speed/accel), distance)
 
     def test_linkage_closure_and_motion_time(self):
-        p = self.problem()
+        # Preserve the original maximum-extension reference reach regression.
+        p = self.problem(models=ModelSet(excavation=Excavation))
         for state,length_name in (("stowed","actuator_retracted_length"),("extended","actuator_extended_length")):
             x,y = (p.get_val(state+"_"+coord).item() for coord in ("x","y"))
             px=p.get_val("pivot_x").item()
@@ -190,7 +200,8 @@ class RoverTests(unittest.TestCase):
                             self.assertLess(abs(delta)/scale,1e-9,f"Missing dependency {comp.name}.{out} <- {name}")
 
     def test_html_report_and_drawings(self):
-        p=self.problem()
+        # Explicit unreachable obstacle fixture for guarded-drawing coverage.
+        p=self.problem(obstacle_height=.40)
         snap=snapshot(p)
         values=values_from_snapshot(snap)
         for extended in (False,True):
