@@ -15,8 +15,9 @@ OUTPUTS = {
     "no_load_speed": "m/s", "loaded_motor_speed_limit": "m/s",
     "loaded_power_speed_limit": "m/s", "stall_drive_force": "N",
     "actuation_time": "s", "lowering_time": "s", "arm_energy": "J", "arm_peak_power": "W",
+    "deposition_reach_margin": "m", "deposition_position_margin": "m", "deposition_clearance_margin": "m",
     "required_actuator_force": "N", "linkage_mass": "kg", "stroke": "m",
-    "stowed_x": "m", "stowed_y": "m", "travel_x": "m", "travel_y": "m", "extended_x": "m", "extended_y": "m",
+    "stowed_x": "m", "stowed_y": "m", "travel_x": "m", "travel_y": "m", "deposition_x": "m", "deposition_y": "m", "extended_x": "m", "extended_y": "m",
     "sweep_x_min": "m", "sweep_x_max": "m", "actuator_leverage_max": None,
     "actuator_attachment_distance": "m", "arm_physical_length": "m", "arm_extension_mass": "kg",
     "actuator_body_margin": "m",  # diagnostic only; excluded from feasibility/optimizer
@@ -31,6 +32,7 @@ OUTPUTS = {
 from rover.excavation import Excavation
 from rover.structure import StructureGeometry, StructureLoads
 from rover.mass_properties import MassProperties
+from rover.alternatives.deposition_actuation import DepositionActuation
 from rover.relocation import SiteRelocation
 from rover.mobility import Mobility
 from rover.trench import TrenchTraversal
@@ -40,7 +42,7 @@ from rover.alternatives.parallel_cylinder_clearance import ParallelCylinderClear
 from rover.alternatives.traversal_stability import TraversalStability
 from rover.alternatives.slope_traversal import SlopeTraversal
 from rover.ground_clearance import GroundClearance
-for component in (Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, Mobility, TrenchTraversal, TipStability, ObstacleStability, ParallelCylinderClearance, TraversalStability, SlopeTraversal, GroundClearance):
+for component in (DepositionActuation, Excavation, StructureGeometry, StructureLoads, MassProperties, SiteRelocation, Mobility, TrenchTraversal, TipStability, ObstacleStability, ParallelCylinderClearance, TraversalStability, SlopeTraversal, GroundClearance):
     OUTPUTS.update(component.OUTPUT_UNITS)
 
 
@@ -152,7 +154,7 @@ def print_report(label, report):
         print(f"  {name:25s} {item['value']:10.4f} {item['units'] or ''}")
     print("Performance:")
     for name in ("construction_points", "mass_points", "energy_points", "dry_mass", "payload_mass",
-                 "cycle_time", "dig_time", "travel_time", "dump_time", "turn_time", "actuation_time", "cycles",
+                 "cycle_time", "dig_time", "travel_time", "dump_time", "turn_time", "actuation_time", "deposition_actuation_time", "cycles",
                  "berm_volume", "run_energy", "average_power", "peak_power"):
         item = report["outputs"][name]
         print(f"  {name:25s} {item['value']:10.4f} {item['units'] or ''}")

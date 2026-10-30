@@ -16,7 +16,7 @@ from ..discipline import Discipline, names
 from ..structure import StructureGeometry, StructureLoads, tube_section
 from ..linkage import sweep_poses, drum_pose, attachment_point
 from .offset_attachment import OffsetArmMechanics
-from ..mass_properties import MassProperties, mass_properties, tail_part
+from ..mass_properties import MassProperties, mass_properties, tail_part, evaluate_pose_states
 from .obstacle_stability import ObstacleStability, raised_wheel_pose, posed_loaded_cg, projected_support_margin
 
 
@@ -405,7 +405,7 @@ class PlateStructureGeometry(Discipline):
 class PlateStructureLoads(Discipline):
     ARM_SECTION = staticmethod(round_arm_section)
     ARM_MECHANICS = None
-    CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cross_tube_youngs_modulus cross_tube_yield_strength plate_buckling_k allowable_deflection lin_act_side_arm_offset lin_act_top_arm_offset actuator_retracted_length travel_actuator_length actuator_extended_length")))
+    CONFIG_INPUTS = tuple(sorted(GEOMETRY_INPUTS | names("arm_length gravity structure_load_factor structure_safety_factor tube_youngs_modulus tube_yield_strength cross_tube_youngs_modulus cross_tube_yield_strength plate_buckling_k allowable_deflection lin_act_side_arm_offset lin_act_top_arm_offset actuator_retracted_length travel_actuator_length deposition_actuator_length actuator_extended_length")))
     COUPLED_INPUTS = {"dry_mass": "kg", "payload_mass": "kg", "drum_mass": "kg", "wheel_mass": "kg", "drive_mass": "kg"}
     OUTPUT_UNITS = {**StructureLoads.OUTPUT_UNITS,
                     "plate_stress": "Pa", "plate_stress_margin": "Pa", "plate_buckling_margin": "N",
@@ -441,50 +441,61 @@ class PlateMassProperties(Discipline):
     COUPLED_INPUTS = {**MassProperties.COUPLED_INPUTS,
                       "structure_cg_z": "m", "structure_sprung_cg_z": "m", "structure_yaw_inertia": "kg*m**2"}
     OUTPUT_UNITS = MassProperties.OUTPUT_UNITS
-    DEPENDENCIES = dict.fromkeys(OUTPUT_UNITS, set(CONFIG_INPUTS) | set(COUPLED_INPUTS))
+    DEPENDENCIES = {n: set(deps) | names("structure_cg_z structure_sprung_cg_z structure_yaw_inertia")
+                    for n, deps in MassProperties.DEPENDENCIES.items()}
     model_evidence = {**EVIDENCE, "placement": "explicit frame inventory; equipment and unequal actuator/arm placement remain reference approximations"}
 
     def compute(self, inputs, outputs):
-        v = lambda n: scalar(inputs, n)
-        wb, track, rw, rd, length = v("wheelbase"), v("track_width"), v("wheel_diameter")/2, v("drum_diameter")/2, v("drum_length")
-        parts, sprung = [], []
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                mw = v("wheel_mass")/4
-                parts.append((mw, sx*wb/2, sy*track/2, rw, mw*(3*rw**2+v("wheel_width")**2)/12))
-                parts.append((v("drive_mass")/4, sx*wb/2, sy*track/2, rw, 0))
-                md = v("drum_mass")/4
-                parts.append((md, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2, v("travel_y"), md*(3*rd**2+length**2)/12))
-                sprung.append(parts[-1])
-            tail = tail_part(v, sx)
-            if tail is not None:
-                parts.append(tail); sprung.append(tail)
-            ml = (v("linkage_mass")-v("arm_extension_mass"))/2
-            px = (v("pivot_x")+v("actuator_pivot_x"))/2
-            pz = (v("bottom_pivot_height")+v("top_pivot_height"))/2
-            jx, jz = attachment_point(v("pivot_x"), v("bottom_pivot_height"), v("travel_x"), v("travel_y"), v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
-            ex, ez = (v("travel_x")+jx)/2, (v("travel_y")+jz)/2
-            parts.append((ml, sx*(px+ex)/2, 0, (pz+ez)/2, ml*(ex-px)**2/12))
+        result = evaluate_pose_states({n: scalar(inputs, n) for n in inputs}, plate_pose_properties)
+        for name, value in result.items():
+            outputs[name] = value
+
+
+def plate_pose_properties(values):
+    """Pure plate-frame inventory at one mirrored drum pose."""
+    v = values.__getitem__
+    outputs = {}
+    wb, track, rw, rd, length = v("wheelbase"), v("track_width"), v("wheel_diameter")/2, v("drum_diameter")/2, v("drum_length")
+    parts, sprung = [], []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            mw = v("wheel_mass")/4
+            parts.append((mw, sx*wb/2, sy*track/2, rw, mw*(3*rw**2+v("wheel_width")**2)/12))
+            parts.append((v("drive_mass")/4, sx*wb/2, sy*track/2, rw, 0))
+            md = v("drum_mass")/4
+            parts.append((md, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2, v("travel_y"), md*(3*rd**2+length**2)/12))
             sprung.append(parts[-1])
-        mc = v("fixed_mass")+v("battery_mass")
-        equipment = (mc, 0, 0, rw+v("chassis_height")/2, mc*(wb**2+track**2)/12)
-        parts.extend((equipment, (v("structure_mass"), 0, 0, v("structure_cg_z"), v("structure_yaw_inertia"))))
-        sprung.extend((equipment, (v("structure_mass")-v("rocker_mass"), 0, 0, v("structure_sprung_cg_z"), 0)))
-        for state in ("empty", "loaded", "half"):
-            load, body = list(parts), list(sprung)
-            if state != "empty":
-                for sx in ((-1, 1) if state == "loaded" else (1,)):
-                    for sy in (-1, 1):
-                        m = v("payload_mass")/4
-                        item = (m, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2,
-                                v("travel_y")-rd/3, m*(3*rd**2+length**2)/12)
-                        load.append(item)
-                        body.append(item)
-            _, x, z, inertia = mass_properties(load)
-            outputs[state+"_cg_x"], outputs[state+"_cg_z"], outputs[state+"_yaw_inertia"] = x, z, inertia
-            if state == "loaded":
-                m, x, z, _ = mass_properties(body)
-                outputs["loaded_sprung_mass"], outputs["loaded_sprung_cg_x"], outputs["loaded_sprung_cg_z"] = m, x, z
+        tail = tail_part(v, sx)
+        if tail is not None:
+            parts.append(tail); sprung.append(tail)
+        ml = (v("linkage_mass")-v("arm_extension_mass"))/2
+        px = (v("pivot_x")+v("actuator_pivot_x"))/2
+        pz = (v("bottom_pivot_height")+v("top_pivot_height"))/2
+        jx, jz = attachment_point(v("pivot_x"), v("bottom_pivot_height"), v("travel_x"), v("travel_y"), v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
+        ex, ez = (v("travel_x")+jx)/2, (v("travel_y")+jz)/2
+        parts.append((ml, sx*(px+ex)/2, 0, (pz+ez)/2, ml*(ex-px)**2/12))
+        sprung.append(parts[-1])
+    mc = v("fixed_mass")+v("battery_mass")
+    equipment = (mc, 0, 0, rw+v("chassis_height")/2, mc*(wb**2+track**2)/12)
+    parts.extend((equipment, (v("structure_mass"), 0, 0, v("structure_cg_z"), v("structure_yaw_inertia"))))
+    sprung.extend((equipment, (v("structure_mass")-v("rocker_mass"), 0, 0, v("structure_sprung_cg_z"), 0)))
+    for state in ("empty", "loaded", "half"):
+        load, body = list(parts), list(sprung)
+        if state != "empty":
+            for sx in ((-1, 1) if state == "loaded" else (1,)):
+                for sy in (-1, 1):
+                    m = v("payload_mass")/4
+                    item = (m, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2,
+                            v("travel_y")-rd/3, m*(3*rd**2+length**2)/12)
+                    load.append(item)
+                    body.append(item)
+        _, x, z, inertia = mass_properties(load)
+        outputs[state+"_cg_x"], outputs[state+"_cg_z"], outputs[state+"_yaw_inertia"] = x, z, inertia
+        if state == "loaded":
+            m, x, z, _ = mass_properties(body)
+            outputs["loaded_sprung_mass"], outputs["loaded_sprung_cg_x"], outputs["loaded_sprung_cg_z"] = m, x, z
+
+    return outputs
 
 
 def plate_frame_posed_cg(pose, radius, offset, sprung_mass, sprung_x, sprung_z, wheel_drive_mass, rocker_mass):

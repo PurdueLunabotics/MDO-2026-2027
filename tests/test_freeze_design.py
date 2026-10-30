@@ -18,7 +18,7 @@ HARDWARE = {
     "wheel_width": .18,
     "travel_actuator_length": .50,
     "actuator_retracted_length": .508,
-    "actuator_extended_length": .70,
+    "actuator_extended_length": .60,
 }
 
 
@@ -90,9 +90,9 @@ class FreezeDesignTests(unittest.TestCase):
     def test_current_actuator_length_bounds_are_enforced_when_frozen(self):
         for structure in ("reference", "plate-frame"):
             design, _ = configuration(structure)
-            for name in ("travel_actuator_length", "actuator_retracted_length", "actuator_extended_length"):
+            for name in ("travel_actuator_length", "deposition_actuator_length", "actuator_retracted_length", "actuator_extended_length"):
                 _, lower, upper, _ = design[name]
-                self.assertEqual((lower, upper), (.453898, .707898))
+                self.assertEqual((lower, upper), (.403098, .606298))
                 for value in (lower-1e-6, upper+1e-6):
                     with self.subTest(structure=structure, name=name, value=value):
                         with self.assertRaisesRegex(ValueError, "positive bounds"):

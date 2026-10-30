@@ -35,6 +35,9 @@ MARGINS = {
     "pit_depth_margin": (0.45, "m"),
     "transport_clearance_margin": (0.30, "m"),
     "wheel_first_margin": (0.359, "m"),
+    "deposition_reach_margin": (0.10, "m"),
+    "deposition_position_margin": (0.10, "m"),
+    "deposition_clearance_margin": (0.30, "m"),
     "startup_position_margin": (0.10, "m"),
     "dig_position_margin": (0.10, "m"),
     "pivot_spacing_margin": (0.40, "m"),
@@ -151,6 +154,10 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     models = traversal_models(models, traversal_mode)
     excavation_component = models.excavation()
     moving_excavation = getattr(excavation_component, "MOVING_EXCAVATION", False)
+    if not moving_excavation:
+        from .tip_stability import TipStability, DepositionTipStability
+        if models.tip_stability is DepositionTipStability:
+            models = replace(models, tip_stability=TipStability)
     design, assumptions = configuration(structure, motors, actuators,
         excavation_mode="moving" if moving_excavation else "legacy")
     retired_excavation_inputs = {}
@@ -222,6 +229,10 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         if name not in values:
             raise ValueError(f"Unknown input {name!r}. See rover/config.py.")
         values[name] = float(value)
+    # Old files start with their resolved travel pose for deposition.
+    if ("deposition_actuator_length" not in (overrides or {})
+            and design["deposition_actuator_length"][0] == design["travel_actuator_length"][0]):
+        values["deposition_actuator_length"] = values["travel_actuator_length"]
     validate(values, design, assumptions, attachment_max=attachment_max)
     # Validate against the original search bounds before converting selected
     # variables into fixed inputs. Preserve those bounds for report auditing.
@@ -241,7 +252,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         raise ValueError("Actuator pin axial station must be beyond the chassis pivot")
     problem = om.Problem(reports=False)
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
-    problem.model_metadata = {"schema_version": 7, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
+    problem.model_metadata = {"schema_version": 8, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
                               "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                               "traversal_mode": traversal_mode,
                               "optimize_attachment": optimize_attachment,
@@ -256,6 +267,12 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
                               "source_files_sha256": {p.relative_to(Path(__file__).parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                                                        for p in sorted(Path(__file__).parent.rglob("*.py"))}}
+    problem.model_metadata["deposition_operation"] = {
+        "pose": "Both mirrored drum pairs at deposition_actuator_length during both dumps and the half-loaded turn",
+        "sequence": "Loaded travel -> parallel deposition motion -> first dump -> half-loaded turn -> second dump -> parallel empty return to travel",
+        "accounting": "Additional time/energy separate from excavation positioning; sampled force/clearance sweep includes deposition",
+        "tip_screen": "Actual deposition half-load CG for moving excavation; explicit legacy excavation retains maximum-extension screen",
+        "limitations": "Quasi-static transitions; no dynamic arm-motion, soil discharge height or controller validation"}
     if moving_excavation:
         problem.model_metadata["excavation_operation"] = {
             "front_depth": "inlet_depth", "rear_depth": "2*inlet_depth",
@@ -332,6 +349,10 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
                 if option not in component.options:
                     raise ValueError(f"{slot} must expose the {option!r} option to use the X44 hardware profile; the selected discipline was not replaced.")
                 component.options[option] = X44MotorProvider if option == "motor_model" else CatalogAssemblyMass
+        if slot == "deposition_actuation" and actuators == "pa04-900":
+            if "actuator_profile" not in component.options:
+                raise ValueError("Deposition actuation replacement must support actuator_profile for PA-04")
+            component.options["actuator_profile"] = actuators
         model.add_subsystem(slot,component,promotes=["*"])
     inputs = om.IndepVarComp()
     for name, value in values.items():
@@ -341,7 +362,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     # Kinematics/mass -> geometry -> excavation -> linkage loads and mobility -> mission.
     # Battery capacity is a design variable, avoiding a hidden mass/energy sizing loop.
     for slot in ("structure_geometry","linkage","wheel_mass","drum_mass","geometry",
-                 "excavation","linkage_loads","mass_properties","structure_loads",
+                 "excavation","linkage_loads","deposition_actuation","mass_properties","structure_loads",
                  "relocation","trench_traversal","tip_stability","obstacle_stability",
                  "obstacle_clearance","traversal_stability","mobility","slope_traversal","ground_clearance"):
         add_discipline(slot)

@@ -56,11 +56,12 @@ def plate_frame_svg(values):
     return ''.join(pieces)
 
 
-def geometry_svg(values, extended=False, title=None, travel=False):
+def geometry_svg(values, extended=False, title=None, travel=False, deposition=False):
     v = values.__getitem__
     poses, _ = sweep_poses(values)
-    cx, cy = ((v("travel_x"),v("travel_y")) if travel else
-              (poses[-1] if extended else (v("stowed_x"),v("stowed_y"))))
+    cx, cy = ((v("deposition_x"),v("deposition_y")) if deposition else
+              (v("travel_x"),v("travel_y")) if travel else
+              ((v("extended_x"),v("extended_y")) if extended else (v("stowed_x"),v("stowed_y"))))
     side, top_offset = offset_values(values)
     jx, jy = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, side, top_offset)
     qx, qy = attachment_point(v("pivot_x"), v("bottom_pivot_height"), cx, cy, side, 0.)
@@ -92,9 +93,9 @@ def geometry_svg(values, extended=False, title=None, travel=False):
         return f'<rect x="{a:.3f}" y="{b:.3f}" width="{w*scale:.3f}" height="{h*scale:.3f}" fill="{fill}" stroke="{stroke}" stroke-width="2" stroke-dasharray="{dash}"/>'
     moving = "front_dig_depth" in values
     extended_state = "Maximum extension · plunge / recovery reach" if moving else "Extended · digging"
-    state = "Raised · travel / deposition" if travel else (extended_state if extended else "Compact · starting envelope")
+    state = "Deposition · both pairs" if deposition else ("Travel" if travel else (extended_state if extended else "Compact · starting envelope"))
     title = title or state
-    actuator_length = v("travel_actuator_length") if travel else (v("actuator_extended_length") if extended else v("actuator_retracted_length"))
+    actuator_length = v("deposition_actuator_length") if deposition else (v("travel_actuator_length") if travel else (v("actuator_extended_length") if extended else v("actuator_retracted_length")))
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 770" role="img" aria-label="{escape(title, quote=True)}">',
            '<rect width="1200" height="770" rx="16" fill="#f7fafc"/>',
            f'<text x="35" y="36" font-family="sans-serif" font-size="24" font-weight="700" fill="#142a43">{escape(title)}</text>',
@@ -325,6 +326,10 @@ def write_report(record, output, iterations=(), *, download_links=None):
     for name, extended, travel in (("retracted", False, False), ("travel", False, True), ("extended", True, False)):
         svg = geometry_svg(values, extended, travel=travel)
         (output.parent/f"{output.stem}_{name}.svg").write_text(svg, encoding="utf-8")
+        drawings.append(svg)
+    if "deposition_x" in values:
+        svg = geometry_svg(values, deposition=True)
+        (output.parent/f"{output.stem}_deposition.svg").write_text(svg, encoding="utf-8")
         drawings.append(svg)
     frame = plate_frame_svg(values) if "plate_spoke_width" in values else ""
     stability = stability_svg(values) if "slope_tip_margin" in values else ""

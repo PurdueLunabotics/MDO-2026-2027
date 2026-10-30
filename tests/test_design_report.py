@@ -89,6 +89,7 @@ class DesignReportTests(unittest.TestCase):
             write_report(record, output)
             html = output.with_suffix(".html").read_text(encoding="utf-8")
             self.assertNotIn('<img src=x onerror="bad()">', html)
+            self.assertIn('<h1>&lt;img src=x onerror=&quot;bad()&quot;&gt;</h1>', html)
             self.assertIn("&lt;draft&gt;", html)
         self.assertEqual(json.dumps(record, sort_keys=True), original)
 

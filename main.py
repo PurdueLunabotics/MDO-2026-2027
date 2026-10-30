@@ -65,7 +65,7 @@ def main():
         artifacts = [output, output.with_suffix(".html"), output.with_suffix(".sql"),
                      output.with_name(output.stem+"_n2.html")]
         artifacts += [output.with_name(output.stem+"_"+part+".svg")
-                      for part in ("retracted", "travel", "extended", "frame", "stability", "top", "obstacle")]
+                      for part in ("retracted", "travel", "deposition", "extended", "frame", "stability", "top", "obstacle")]
         if args.inputs and args.inputs.resolve() in {path.resolve() for path in artifacts}:
             raise ValueError("Output artifacts would overwrite the source baseline. Choose --output with a different filename.")
         problem = build_problem(overrides, optimizer=args.optimizer, maxiter=args.maxiter, display=True, structure=structure, cobyla_radius=args.cobyla_radius, motors=motors, actuators=actuators, solver_tol=args.solver_tol, freeze=args.freeze, ignore_constraints=args.ignore_constraint, traversal_mode=traversal_mode, optimize_attachment=args.optimize_attachment, attachment_max=attachment_max)
@@ -108,7 +108,7 @@ def main():
             print_report("Final optimizer iterate", final)
             print(f"Optimizer success: {success}")
         om.n2(problem, outfile=str(output.parent / f"{output.stem}_n2.html"), show_browser=False)
-        record = {"schema_version": 7, "model_metadata": problem.model_metadata, "report_context": context,
+        record = {"schema_version": 8, "model_metadata": problem.model_metadata, "report_context": context,
                   "openmdao_version": openmdao.__version__, "optimizer": problem.model_metadata["optimizer_settings"]["optimizer"],
                   "optimizer_success": success, "optimizer_result": message,
                   "status": "baseline" if baseline_mode else ("converged_feasible" if success and final["feasible"] else "failed_or_infeasible"),

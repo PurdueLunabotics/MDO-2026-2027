@@ -18,23 +18,27 @@ the interactive report; PDFs can be read directly on GitHub.
 | Design | Printable PDF | Interactive report |
 | --- | --- | --- |
 | Student-selected baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
-| Historical optimizer candidate (outdated model) | [Historical PDF](output/pdf/optimized.pdf) | [Historical HTML](docs/design_reports/optimized.html) |
+| Fixed-hardware optimizer candidate (infeasible) | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
 
-Reports include scores, mass and energy, top and side views, failed checks, and
-complete input/output tables. The baseline was regenerated on **2026-10-24** from
-`design_baseline.json`, including the aluminum box arms and revised plan/rock
-drawings. It retains failures in empty/full climbing, turn traction,
-asymmetric-dump tipping, static slope tipping and rock-path wheel loading.
-The historical candidate reports predate the current BWR climbs and box arms;
-their old pass statuses do not establish current feasibility. These are saved
-snapshots: changing inputs does not refresh them.
+Reports were regenerated on **2026-10-30**. They include scores, mass and energy,
+travel/deposition/compact/recovery drawings, failed checks, and full input/output
+tables. The baseline evaluates the current `design_baseline.json` unchanged as
+the student's best-case scenario; it retains 13 failed modeled checks.
 
-The current input baseline now selects **PA-04 900 lbf / 12 V actuators** from
-the supplied charts. Stroke is continuous for optimization; its provisional
-8-inch start includes an editable **161.3408 mm** installed length allowance.
-The current 500 mm travel command is shorter than the installed minimum, so the
-baseline retains a packaging failure pending mounting/pose redesign. Regenerate
-reports to see this selection. See [actuator data and assumptions](docs/PA04_ACTUATORS.md).
+The candidate preserves the final geometry from
+`results/fixed_hardware_optimization.json`; all 288 saved output values were
+reproduced with the current model. Its optimizer converged, but turning traction
+still fails. This separate study uses calculated route timing, zero-degree climb
+checks and two excluded optimizer constraints. It did not start from the current
+baseline, so the two scores are not a controlled before/after comparison.
+Effective candidate inputs and provenance are in `design_optimized.json`.
+See [report release details](docs/REPORT_RELEASE.md).
+
+Both cases use **PA-04 900 lbf / 12 V actuators** and separate travel/deposition
+commands. Installed-length fit remains diagnostic only; passing the other
+geometry screens does not establish actuator packaging. See
+[the actuator assumptions](docs/PA04_ACTUATORS.md). These are saved snapshots:
+changing inputs does not refresh them.
 
 ## First run
 
@@ -446,3 +450,8 @@ values for a single analysis/optimization in degrees:
 Unreachable climbing demands remain failed. Reports show “No climbing solution”;
 the numeric slip=1 sentinel is accompanied by `solution_valid=0`. Historical
 feasible-start fixtures predate these new requirements and must be reevaluated.
+
+Separate travel and deposition poses are described in
+[DEPOSITION_STATES.md](docs/DEPOSITION_STATES.md). Set `deposition_actuator_length`
+in metres independently of `travel_actuator_length`; omitting it starts with the
+resolved travel command. Reports include separate views and pose-change costs.

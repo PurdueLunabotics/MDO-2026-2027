@@ -4,6 +4,11 @@ Checked locally using the repository's `.venv`. This page
 describes the current implementation; Git history retains earlier run notes.
 Software verification is separate from physical calibration and validation.
 
+The 2026-10-30 report release adds a fresh baseline and the saved fixed-hardware
+candidate, with all physical failures retained. See [release verification](REPORT_RELEASE.md#verification)
+for the full-suite/focused-rerun coverage, derivative checks, interrupted default
+reference search, completed bounded failed-run check, and PDF visual review.
+
 ## Pre-push actuator-range consistency (2026-10-30)
 
 The current generic actuator commands start at 0.454/0.454/0.706 m, with all
@@ -996,3 +1001,50 @@ The graphics implementation retains the 148-test passing result and derivative
 check above. Publication introduced no further model changes or optimization;
 the fixed-evaluation and source/embedded-record checks passed before release.
 Physical calibration and unresolved feasibility are unchanged.
+
+## Separate travel/deposition states (2026-10-30)
+
+Branch `codex/separate-deposition-pose` adds the schema 8 contracts and
+assumptions in [DEPOSITION_STATES.md](DEPOSITION_STATES.md).
+
+- Full `python -m unittest discover -s tests -v`: **217 passed** in 412.420 s.
+  After adding the calculated-route isolation case, the 10-test deposition
+  module passed again, including configured-initializer handling; **218 distinct
+  tests** are covered across these runs. The 14-test rover module also passed
+  after the deposition packaging-diagnostic dependency change, including the
+  numerical audit of omitted component dependencies and N2 checks.
+- `python main.py --baseline --output results/deposition_baseline.json` completed.
+  Equal commands preserve 883.9271379 s cycle duration and zero added deposition
+  motion cost. The five existing geometry/mobility requirement failures
+  remain in the saved fixed evaluation (length, clearance, both climbs and turn
+  traction).
+- The required default `--check-derivatives` run passed the total-derivative
+  step-size check. Its longer reference SLSQP search was stopped after 35 driver
+  records: reference rocker clearance is bounded above by
+  `0.8*(0.359/2)+0.10-0.055/2-0.0254 = 0.1907 m`, below 0.2032 m required.
+  Its SQL/log remain locally as `deposition_reference_interrupted.*`; there is
+  no claim that this search converged. A separate `--maxiter 1` reference smoke
+  run completed and wrote `deposition_optimization.*`, with
+  `optimizer_success=false`, `status=failed_or_infeasible` and raw failed checks.
+- `python main.py --inputs design_baseline.json --optimize --check-derivatives
+  --maxiter 80 --output results/deposition_profile_optimization.json` passed
+  derivative checks and completed its bounded plate-frame/X44/PA-04 trial.
+  The candidate **failed**: remaining clearance/climb/traction, geometry,
+  structure, recovery and design-bound failures are retained, including an
+  out-of-bounds deposition command. No bounds or constraints were loosened.
+- `results/deposition_pose_example.html` uses illustrative compact/travel
+  commands of 470 mm and a deposition command of 453.898 mm, with other inputs
+  from the saved design. Deposition raises the axle 25.394 mm and moves it
+  inward 23.578 mm. Half-loaded yaw inertia falls from 30.30196 to 28.35495
+  kg m²; added two-leg actuation duration/energy are 3.14903 s / 938.81253 J.
+  It is a fixed, **infeasible, unoptimized illustration**, not a released design.
+  Source inputs are in `results/deposition_pose_example_inputs.json`.
+
+N2 tests confirm separate deposition-half inertia into mobility, deposition
+energy into mission, and deposition command into the capability sweep, with no
+auto-IVC sources or deposition-coordinate links into travel mass properties.
+HTML/SVG structure and exports are tested. Interactive browser preview was
+blocked by the browser's local-file URL policy; no rendered-browser inspection
+is claimed. No calibration data were added and no hardware or soil experiment
+was run. Dynamic arm motion, dumping reactions, packaging and controller
+interlocks remain unvalidated.

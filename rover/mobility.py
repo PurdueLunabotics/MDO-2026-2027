@@ -88,7 +88,7 @@ class Mobility(SimpleComponent):
         self.inputs_from_config(*sorted(motor.input_names("drive")))
         self.add_input("dry_mass", units="kg")
         self.add_input("payload_mass", units="kg")
-        for state in ("empty", "loaded", "half"):
+        for state in ("empty", "loaded", "deposition_half"):
             self.add_input(state+"_yaw_inertia", units="kg*m**2")
             self.add_input(state+"_cg_x", units="m")
             self.add_input(state+"_cg_z", units="m")
@@ -120,7 +120,7 @@ class Mobility(SimpleComponent):
         no_load_speed = motor.free_rpm*math.pi/30*radius
         rating = 4*motor.peak_power()
         segments = list(plan["segments"])
-        segments += [(dry + payload / 2, "half", ("turn", turn_path, turn_time, turn_peak, turn_accel))]
+        segments += [(dry + payload / 2, "deposition_half", ("turn", turn_path, turn_time, turn_peak, turn_accel))]
         straight_response = self.straight_responder(v, segments)
         forces, powers, motor_margins, traction_margins = {}, {}, {}, {}
         electrical = {"straight": [], "turn": []}

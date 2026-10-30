@@ -31,13 +31,18 @@ def dependencies(component):
         core = names("arm_length top_pivot_height bottom_pivot_height pivot_x actuator_pivot_x lin_act_side_arm_offset lin_act_top_arm_offset")
         retract = core | {"actuator_retracted_length"}
         travel = core | {"travel_actuator_length"}
+        deposition = core | {"deposition_actuator_length"}
         extend = core | {"actuator_extended_length"}
-        sweep = travel | extend
+        sweep = travel | extend | deposition
         envelope = names("wheelbase wheel_diameter drum_diameter pivot_x actuator_pivot_x arm_envelope_radius")
         high = names("wheel_diameter chassis_height drum_diameter top_pivot_height arm_envelope_radius")
         return {
             "stowed_x": retract, "stowed_y": retract,
             "travel_x": travel, "travel_y": travel,
+            "deposition_x": deposition, "deposition_y": deposition,
+            "deposition_reach_margin": deposition | {"mechanism_clearance"},
+            "deposition_position_margin": names("deposition_actuator_length actuator_extended_length"),
+            "deposition_clearance_margin": deposition | names("drum_diameter transport_clearance"),
             "extended_x": extend, "extended_y": extend,
             "sweep_x_min": sweep, "sweep_x_max": sweep,
             "actuator_leverage_max": sweep,
@@ -61,7 +66,7 @@ def dependencies(component):
             "pivot_longitudinal_margin": names("wheelbase pivot_x"),
             "actuator_pivot_longitudinal_margin": names("wheelbase actuator_pivot_x"),
             "stroke_margin": names("actuator_extended_length travel_actuator_length minimum_stroke"),
-            "actuator_body_margin": names("travel_actuator_length actuator_extended_length actuator_housing_allowance"),
+            "actuator_body_margin": names("travel_actuator_length deposition_actuator_length actuator_extended_length actuator_housing_allowance"),
             "triangle_retracted_margin": travel | {"mechanism_clearance"},
             "triangle_extended_margin": extend | {"mechanism_clearance"},
             "toggle_margin": sweep | {"mechanism_clearance"},
@@ -80,8 +85,8 @@ def dependencies(component):
     if component == "Mobility":
         profile = names("track_width travel_speed acceleration turn_speed_fraction turn_accel_fraction traversal_time_one_way")
         deposit = names("track_width turn_angle travel_speed acceleration turn_speed_fraction turn_accel_fraction")
-        cg = names("empty_cg_x empty_cg_z loaded_cg_x loaded_cg_z half_cg_x half_cg_z wheelbase")
-        inertia = names("empty_yaw_inertia loaded_yaw_inertia half_yaw_inertia")
+        cg = names("empty_cg_x empty_cg_z loaded_cg_x loaded_cg_z deposition_half_cg_x deposition_half_cg_z wheelbase")
+        inertia = names("empty_yaw_inertia loaded_yaw_inertia deposition_half_yaw_inertia")
         pressure = cg | profile | deposit | names("rocker_load_factor dry_mass payload_mass gravity wheel_width wheel_diameter wheel_deflection_fraction")
         drag = names("rocker_load_factor dry_mass payload_mass gravity wheel_width wheel_diameter wheel_deflection_fraction rolling_base rolling_pressure_scale")
         force = drag | profile
@@ -110,13 +115,13 @@ def dependencies(component):
             "turn_power_margin": turnpower | names("drive_motor_power drive_gear_efficiency"),
         }
     if component == "Mission":
-        cycle = names("dig_time dump_time travel_time turn_time overhead_time actuation_time relocation_time dig_overlap_time")
-        energy = cycle | names("dig_energy dump_energy relocation_energy mobility_energy electronics_power arm_energy")
+        cycle = names("dig_time dump_time travel_time turn_time overhead_time actuation_time deposition_actuation_time relocation_time dig_overlap_time")
+        energy = cycle | names("dig_energy dump_energy relocation_energy mobility_energy electronics_power arm_energy deposition_arm_energy")
         payload = names("payload_mass delivery_efficiency berm_density")
         volume = cycle | payload | {"run_time"}
         mass_points = cycle | payload | {"dry_mass"}
         energy_points = energy | payload | {"run_time"}
-        peak = names("electronics_power dig_power dump_power drive_peak_power turn_peak_power arm_peak_power relocation_peak_power")
+        peak = names("electronics_power dig_power dump_power drive_peak_power turn_peak_power arm_peak_power deposition_arm_peak_power relocation_peak_power")
         return {
             "excavation_area_margin": cycle | names("available_excavation_area run_time excavation_footprint"),
             "cycle_time": cycle, "cycle_energy": energy, "cycles": cycle | {"run_time"},

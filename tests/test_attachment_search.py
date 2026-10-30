@@ -36,7 +36,8 @@ class AttachmentSearchTests(unittest.TestCase):
     def test_invalid_attachment_settings_are_rejected(self):
         with self.assertRaises(ValueError):
             build_problem(optimize_attachment="yes")
-        for value in (-.151,.151):
+        _, lower, upper, _ = DESIGN["lin_act_side_arm_offset"]
+        for value in (lower-1e-6, upper+1e-6):
             with self.assertRaises(ValueError):
                 build_problem({"lin_act_side_arm_offset":value},optimize_attachment=True)
 

@@ -72,6 +72,8 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 
 ## Contracts that must remain explicit
 
+Schema 8 adds independent deposition actuator length and axle x/z, nine deposition mass-property ports, three deposition motion time/energy/peak ports, and three pose margins. Unprefixed mass properties remain travel-only. Mobility consumes deposition half-load ports; the default dump tip screen uses actual deposition CG. Mission adds motion costs once. New factories must preserve these ports and units; old snapshots need reevaluation. See [DEPOSITION_STATES.md](DEPOSITION_STATES.md).
+
 Schema 7 unifies moving excavation under `inlet_depth` (metres): radial scoop
 protrusion and fresh-layer cut depth are equal. The front cuts one inlet depth
 and the rear two below original grade. `inlet_width=drum_length` enforces full

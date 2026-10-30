@@ -43,12 +43,13 @@ def offset_values(values):
 
 
 def sweep_poses(values, samples=SWEEP_SAMPLES):
-    """Equal-angle samples, including the two actuator endpoints."""
+    """Equal-angle capability sweep covering travel, deposition and extension."""
     v = values.__getitem__
     arm, bottom, pivot = v("arm_length"), v("bottom_pivot_height"), v("pivot_x")
     side, top = offset_values(values)
-    start = drum_pose(arm, pivot, bottom, v("actuator_pivot_x"), v("top_pivot_height"), v("travel_actuator_length"), side, top)
-    end = drum_pose(arm, pivot, bottom, v("actuator_pivot_x"), v("top_pivot_height"), v("actuator_extended_length"), side, top)
+    lengths = (v("travel_actuator_length"), values.get("deposition_actuator_length", v("travel_actuator_length")), v("actuator_extended_length"))
+    start = drum_pose(arm, pivot, bottom, v("actuator_pivot_x"), v("top_pivot_height"), min(lengths), side, top)
+    end = drum_pose(arm, pivot, bottom, v("actuator_pivot_x"), v("top_pivot_height"), max(lengths), side, top)
     angles = np.linspace(math.atan2(start[1] - bottom, start[0] - pivot),
                          math.atan2(end[1] - bottom, end[0] - pivot), samples)
     return [(pivot + arm * math.cos(a), bottom + arm * math.sin(a)) for a in angles], angles
@@ -56,7 +57,7 @@ def sweep_poses(values, samples=SWEEP_SAMPLES):
 
 class LinkageGeometry(SimpleComponent):
     OUTPUT_UNITS = {name: "m" for name in (
-        "stowed_x stowed_y travel_x travel_y extended_x extended_y "
+        "stowed_x stowed_y travel_x travel_y extended_x extended_y deposition_x deposition_y "
         "stowed_length stowed_height deployed_length deployed_height stroke "
         "pit_depth_margin transport_clearance_margin wheel_first_margin "
         "startup_position_margin dig_position_margin pivot_spacing_margin "
@@ -65,13 +66,14 @@ class LinkageGeometry(SimpleComponent):
         "triangle_extended_margin toggle_margin wheel_clearance_margin "
         "chassis_clearance_margin deployed_height_margin "
         "actuator_pivot_longitudinal_margin sweep_x_min sweep_x_max "
-        "actuator_toggle_margin actuator_attachment_distance arm_physical_length").split()}
+        "actuator_toggle_margin actuator_attachment_distance arm_physical_length "
+        "deposition_reach_margin deposition_position_margin deposition_clearance_margin").split()}
     OUTPUT_UNITS.update({"actuator_leverage_max": None, "lowering_time": "s",
                          "linkage_mass": "kg", "arm_extension_mass": "kg"})
 
     def setup(self):
         self.inputs_from_config(
-            "actuator_speed", "travel_actuator_length", "actuator_retracted_length", "actuator_extended_length",
+            "actuator_speed", "travel_actuator_length", "deposition_actuator_length", "actuator_retracted_length", "actuator_extended_length",
             "top_pivot_height", "bottom_pivot_height", "arm_length", "pivot_x", "actuator_pivot_x", "lin_act_side_arm_offset", "lin_act_top_arm_offset",
             "actuator_force_rating", "wheel_diameter", "drum_diameter", "wheelbase",
             "chassis_height", "transport_clearance", "mechanism_clearance",
@@ -88,10 +90,15 @@ class LinkageGeometry(SimpleComponent):
         v = values.__getitem__
         poses, angles = sweep_poses(values)
         xs, ys = np.array(poses).T
-        tx, ty = poses[0]
+        def command_pose(name):
+            return drum_pose(v("arm_length"), v("pivot_x"), v("bottom_pivot_height"),
+                v("actuator_pivot_x"), v("top_pivot_height"), v(name),
+                v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
+        tx, ty = command_pose("travel_actuator_length")
+        dep_x, dep_y = command_pose("deposition_actuator_length")
         sx, sy = drum_pose(v("arm_length"), v("pivot_x"), v("bottom_pivot_height"),
                           v("actuator_pivot_x"), v("top_pivot_height"), v("actuator_retracted_length"), v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset"))
-        ex, ey = poses[-1]
+        ex, ey = command_pose("actuator_extended_length")
         arm = v("arm_length")
         side, top = v("lin_act_side_arm_offset"), v("lin_act_top_arm_offset")
         attachment_radius = pin_radius(arm, side, top)
@@ -115,6 +122,12 @@ class LinkageGeometry(SimpleComponent):
         outputs["stowed_x"], outputs["stowed_y"] = sx, sy
         outputs["travel_x"], outputs["travel_y"] = tx, ty
         outputs["extended_x"], outputs["extended_y"] = ex, ey
+        outputs["deposition_x"], outputs["deposition_y"] = dep_x, dep_y
+        dep = v("deposition_actuator_length")
+        outputs["deposition_reach_margin"] = min(dep-abs(attachment_radius-gap)-clearance,
+                                                  attachment_radius+gap-dep-clearance)
+        outputs["deposition_position_margin"] = extended-dep
+        outputs["deposition_clearance_margin"] = dep_y-rd-v("transport_clearance")
         outputs["stowed_length"] = 2 * max(chassis_end + rw, sx + rd, v("pivot_x"), v("actuator_pivot_x"))
         outputs["stowed_height"] = max(chassis_top, sy + rd, v("top_pivot_height"))
         outputs["deployed_length"] = 2 * max(chassis_end + rw, max(xs) + rd, v("actuator_pivot_x"))
@@ -137,7 +150,7 @@ class LinkageGeometry(SimpleComponent):
         outputs["actuator_pivot_longitudinal_margin"] = chassis_end - v("actuator_pivot_x")
         outputs["stroke_margin"] = extended - travel - v("minimum_stroke")
         # Diagnostic only: this reserve does not constrain optimization/feasibility.
-        outputs["actuator_body_margin"] = 2 * travel - extended - v("actuator_housing_allowance")
+        outputs["actuator_body_margin"] = 2 * min(travel, dep) - extended - v("actuator_housing_allowance")
         outputs["triangle_retracted_margin"] = travel - abs(attachment_radius - gap) - clearance
         outputs["triangle_extended_margin"] = attachment_radius + gap - extended - clearance
         outputs["toggle_margin"] = min(xs) - v("pivot_x") - clearance
@@ -147,7 +160,7 @@ class LinkageGeometry(SimpleComponent):
         actuator_lengths = np.hypot(joint_xs-v("actuator_pivot_x"), joint_ys-v("top_pivot_height"))
         leverage = np.abs((xs-v("pivot_x"))*actuator_lengths/np.maximum(np.abs(cross), 1e-6))
         outputs["actuator_leverage_max"] = max(leverage)
-        x_candidates = [tx, ex]
+        x_candidates = [poses[0][0], poses[-1][0]]
         if min(angles) <= 0 <= max(angles):
             x_candidates.append(v("pivot_x")+arm)
         outputs["sweep_x_min"], outputs["sweep_x_max"] = min(x_candidates), max(x_candidates)

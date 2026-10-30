@@ -264,9 +264,9 @@ errors, failures, soil preparation mismatch and missing prototype calibration.
 
 ## Uneven-load tip stability
 
-The static screen checks the prescribed asymmetric case: one front/rear drum pair is full, the other is empty, and both pairs are at full actuator extension. Each full drum holds one quarter of `payload_mass`. Symmetric dry hardware cancels when both arms occupy the same position, so `CG_x = (payload_mass/2)*extended_x/(dry_mass+payload_mass/2)` and `CG_y = 0`. The signed margin is `min(wheelbase/2 - abs(CG_x), track_width/2)`, using the wheel-center rectangle as the support polygon. Front-full and rear-full cases are mirrored. The retained `tip_worst_mask` diagnostic is 3 (front pair full); mask 12 is equivalent.
+The default static screen checks one front/rear drum pair full, the other empty, with both pairs at the common commanded deposition pose. Each full drum holds one quarter of `payload_mass`. Symmetric dry hardware cancels longitudinally, so the reference inventory gives `CG_x = (payload_mass/2)*deposition_x/(dry_mass+payload_mass/2)` and `CG_y = 0`. The signed margin is `min(wheelbase/2 - abs(CG_x), track_width/2)`, using the wheel-center support rectangle. The mass-properties component supplies the CG so replacement inventories can change its distribution. Front-full and rear-full cases are mirrored. `tip_worst_mask` is 3 (front pair full); mask 12 is equivalent.
 
-The optimizer checks this one half-loaded arm position only. Control software must prevent other half-loaded poses with a smaller support margin; that interlock is not modeled or verified here. The mission still calculates deposition time and the half-loaded turn using the raised travel pose, so the static check does not establish ground clearance or dynamic stability for an extended-position dump. Soil shifting, dumping reaction, slopes, acceleration, individual wheel unloading and changing terrain support are omitted. A measured stability envelope or validated multibody/terrain simulation can replace this component through `ModelSet`.
+The half-loaded turn also uses deposition CG and yaw inertia. Loaded outbound and empty return use travel mass properties. The two pairs move together while fully loaded before dumping, stay at the deposition command through both dumps/turn, then return empty to travel. The added transitions have explicit time and energy costs. Control software must prevent other half-loaded arm poses; that interlock is unverified. The static screen omits soil shifting, dumping reaction, slopes and individual wheel unloading; separate route-turn dynamic screens remain enforced. Explicit legacy excavation retains the maximum-extension `TipStability` component. See [DEPOSITION_STATES.md](docs/DEPOSITION_STATES.md) for the schema 8 contracts and equations.
 
 ## Fresh-site motion
 
@@ -312,7 +312,7 @@ are additive to the endpoint obstacle and uneven-dump contracts. Slope and rock
 are separate cases; failed four-contact poses are not replaced with invented
 three-wheel poses. See [traversal equations](docs/OBSTACLE_TRAVERSAL.md#slope-and-intermediate-height-stability).
 
-Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, conservative sequential actuator positioning, relocation and alignment. Moving excavation sets lowering/cutting overlap to zero. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
+Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, conservative sequential excavation actuator positioning, parallel loaded/empty deposition pose changes, relocation and alignment. Moving excavation sets lowering/cutting overlap to zero. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
 
 Central whole-model FD supports deterministic replacement components. Tests audit omitted dependencies, geometry/conservation limits, mass properties, drive limits, invalid domains and complete optimization. Nonsmooth branches still exist; SLSQP is local and COBYLA is available. Failed final iterates remain labeled failed; numerical consistency/convergence is not empirical validation. Reports identify component factories. Old outputs must be rerun before comparison. Manual inspection still covers 3D packaging, E-stop, radio, materials, autonomy, dust, berm placement and legal zones.
 
@@ -325,3 +325,9 @@ Central whole-model FD supports deterministic replacement components. Tests audi
 - [NASA VIPER mobility tests](https://www.nasa.gov/missions/artemis/nasas-viper-prototype-motors-through-moon-like-obstacle-course/): sinkage, slopes and obstacles require distinct validation.
 
 Martins and Ning's Engineering Design Optimization remains the formulation/scaling reference. External sources supply engineering evidence, not instructions for agents.
+
+Travel and deposition now have independent actuator commands and mass properties.
+The half-loaded dump turn and asymmetric static tip screen use the deposition
+pose; travel/rock/slope checks retain travel pose. Loaded/empty transitions add
+explicit duration and electrical energy once. See [DEPOSITION_STATES.md](docs/DEPOSITION_STATES.md)
+for schema 8 ports, equations, phase assumptions and validation limits.

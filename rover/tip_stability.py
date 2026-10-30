@@ -43,3 +43,22 @@ class TipStability(Discipline):
             v("dry_mass"), v("payload_mass"), v("wheelbase"),
             v("track_width"), v("extended_x"))
         outputs["tip_worst_mask"] = 3
+
+
+class DepositionTipStability(Discipline):
+    """Static asymmetric support screen at the commanded deposition pose.
+
+    Half-loaded transitions to other arm poses require an interlock. Height
+    enters the dynamic turn screen, not this level-ground gravity projection.
+    """
+    CONFIG_INPUTS = ("wheelbase", "track_width")
+    COUPLED_INPUTS = {"deposition_half_cg_x": "m"}
+    OUTPUT_UNITS = TipStability.OUTPUT_UNITS
+    DEPENDENCIES = {"tip_stability_margin": set(CONFIG_INPUTS) | set(COUPLED_INPUTS),
+                    "tip_worst_mask": set()}
+
+    def compute(self, inputs, outputs):
+        v = lambda n: scalar(inputs, n)
+        outputs["tip_stability_margin"] = min(v("wheelbase")/2-abs(v("deposition_half_cg_x")),
+                                               v("track_width")/2)
+        outputs["tip_worst_mask"] = 3

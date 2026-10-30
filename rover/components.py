@@ -100,6 +100,7 @@ class Mission(SimpleComponent):
             "travel_time": "s", "turn_time": "s", "dig_power": "W", "dump_power": "W",
             "drive_peak_power": "W", "turn_peak_power": "W", "mobility_energy": "J",
             "actuation_time": "s", "arm_energy": "J", "arm_peak_power": "W",
+            "deposition_actuation_time": "s", "deposition_arm_energy": "J", "deposition_arm_peak_power": "W",
             "dig_energy": "J", "dump_energy": "J", "dig_overlap_time": "s",
             "relocation_time": "s", "relocation_energy": "J", "relocation_peak_power": "W", "excavation_footprint": "m**2",
         }.items():
@@ -116,9 +117,9 @@ class Mission(SimpleComponent):
 
     def compute(self, inputs, outputs):
         v = lambda name: scalar(inputs, name)
-        cycle = sum(v(n) for n in ("dig_time", "dump_time", "travel_time", "turn_time", "overhead_time", "actuation_time", "relocation_time"))-v("dig_overlap_time")
+        cycle = sum(v(n) for n in ("dig_time", "dump_time", "travel_time", "turn_time", "overhead_time", "actuation_time", "deposition_actuation_time", "relocation_time"))-v("dig_overlap_time")
         energy_j = v("dig_energy") + v("dump_energy") + v("relocation_energy")
-        energy_j += v("mobility_energy") + v("electronics_power") * cycle + v("arm_energy")
+        energy_j += v("mobility_energy") + v("electronics_power") * cycle + v("arm_energy") + v("deposition_arm_energy")
         cycles = v("run_time") / cycle  # continuous throughput approximation for optimization
         run_wh = cycles * energy_j / 3600
         volume = cycles * v("payload_mass") * v("delivery_efficiency") / v("berm_density")
@@ -126,7 +127,7 @@ class Mission(SimpleComponent):
         mass_points = 4.4 * volume * 1e6 / (v("run_time") / 60 * v("dry_mass"))
         energy_points = 1.5 * volume * 1e6 / (v("run_time") / 60 * run_wh)
         peak = v("electronics_power") + max(v("dig_power")+v("arm_peak_power"), v("dump_power"), v("drive_peak_power"),
-                                            v("turn_peak_power"), v("relocation_peak_power"))
+                                            v("turn_peak_power"), v("deposition_arm_peak_power"), v("relocation_peak_power"))
         outputs["cycle_time"], outputs["cycle_energy"], outputs["cycles"] = cycle, energy_j / 3600, cycles
         outputs["berm_volume"], outputs["run_energy"] = volume, run_wh
         outputs["average_power"], outputs["peak_power"] = run_wh * 3600 / v("run_time"), peak

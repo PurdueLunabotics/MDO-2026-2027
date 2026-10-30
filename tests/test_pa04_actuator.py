@@ -153,8 +153,15 @@ class PA04Tests(unittest.TestCase):
         self.assertNotIn('actuator_body_margin', snapshot(baseline)['constraints'])
         self.assertIn('actuator_body_margin', baseline.model.linkage.OUTPUT_UNITS)
         self.assertFalse(snapshot(baseline)['feasible'])
-        with self.assertRaisesRegex(ValueError, 'hardware profiles'):
-            load_study_inputs(ROOT/'design_baseline.json', ROOT/'design_optimized.json')
+        # Keep the mismatch explicit: published baseline/candidate profiles can
+        # legitimately match after a report release.
+        with tempfile.TemporaryDirectory() as folder:
+            mismatched = Path(folder)/'mismatched_hardware.json'
+            case = json.loads((ROOT/'design_optimized.json').read_text(encoding='utf-8'))
+            case['actuators'] = 'reference'
+            mismatched.write_text(json.dumps(case), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'hardware profiles'):
+                load_study_inputs(ROOT/'design_baseline.json', mismatched)
 
     def test_smooth_total_derivatives_and_dependency_audit(self):
         p = self.problem({'actuator_catalog_stroke': .2032})

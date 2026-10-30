@@ -85,7 +85,7 @@ class PA04LinkageGeometry(LinkageGeometry):
         "actuator_unit_mass": {"actuator_catalog_stroke"},
         "actuator_stroke_domain_margin": {"actuator_catalog_stroke"},
         "linkage_mass": names("actuator_catalog_stroke arm_linear_mass arm_length lin_act_side_arm_offset"),
-        "actuator_body_margin": names("actuator_catalog_stroke actuator_installation_allowance travel_actuator_length actuator_retracted_length actuator_extended_length")}
+        "actuator_body_margin": names("actuator_catalog_stroke actuator_installation_allowance travel_actuator_length deposition_actuator_length actuator_retracted_length actuator_extended_length")}
 
     def setup(self):
         # Reference geometry, clearances and force leverage remain shared.
@@ -107,7 +107,7 @@ class PA04LinkageGeometry(LinkageGeometry):
         # Installed catalog interval reserve, retained as a diagnostic only.
         outputs["actuator_body_margin"] = min(
             min(v(n)-lo, hi-v(n)) for n in
-            ("travel_actuator_length", "actuator_retracted_length", "actuator_extended_length"))
+            ("travel_actuator_length", "deposition_actuator_length", "actuator_retracted_length", "actuator_extended_length"))
 
 
 class PA04LinkageLoads(Discipline):

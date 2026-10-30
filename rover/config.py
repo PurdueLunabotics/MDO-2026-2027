@@ -9,7 +9,7 @@ import math
 
 # name: (initial value, lower bound, upper bound, OpenMDAO units)
 DESIGN = {
-    "lin_act_side_arm_offset": (-0.0508, -0.15, -0.0508, "m"),
+    "lin_act_side_arm_offset": (-0.0508, -0.30, -0.0508, "m"),
     "lin_act_top_arm_offset": (0.0, -0.15, 0.15, "m"),
     "wheel_diameter": (0.30, 0.18, 0.359, "m"),
     "wheel_width": (0.10, 0.05, 0.359, "m"),
@@ -29,14 +29,15 @@ DESIGN = {
     "arm_wall": (0.002, 0.001, 0.005, "m"),
     "battery_capacity": (50.0, 10.0, 300.0, "W*h"),
     "actuator_speed": (0.025, 0.005, 0.08, "m/s"),
-    "travel_actuator_length": (0.454, 0.453898, 0.707898, "m"),
-    "actuator_retracted_length": (0.454, 0.453898, 0.707898, "m"),  # compact starting pose
-    "actuator_extended_length": (0.706, 0.453898, 0.707898, "m"),
+    "travel_actuator_length": (0.454, 0.403098, 0.606298, "m"),
+    "deposition_actuator_length": (0.454, 0.403098, 0.606298, "m"),
+    "actuator_retracted_length": (0.454, 0.403098, 0.606298, "m"),  # compact starting pose
+    "actuator_extended_length": (0.606, 0.403098, 0.606298, "m"),
     "top_pivot_height": (0.45, 0.35, 0.70, "m"),  # above level ground
     "actuator_pivot_x": (0.15, 0.02, 0.30, "m"),  # actuator mount; independent of arm pivot_x
     "bottom_pivot_height": (0.15, 0.09, 0.30, "m"),
     "arm_length": (0.60, 0.30, 0.70, "m"),
-    "pivot_x": (0.13, 0.05, 0.30, "m"),  # front station from rover center; rear mirrored
+    "pivot_x": (0.13, 0.05, 0.40, "m"),  # front station from rover center; rear mirrored
     "wheelbase": (0.40, 0.38, 0.65, "m"),  # exploratory upper bound expanded by user; overall length cap still applies
     "track_width": (0.54, 0.50, 0.699, "m"),  # wheel center spacing; width envelope also applies
     "actuator_force_rating": (2000.0, 500.0, 6000.0, "N"),  # each of two

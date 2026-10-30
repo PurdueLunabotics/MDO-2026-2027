@@ -59,7 +59,7 @@ class ArmAttachmentTests(unittest.TestCase):
                     self.assertEqual(diagnostic['outputs']['actuator_body_margin']['value'],-1000.)
                     self.assertEqual(diagnostic['constraints'],report['constraints'])
                     self.assertEqual(diagnostic['feasible'],report['feasible'])
-                    self.assertEqual(p.model_metadata['schema_version'],7)
+                    self.assertEqual(p.model_metadata['schema_version'],8)
 
     def test_signed_local_coordinates_and_zero_offset_limit(self):
         for angle in (-1.1,0.,.8):

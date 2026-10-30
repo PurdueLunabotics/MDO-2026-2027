@@ -14,7 +14,8 @@ from .structure import StructureGeometry, StructureLoads
 from .mass_properties import MassProperties
 from .relocation import SiteRelocation
 from .trench import TrenchTraversal
-from .tip_stability import TipStability
+from .tip_stability import DepositionTipStability
+from .alternatives.deposition_actuation import DepositionActuation
 from .alternatives.obstacle_stability import ObstacleStability
 from .alternatives.parallel_cylinder_clearance import ParallelCylinderClearance
 from .alternatives.traversal_stability import TraversalStability
@@ -36,11 +37,12 @@ class ModelSet:
     geometry: Callable = GeometryMass
     excavation: Callable = MovingExcavation
     linkage_loads: Callable = LinkageLoads
+    deposition_actuation: Callable = DepositionActuation
     mass_properties: Callable = MassProperties
     structure_loads: Callable = StructureLoads
     relocation: Callable = SiteRelocation
     trench_traversal: Callable = TrenchTraversal
-    tip_stability: Callable = TipStability
+    tip_stability: Callable = DepositionTipStability
     obstacle_stability: Callable = ObstacleStability
     obstacle_clearance: Callable = ParallelCylinderClearance
     traversal_stability: Callable = TraversalStability

@@ -9,6 +9,7 @@ from reporting.report import snapshot
 from rover.config import DESIGN
 from rover.models import ModelSet
 from rover.excavation import Excavation
+from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
 from openmdao.utils.assert_utils import assert_check_totals
 
 
@@ -96,6 +97,7 @@ class ObstacleSupportTests(unittest.TestCase):
         # zero-offset geometry and stationary reference supply its original CG;
         # production attachment bounds and moving excavation remain unchanged.
         with patch.dict(DESIGN, {
+            **HISTORICAL_ACTUATOR_DESIGN,
             "lin_act_side_arm_offset": (0., -.15, .15, "m"),
             "lin_act_top_arm_offset": (0., -.15, .15, "m"),
         }):
