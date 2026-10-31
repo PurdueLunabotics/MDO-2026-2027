@@ -146,3 +146,69 @@ Verification for the calculated-default update:
   input/source hashes match the current source, calculated timing is recorded,
   and the simplified design presentation is preserved. No new calibration or
   hardware/soil validation was introduced.
+
+## Parallel excavation positioning - 2026-10-31
+
+The current baseline now lowers both arms together to their actual front/rear
+cutting commands, then raises both together after feeding. It no longer adds
+four sequential full-capability movements. Dimensions, commanded poses, PA-04
+speed/current curves, force checks, route and scoring definitions are unchanged.
+Electrical work sums both actuators; concurrency does not halve their energy.
+
+| Quantity | Updated baseline |
+| --- | --- |
+| Front / rear command movement | 5.32622 / 5.62721 inches |
+| Concurrent lowering | 14.4287495 s |
+| Concurrent raising | 13.3967966 s |
+| Total excavation arm motion | 27.8255461 s (previously 67.3204005 s) |
+| Excavation including positioning | 59.3479099 s |
+| Deposition including positioning and turn | 20.1484914 s |
+| Excavation + deposition | 79.4964013 s |
+| Full cycle including route, relocation and overhead | 157.4166117 s |
+| Electrical energy per cycle | 16.4690703 Wh |
+
+Five complete cycles now fit in the modeled mission, with a conditional
+309.786177 L delivered. All 13 failed checks remain failed; the area reserve
+also reflects the increased cycle count. No constraint was removed or weakened.
+The archived optimized report retains its original staged schedule and is
+unchanged. It has not been reoptimized under the new motion accounting.
+
+The known generic/PA-04 ModelSet load factories use the new optional parallel
+adapter. Custom factories and stationary reference excavation are preserved.
+Schema 9 records the motion mode and adds two optional elapsed-time outputs;
+full-extension timing diagnostics retain their meanings. Force/peak screens
+retain the full capability sweep. The finite-pass feed distance, three-stop
+budget and conservative drum restart allowances are preserved. Simultaneous
+soil entry, controller behavior and unequal filling transients remain unresolved;
+no new soil/hardware calibration or trajectory validation is claimed.
+
+Verification and reproduction:
+
+- Four independent new tests passed: slower-arm duration, ideal gravity work,
+  summed unequal PA-04 electrical work, zero motion, invalid domains, signed
+  overload failures, connected outputs/N2 and smooth derivatives.
+- The complete current baseline total-derivative step-size check passed with
+  all active baseline design variables. Its numeric snapshot exactly matches
+  the published baseline, and independent time/energy phase sums close.
+- The default reference baseline completed. A bounded reference CLI derivative
+  check (wheel diameter and battery capacity active, all other dimensions held,
+  one optimizer iteration) passed derivatives and retained an honest failed /
+  infeasible result. It does not establish optimization convergence.
+- The 34-page PDF was rendered and visually inspected. The simplified title,
+  clean opening and removed student/BWR wording are preserved. Source/input
+  hashes match the current baseline and rover source files.
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --output results/parallel_excavation/baseline_derivatives.json
+.\.venv\Scripts\python.exe main.py --baseline --output results/parallel_excavation/reference_baseline.json
+```
+
+All 223 distinct tests have passing coverage across the three parallel suite
+partitions and focused reruns. The initial serial discovery was interrupted
+after 65 passing cases to run the suite in parallel. Initial failures exposed
+an old full-extension gravity-work expectation, an old report wording check,
+and scalar extraction in the new adapter during dictionary-based dependency
+audits. These were corrected; all affected checks then passed. No physical
+constraint or test tolerance was weakened. Logs and reconciled test IDs remain
+under ignored `results/parallel_excavation/`. The final baseline all-variable
+derivative step-size check also passed after the adapter correction.

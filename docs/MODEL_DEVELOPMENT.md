@@ -72,6 +72,16 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 
 ## Contracts that must remain explicit
 
+Schema 9 selects parallel actual-pose excavation motion for the known generic
+and PA-04 load factories with MovingExcavation. `actuation_time` remains total
+excavation seconds and `arm_energy` total electrical joules across both arms.
+New optional outputs `excavation_lowering_time` and `excavation_raising_time`
+are elapsed seconds (maximum arm duration per phase). Existing full-capability
+diagnostics and force/peak screens retain their meanings. Configuration saves
+`excavation_arm_motion=parallel_operating_poses` for live/recorded report output
+selection; old snapshots keep their original schedule. Explicit custom loads
+and stationary reference factories are preserved. See [MOVING_EXCAVATION.md](MOVING_EXCAVATION.md).
+
 Schema 8 adds independent deposition actuator length and axle x/z, nine deposition mass-property ports, three deposition motion time/energy/peak ports, and three pose margins. Unprefixed mass properties remain travel-only. Mobility consumes deposition half-load ports; the default dump tip screen uses actual deposition CG. Mission adds motion costs once. New factories must preserve these ports and units; old snapshots need reevaluation. See [DEPOSITION_STATES.md](DEPOSITION_STATES.md).
 
 Schema 7 unifies moving excavation under `inlet_depth` (metres): radial scoop
@@ -94,8 +104,9 @@ feed, operating-reach, ground-level axle-reach and domain margins are enforced.
 `extended_y` still means maximum-extension capability, and
 `axle_ground_margin=-extended_y`; it must not be repurposed as normal cut height.
 `dig_overlap_time=0` retires stationary lowering/cutting overlap. Full-range
-actuator load/work allowances and sequential positioning time are explicitly
-conservative. See [the equations and output meanings](MOVING_EXCAVATION.md).
+actuator load/work allowances and sequential positioning time were explicitly
+conservative in schema 6; schema 9 replaces normal motion time/work as above.
+See [the equations and output meanings](MOVING_EXCAVATION.md).
 Historical snapshots require reevaluation; no new calibration data are implied.
 
 Schema 5 retires `actuator_body_margin` from optimizer constraints and report pass/fail decisions at the user’s request. Its metre-valued output, equations, dependencies and catalog endpoint diagnostics remain unchanged. It is listed under diagnostic-only screens and does not affect `feasible` or CLI acceptance. Catalog stroke/load domains and all other constraints remain.

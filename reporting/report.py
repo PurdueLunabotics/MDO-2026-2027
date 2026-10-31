@@ -55,6 +55,11 @@ def snapshot(problem, configuration=None):
     assumptions = specs.get("assumptions", ASSUMPTIONS)
     margins = specs.get("margins", MARGINS)
     output_units = dict(OUTPUTS)
+    loads = getattr(getattr(problem, "model", None), "linkage_loads", None)
+    if (getattr(loads, "PARALLEL_EXCAVATION_MOTION", False)
+            or specs.get("excavation_arm_motion") == "parallel_operating_poses"):
+        from rover.alternatives.parallel_excavation_actuation import MOTION_OUTPUT_UNITS
+        output_units.update(MOTION_OUTPUT_UNITS)
     # A recorded OpenMDAO Case has no live model. Its saved configuration must
     # identify moving excavation just as it identifies calculated traversal.
     excavation = getattr(getattr(problem, "model", None), "excavation", None)

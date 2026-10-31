@@ -89,20 +89,21 @@ failures; the equations above describe valid designs only.
 
 ## Finite tandem pass and timing
 
-The front pair starts the lane. The rear pair enters the same lane after the
-rover advances by the longitudinal station separation. The front pair is
-raised when its storage is filled; the rear pair then finishes the same
-productive lane. This also covers a productive lane shorter than the station
-separation. No pre-excavated entrance is assumed or credited.
+Both arms now lower together before feeding and raise together afterward
+(schema 9). The finite-pass feed budget still reserves station separation in
+addition to the productive lane. It originated from staged entry/exit and is
+retained conservatively without extra soil credit. Simultaneous entry into
+undisturbed soil and unequal fill transients are not resolved or validated;
+the storage target remains conditional on sufficient fresh soil and capture.
 
 ```text
 station_separation = front_dig_x - rear_dig_x
 feed_drive_distance = feed_distance + station_separation
 ```
 
-The rover stops for the rear pair's entry and the front pair's exit. Their
-order is determined by which of productive lane length and station separation
-is smaller. With d=feed_distance and b=station_separation, the three rest-to-rest
+The existing three rest-to-rest feed segments remain as a conservative
+start/stop budget, rather than a requirement to operate the arms separately.
+With d=feed_distance and b=station_separation, these
 drive segments have lengths `min(d,b)`, `abs(d-b)` and `min(d,b)`. Each uses the
 existing triangular/trapezoidal profile bounded by `feed_speed` and
 `acceleration`. The zero-length middle segment is omitted. `feed_time` is their
@@ -110,7 +111,7 @@ total duration; `pair_cutting_time` is the first segment duration plus the
 middle segment duration when d>b. These times therefore include acceleration
 and deceleration instead of assuming an instantaneous speed change.
 
-Drums stop during staged arm positioning. The calculation conservatively
+Drums stop during arm positioning. The calculation conservatively
 reserves two drum starts per pair, including when a short lane would need
 fewer restarts. `dig_time=feed_time+4*drum_spinup_time` charges these starts
 sequentially, and both starts' rotational kinetic energy are charged without
@@ -122,14 +123,35 @@ the center gap, and cumulative cycle reservations must fit the declared
 available excavation area. Fresh-lane relocation remains a separate empty
 move between cycles; these inputs do not establish a legal site layout.
 
-Arm loads and work retain the full travel-to-maximum-extension envelope as a
-conservative capability allowance. Arm positioning is charged sequentially
-for the staged pass. Normal digging uses shallower front/rear target poses;
-the timing allowance does not claim that both must actually plunge to the
-maximum extension on every cycle. `dig_overlap_time` is zero: the removed
-stationary model's lowering/cutting overlap is not subtracted from this pass.
-Entry/exit soil transients and an actual actuator/controller trajectory remain
-unvalidated.
+Arm force and peak-power screens retain the full mechanism capability sweep.
+The default known load factories are adapted through ModelSet by
+`rover/alternatives/parallel_excavation_actuation.py`; explicit custom load
+factories and stationary reference excavation retain their own accounting.
+Normal motion instead uses actual commands, in metres:
+
+```text
+s_front = abs(front_dig_actuator_length - travel_actuator_length)
+s_rear  = abs(rear_dig_actuator_length - travel_actuator_length)
+excavation_lowering_time = max(s_front/v_lower, s_rear/v_lower)
+excavation_raising_time  = max(s_front/v_raise, s_rear/v_raise)
+actuation_time = excavation_lowering_time + excavation_raising_time
+```
+
+Generic reference speed is `actuator_speed` in both directions. Its arm work
+sums each arm's actual axle-height excursion with empty lowering and loaded
+raising, existing breakout work and per-actuator idle loss. PA-04 uses the
+existing 0.39 inch/s, 14 A lowering envelope and load-dependent raising curve:
+`arm_energy=12*sum(14*s_i/v_lower + I_raise*s_i/v_raise)`. Energy is summed,
+not divided by two because the actuators run concurrently. No regeneration
+or additional motor efficiency is applied. Zero motion costs zero time/energy.
+Unsupported loads retain the original negative force/chart margins.
+
+`lowering_time`, `actuator_raising_time` and `stroke` remain full-capability
+diagnostics; they must not be added to normal excavation time. The two new
+phase outputs are seconds; `actuation_time` remains total excavation motion
+seconds and `arm_energy` remains total electrical joules across both arms.
+`dig_overlap_time` remains zero: lowering and cutting do not overlap. No new
+fit, hardware calibration or validated controller trajectory is claimed.
 
 ## Loads, drive work and electrical accounting
 
@@ -159,7 +181,7 @@ capability and available traction after vertical tool reaction unloads the
 wheels. Full load is used for drive force acceptance; traction uses empty
 rover weight after the vertical reaction as a conservative normal-load reserve.
 Rolling work uses half the final payload on average, consistent with the two
-staged equal fills. Every drive segment receives a full-load translational
+equal target fills. Every drive segment receives a full-load translational
 startup allowance without regenerative credit. `feed_motor_margin`,
 `feed_traction_margin` and `feed_power_margin`
 remain separate signed constraints.

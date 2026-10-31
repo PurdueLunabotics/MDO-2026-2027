@@ -1054,3 +1054,23 @@ blocked by the browser's local-file URL policy; no rendered-browser inspection
 is claimed. No calibration data were added and no hardware or soil experiment
 was run. Dynamic arm motion, dumping reactions, packaging and controller
 interlocks remain unvalidated.
+
+## Parallel actual-pose excavation motion - 2026-10-31
+
+The baseline all-variable total derivative check passed. Independent time and
+electrical phase sums close, full-sweep force/peak failures remain signed, and
+four new analytical/domain/integration tests passed. The default reference
+baseline and a bounded two-variable derivative/one-iteration optimizer smoke
+check completed; the reference result remains failed/infeasible. No hardware
+calibration was introduced. See [release details](REPORT_RELEASE.md#parallel-excavation-positioning---2026-10-31)
+for accounting, numerical values, reproduction and retained limitations.
+
+All 223 distinct tests have passing coverage across the three parallel suite
+partitions and focused reruns. The initial serial discovery was interrupted
+after 65 passing cases to run the suite in parallel. Initial failures exposed
+an old full-extension gravity-work expectation, an old report wording check,
+and scalar extraction in the new adapter during dictionary-based dependency
+audits. These were corrected; all affected checks then passed. No physical
+constraint or test tolerance was weakened. Logs and reconciled test IDs remain
+under ignored `results/parallel_excavation/`. The final baseline all-variable
+derivative step-size check also passed after the adapter correction.

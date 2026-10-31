@@ -36,7 +36,7 @@ class SyntheticHalfCapture(MovingExcavation):
 
 
 class MovingExcavationTests(unittest.TestCase):
-    def test_function_factory_keeps_moving_constraints_and_staged_motion(self):
+    def test_function_factory_keeps_moving_constraints_and_parallel_motion(self):
         from rover.models import ModelSet
         from rover.problem import build_problem
         calls = []
@@ -50,8 +50,10 @@ class MovingExcavationTests(unittest.TestCase):
         self.assertIn("feed_margin", p.margin_specs)
         self.assertIn("axle_ground_margin", p.margin_specs)
         self.assertIn("feed_speed", p.design_specs)
+        stroke = max(abs(p.get_val(n).item()-p.get_val("travel_actuator_length").item())
+                     for n in ("front_dig_actuator_length", "rear_dig_actuator_length"))
         self.assertAlmostEqual(p.get_val("actuation_time").item(),
-                               4*p.get_val("lowering_time").item())
+                               2*stroke/p.get_val("actuator_speed").item())
 
     def component(self, provider=ReferenceMotorProvider, component=MovingExcavation, **changes):
         problem = om.Problem(reports=False)

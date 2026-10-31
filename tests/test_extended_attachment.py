@@ -68,9 +68,13 @@ class ExtendedAttachmentTests(unittest.TestCase):
             self.assertAlmostEqual(math.hypot(x-v['actuator_pivot_x'],z-v['top_pivot_height']),v[name],places=10)
         empty=(get('drum_mass')/2+mu*(1.2*L)**2/(2*L))*get('gravity')
         loaded=empty+get('payload_mass')/2*get('gravity')
-        # Sequential elapsed time doubles, while summed two-motor active time
-        # and the already-total electrical energy retain the original boundary.
-        expected=2*((loaded+empty)*max(get('travel_y')-get('extended_y'),0.)+get('breakout_force')*get('cut_depth'))/get('actuator_efficiency')+get('actuator_idle_power')*get('actuation_time')
+        # Work sums actual front/rear potential changes, including the tail's
+        # gravity moment. Parallel elapsed time does not divide electrical work.
+        heights=sum(abs(get('travel_y')-get(n)) for n in ('front_dig_y','rear_dig_y'))
+        distances=sum(abs(get('travel_actuator_length')-get(n)) for n in
+                      ('front_dig_actuator_length','rear_dig_actuator_length'))
+        expected=((loaded+empty)*heights+2*get('breakout_force')*get('cut_depth'))/get('actuator_efficiency')
+        expected+=2*get('actuator_idle_power')*distances/get('actuator_speed')
         self.assertAlmostEqual(get('arm_energy'),expected,places=8)
         self.assertEqual(get('frame_load_solution_valid'),1.)
         # Subtract tails and independently add their centroid and yaw inertia.

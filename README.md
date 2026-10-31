@@ -20,7 +20,7 @@ the interactive report; PDFs can be read directly on GitHub.
 | Design Baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
 | Fixed-hardware optimizer candidate (infeasible) | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
 
-The baseline report was refreshed on **2026-10-31** with calculated traversal.
+The baseline report was refreshed on **2026-10-31** with calculated traversal and parallel actual-pose excavation arm motion.
 The saved candidate report was generated on **2026-10-30**. Reports include scores, mass and energy,
 travel/deposition/compact/recovery drawings, failed checks, and full input/output
 tables. The baseline evaluates the current `design_baseline.json` unchanged as
@@ -28,7 +28,8 @@ the baseline configuration; it retains 13 failed modeled checks.
 
 The candidate preserves the final geometry from
 `results/fixed_hardware_optimization.json`; all 288 saved output values were
-reproduced with the current model. Its optimizer converged, but turning traction
+reproduced at its original release. Its archived staged arm schedule is preserved
+in that report; reevaluation with the current model changes motion accounting. Its optimizer converged, but turning traction
 still fails. This separate study uses calculated route timing, zero-degree climb
 checks and two excluded optimizer constraints. It did not start from the current
 baseline, so the two scores are not a controlled before/after comparison.

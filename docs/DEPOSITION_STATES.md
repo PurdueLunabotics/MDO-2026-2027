@@ -73,8 +73,10 @@ The first leg is fully loaded, the return empty. Absolute gravitational work
 retains the existing conservative no-regeneration/lowering assumption. Peak
 uses the existing full-load capability-sweep force (including breakout
 allowance); this is conservative for deposition, not a measured trajectory.
-Two actuators move in parallel in each deposition leg. The existing sequential
-front/rear excavation timing is unchanged.
+Two actuators move in parallel in each deposition leg. Schema 9 also makes
+normal front/rear excavation positioning parallel at their actual digging
+commands; see [MOVING_EXCAVATION.md](MOVING_EXCAVATION.md). Deposition costs
+remain separate and are charged once.
 
 PA-04 uses its existing chart helper: raising speed/current at the conservative
 force envelope, lowering at 0.39 inch/s and 14 A, and electrical energy

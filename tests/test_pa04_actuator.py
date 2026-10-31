@@ -111,7 +111,9 @@ class PA04Tests(unittest.TestCase):
         v = lambda n: p.get_val(n).item()
         self.assertAlmostEqual(v('linkage_mass'), 2*(v('actuator_unit_mass')+v('arm_linear_mass')*v('arm_length')))
         self.assertAlmostEqual(v('dry_mass'), sum(v(n) for n in ('fixed_mass', 'structure_mass', 'wheel_mass', 'drive_mass', 'drum_mass', 'battery_mass', 'linkage_mass')))
-        self.assertAlmostEqual(v('actuation_time'), 2*(v('lowering_time')+v('actuator_raising_time')))
+        stroke = max(abs(v(n)-v('travel_actuator_length')) for n in
+                     ('front_dig_actuator_length', 'rear_dig_actuator_length'))
+        self.assertAlmostEqual(v('actuation_time'), stroke/(.39*INCH)+stroke/v('actuator_loaded_speed'))
         self.assertEqual(v('dig_overlap_time'), 0)
         self.assertAlmostEqual(v('cycle_time'), sum(v(n) for n in ('dig_time', 'dump_time', 'travel_time', 'turn_time', 'actuation_time', 'relocation_time', 'overhead_time')))
         energy = sum(v(n) for n in ('dig_energy', 'dump_energy', 'mobility_energy', 'relocation_energy', 'arm_energy'))
@@ -249,7 +251,7 @@ class PA04Tests(unittest.TestCase):
         expected_force = (expected_force+v('breakout_force'))*v('actuator_leverage_max')
         self.assertAlmostEqual(v('linkage_mass'), expected_mass)
         self.assertAlmostEqual(v('required_actuator_force'), expected_force)
-        self.assertAlmostEqual(v('actuation_time'), 2*(v('lowering_time')+v('actuator_raising_time')))
+        self.assertAlmostEqual(v('actuation_time'), v('excavation_lowering_time')+v('excavation_raising_time'))
         # A PA-04 seed retains the frozen force even for an inward pin.
         from studies.linkage_multistart import geometry_seed, make_problem
         seed = geometry_seed({'final': a, 'model_metadata': ordinary.model_metadata}, .9, 'matched', 0.)

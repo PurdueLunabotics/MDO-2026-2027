@@ -104,7 +104,9 @@ class PhysicsTests(unittest.TestCase):
         self.assertAlmostEqual(v('wheel_first_margin'),v('travel_y')-v('drum_diameter')/2-v('wheel_diameter'))
         self.assertGreater(v('wheel_first_margin'),0)
         self.assertEqual(v('dig_overlap_time'),0)
-        self.assertAlmostEqual(v('actuation_time'),4*v('lowering_time'))
+        stroke=max(abs(v(n)-v('travel_actuator_length')) for n in
+                   ('front_dig_actuator_length','rear_dig_actuator_length'))
+        self.assertAlmostEqual(v('actuation_time'),2*stroke/v('actuator_speed'))
         p.set_val('travel_actuator_length',.60);p.run_model()
         self.assertLess(p.get_val('wheel_first_margin').item(),0)
         p.set_val('travel_actuator_length',.38);p.run_model()

@@ -5,7 +5,7 @@ These drawings explain the analytic model; they do not simulate soil motion.
 import math
 
 
-def moving_excavation_svg(values):
+def moving_excavation_svg(values, *, parallel_motion=False):
     """Draw tandem pairs cutting two distinct fresh layers in the same tracks."""
     radius = values["drum_diameter"] / 2
     opening = values["inlet_depth"]
@@ -19,6 +19,9 @@ def moving_excavation_svg(values):
     rx, ry = point(*rear)
     upper_floor = grade + scale * opening
     lower_floor = grade + scale * 2 * opening
+    schedule = ("Both pairs lower together → feed with both pairs cutting → both pairs raise together."
+                if parallel_motion else
+                "Staged entry: front starts → rear reaches that start and lowers → front lifts when full → rear finishes.")
     pieces = [
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-label="Moving excavation: front and rear fresh soil layers">',
         '<rect width="1200" height="560" rx="14" fill="#f7fafc"/>',
@@ -47,7 +50,7 @@ def moving_excavation_svg(values):
         f'<text x="590" y="151" text-anchor="middle" font-size="16">Feed {values["feed_speed"]*1000:.2f} mm/s</text>',
         f'<text x="600" y="385" text-anchor="middle" font-size="17">Each pair removes one inlet-depth layer: d = {opening*1000:.1f} mm, across the full drum width.</text>',
         '<text x="600" y="411" text-anchor="middle" font-size="16">The rear pair does not count the front pair’s removed soil again.</text>',
-        '<text x="30" y="452" font-size="16">Staged entry: front starts → rear reaches that start and lowers → front lifts when full → rear finishes.</text>',
+        f'<text x="30" y="452" font-size="16">{schedule}</text>',
         f'<text x="30" y="479" font-size="16">Productive lane: {values["feed_distance"]:.3f} m · total feed travel: {values["feed_drive_distance"]:.3f} m · feed time: {values["feed_time"]:.1f} s</text>',
         '<text x="30" y="509" font-size="15">The maximum-extension view is a separate plunge/recovery reach screen; it is not this operating pose.</text>',
         '<text x="30" y="535" font-size="15">Schematic soil boundary; entry/endcap soil is not credited. Soil flow and recovery driving require validation.</text>',

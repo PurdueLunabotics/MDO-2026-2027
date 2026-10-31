@@ -212,8 +212,8 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
             raise ValueError("PA-04 profile needs PA04LinkageGeometry/Loads; a custom linkage was not replaced.")
         models = replace(models, linkage=PA04LinkageGeometry, linkage_loads=PA04LinkageLoads)
     if moving_excavation:
-        from .alternatives.staged_linkage_loads import staged_load_factory
-        models = replace(models, linkage_loads=staged_load_factory(models.linkage_loads))
+        from .alternatives.parallel_excavation_actuation import parallel_load_factory
+        models = replace(models, linkage_loads=parallel_load_factory(models.linkage_loads))
     # A round outside diameter is not a box width/height specification. Require
     # explicit case migration rather than silently ignoring old arm geometry.
     if (structure == 'plate-frame' and 'arm_tube_diameter' in (overrides or {})
@@ -252,7 +252,9 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         raise ValueError("Actuator pin axial station must be beyond the chassis pivot")
     problem = om.Problem(reports=False)
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
-    problem.model_metadata = {"schema_version": 8, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
+    parallel_motion = getattr(models.linkage_loads, "PARALLEL_EXCAVATION_MOTION", False)
+    arm_motion = "parallel_operating_poses" if parallel_motion else "custom_or_legacy"
+    problem.model_metadata = {"schema_version": 9, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
                               "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                               "traversal_mode": traversal_mode,
                               "optimize_attachment": optimize_attachment,
@@ -261,6 +263,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
                                                 "frozen_design": frozen_design,
                                                 "ignored_optimizer_constraints": sorted(ignored_constraints),
                                                 "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
+                                                "excavation_arm_motion": arm_motion,
                                                 "traversal_mode": traversal_mode, "attachment_max": attachment_max},
                               "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": solver_tol, "cobyla_radius": cobyla_radius},
                               "diagnostic_only_screens": diagnostic_screens,
@@ -282,8 +285,11 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
             "feed_screen": "60*feed_speed/(scoops_per_revolution*drum_rpm) <= inlet_depth",
             "input_migration": {"retired_inputs": retired_excavation_inputs,
                 "policy": "Legacy cut_depth becomes inlet_depth. Separate scoop_opening, scoop_depth_fraction and partial-width cut_engagement are retired; front/rear depths follow inlet_depth and full width is enforced."},
-            "entry_exit": "Staged front/rear lowering and raising; both cut the same lane, travel includes station separation. No plunge/endcap soil credit.",
-            "arm_accounting": "Full capability-sweep loads/work retained as conservative envelopes; sum both arms' motion durations for staged positioning; no lowering/cutting overlap credit.",
+            "arm_motion": arm_motion,
+            "entry_exit": ("Front/rear arms lower together before feeding and raise together afterward. Retained feed travel includes station separation and conservative start/stop budgets; simultaneous soil-entry transients are not resolved. No plunge/endcap soil credit."
+                           if parallel_motion else "Explicit custom/legacy arm schedule; feed travel includes station separation. No plunge/endcap soil credit."),
+            "arm_accounting": ("Full capability-sweep loads retained; actual front/rear digging commands determine elapsed motion (slower arm per phase) and summed electrical work. No lowering/cutting overlap credit."
+                               if parallel_motion else "Explicit custom/legacy load factory retains its own motion accounting."),
             "recovery": "Maximum-extension axle reaches ground; actual driving on drums and motor-body clearance unverified.",
             "calibration": "No fitted data added; existing capture, cutting, rolling and efficiency assumptions remain uncalibrated.",
         }

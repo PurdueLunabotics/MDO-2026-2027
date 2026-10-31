@@ -48,7 +48,7 @@ Wheel-center track width is now a design variable alongside wheelbase. Both are 
 
 The actuator attachment now uses two signed metre-valued coordinates relative to the drum axle: lin_act_side_arm_offset and lin_act_top_arm_offset. With arm direction u=(C-B)/L and its upward normal n=(-u_z,u_x), the pin is D=C+side*u+top*n. Positive side extends past the axle; positive top is above the arm. Rear geometry mirrors the front. Circle closure uses radius hypot(L+side,top), then rotates through -atan2(top,L+side) to recover the drum position. arm_length remains the pivot-to-axle distance. Both offsets are design variables with exploratory bounds [-0.15,0.15] m; generic defaults are zero and the requested baseline is +0.05 m for both. The old fraction is removed from live configuration.
 
-The same eccentric pin feeds virtual-work actuator force, plate-frame equilibrium, mass placement and report drawings. For positive side offset, a uniform tube continuation adds actual mass, gravity work, yaw inertia, physical length and beam load effects. Top offset transfers an eccentric couple into the tube; its normal bracket is assumed rigid and massless pending hardware/CAD data. Actuator catalog stroke/load domains, safety factors, triangle/toggle, mounting, pit-floor, envelope and existing drum/wheel clearance screens remain. At the user’s request actuator_body_margin is diagnostic only: the body/catalog installed-length reserve is computed but excluded from optimization and feasibility. The sweep retains 81 arm-angle samples. One-time electrical loss accounting is retained. Moving excavation now charges sequential positioning with a conservative full-range arm allowance and zero lowering/cutting overlap; see the excavation section below. See [complete equations, interface migration, domains and limitations](docs/ARM_OFFSETS.md).
+The same eccentric pin feeds virtual-work actuator force, plate-frame equilibrium, mass placement and report drawings. For positive side offset, a uniform tube continuation adds actual mass, gravity work, yaw inertia, physical length and beam load effects. Top offset transfers an eccentric couple into the tube; its normal bracket is assumed rigid and massless pending hardware/CAD data. Actuator catalog stroke/load domains, safety factors, triangle/toggle, mounting, pit-floor, envelope and existing drum/wheel clearance screens remain. At the user’s request actuator_body_margin is diagnostic only: the body/catalog installed-length reserve is computed but excluded from optimization and feasibility. The sweep retains 81 arm-angle samples. One-time electrical loss accounting is retained. Moving excavation uses concurrent actual-pose positioning with zero lowering/cutting overlap; full-sweep force checks remain; see the excavation section below. See [complete equations, interface migration, domains and limitations](docs/ARM_OFFSETS.md).
 
 ## Forward-feed excavation, storage and inlet depth
 
@@ -75,10 +75,10 @@ feed_margin=d-feed_per_scoop
 
 Storage is supplied by the required fresh lane, rather than the old stationary
 endpoint intersection. Storage and in-situ soil densities remain distinct.
-The front pair starts first, the rear enters the same lane after the station
-separation, and the front is raised when full while the rear finishes. Feed
-drive distance is productive lane length plus station separation; this avoids
-assuming a prepared entrance or crediting the front layer twice. No lowering,
+Both arms lower together to their distinct cutting poses and raise together
+after feeding. Feed drive distance retains productive lane length plus station
+separation as a conservative finite-pass budget; soil-entry transients under
+this parallel schedule are unresolved. No lowering,
 endcap, collapse or recutting soil is credited. Fresh-lane area and relocation
 remain explicit planning checks.
 
@@ -89,8 +89,9 @@ equivalently fresh flow `4*L*d*feed_speed` cannot exceed assumed scoop throughpu
 `4*L*d^2*n*drum_rpm/60`. Overfeed retains its negative margin and raw
 force demand. This uncalibrated volume screen is not a measured plunge limit.
 The report shows the layered cut and feed-speed/RPM boundary. `dig_overlap_time`
-is zero. Full-range arm work/loads remain a conservative capability allowance,
-with sequential positioning time charged for the staged pass.
+is zero. Full-range arm loads remain a conservative capability screen. Actual
+front/rear command distances determine parallel positioning time and summed
+electrical work; neither arm is timed to maximum extension during normal digging.
 
 Cut force=`cut_pressure*4*L*feed_per_scoop`, with the full drum width engaged.
 The radial geometry screen remains `R/4-inlet_depth >= 0`; the obsolete
@@ -313,7 +314,7 @@ are additive to the endpoint obstacle and uneven-dump contracts. Slope and rock
 are separate cases; failed four-contact poses are not replaced with invented
 three-wheel poses. See [traversal equations](docs/OBSTACLE_TRAVERSAL.md#slope-and-intermediate-height-stability).
 
-Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, conservative sequential excavation actuator positioning, parallel loaded/empty deposition pose changes, relocation and alignment. Moving excavation sets lowering/cutting overlap to zero. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
+Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, parallel actual-pose excavation actuator positioning, parallel loaded/empty deposition pose changes, relocation and alignment. Moving excavation sets lowering/cutting overlap to zero. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
 
 Central whole-model FD supports deterministic replacement components. Tests audit omitted dependencies, geometry/conservation limits, mass properties, drive limits, invalid domains and complete optimization. Nonsmooth branches still exist; SLSQP is local and COBYLA is available. Failed final iterates remain labeled failed; numerical consistency/convergence is not empirical validation. Reports identify component factories. Old outputs must be rerun before comparison. Manual inspection still covers 3D packaging, E-stop, radio, materials, autonomy, dust, berm placement and legal zones.
 

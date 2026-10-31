@@ -263,6 +263,18 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
         row(["Actual route peak speed", q("actual_travel_speed"), "Prescribed motion, not measured vehicle performance." if timing_mode == "fixed" else "Calculated profile, not measured vehicle performance."]),
         row(["Score · complete-cycle estimate", f'{whole["construction_points"]:,.2f} points', "Uses complete deliveries and idle remainder; separate from the continuous MDO objective."]),
     ]
+    parallel_motion = metadata.get("configuration", {}).get("excavation_arm_motion") == "parallel_operating_poses"
+    if parallel_motion:
+        excavation_total = val("dig_time")+val("actuation_time")
+        deposition_total = val("dump_time")+val("turn_time")+val("deposition_actuation_time")
+        performance_rows[1:1] = [
+            row(["Excavation including arm motion", escape(quantity(excavation_total, "s")),
+                 "Both arms lower together, feed/cut, then both raise together."]),
+            row(["Deposition including arm motion and turn", escape(quantity(deposition_total, "s")),
+                 "Position both arms, dump, turn, dump, and return arms to travel."]),
+            row(["Excavation + deposition", escape(quantity(excavation_total+deposition_total, "s")),
+                 "Excludes route, fresh-site relocation and alignment overhead."]),
+        ]
     for state in ("empty", "loaded"):
         if state+"_slope_solution_valid" in outputs:
             solved = val(state+"_slope_solution_valid") == 1
@@ -331,7 +343,7 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     if metadata.get("motor_profile") == "x44-standard":
         motor_note = f'<details><summary>Standard X44 motors · assumptions</summary><p>Four wheel motors at 100:1; two drum motors at {val("drum_gear_ratio"):.2f}:1 (exploratory gearing).</p><p>Electrical energy = output-shaft mechanical work / combined efficiency. Drive: {val("drive_efficiency"):.0%}; drums: {val("drum_efficiency"):.0%}. Both efficiencies are provisional.</p><p>Continuous operation unverified. Current-limit inputs of zero mean undecided. Shaft torque-speed capability is enforced separately from energy accounting.</p></details>'
     if metadata.get("actuator_profile") == "pa04-900":
-        motor_note += f'<details open><summary>PA-04 actuators · 900 lbf / 12 V</summary><p>Two actuators. Continuous catalog stroke: {q("actuator_catalog_stroke")}; installed hardware limits: {q("actuator_catalog_retracted_length")} to {q("actuator_catalog_extended_length")}. These include {q("actuator_installation_allowance")} added to each endpoint. Compact, travel, deposition and digging commands are compared with these limits diagnostically; packaging is not an active constraint.</p><p>Mass per actuator: {q("actuator_unit_mass")}. Raising envelope: {q("actuator_loaded_speed")} and {q("actuator_raising_current")}; raising time: {q("actuator_raising_time")}, lowering time: {q("lowering_time")}. Lowering assumes rated-load speed and 14 A. Electrical energy uses 12 V × current × time for both actuators, including motor losses.</p><p>Mass fit supports 2–40 inch strokes; load curves support 0–900 lbf. Guarded out-of-domain diagnostics retain failed checks. Independent hardware, gravity-assisted lowering, duty cycle, temperature and installation-hardware mass remain unverified. A continuous stroke must be replaced with an available catalog size and reevaluated before purchase.</p></details>'
+        motor_note += f'<details open><summary>PA-04 actuators · 900 lbf / 12 V</summary><p>Two actuators. Continuous catalog stroke: {q("actuator_catalog_stroke")}; installed hardware limits: {q("actuator_catalog_retracted_length")} to {q("actuator_catalog_extended_length")}. These include {q("actuator_installation_allowance")} added to each endpoint. Compact, travel, deposition and digging commands are compared with these limits diagnostically; packaging is not an active constraint.</p><p>Mass per actuator: {q("actuator_unit_mass")}. Raising envelope: {q("actuator_loaded_speed")} and {q("actuator_raising_current")}; maximum-reach diagnostic times: raising {q("actuator_raising_time")}, lowering {q("lowering_time")}. Lowering assumes rated-load speed and 14 A. Electrical energy uses 12 V × current × time for both actuators, including motor losses.</p><p>Mass fit supports 2–40 inch strokes; load curves support 0–900 lbf. Guarded out-of-domain diagnostics retain failed checks. Independent hardware, gravity-assisted lowering, duty cycle, temperature and installation-hardware mass remain unverified. A continuous stroke must be replaced with an available catalog size and reevaluated before purchase.</p></details>'
     obstacle_note = "Guarded pose: requested height is unreachable. Endpoint and path diagnostics are evaluated at a guarded height, not the requested rock height." if val("obstacle_pose_valid", 1) < .5 else "Requested endpoint rock pose is geometrically reachable; this alone does not establish traversal."
     clearance_note = "Guarded clearance: requested pose is unreachable. Clearance diagnostics are not predictions at the requested height." if val("obstacle_clearance_pose_valid", 1) < .5 else "Requested-height obstacle clearance screen."
     if metadata.get('models', {}).get('obstacle_clearance', '').endswith('ParallelCylinderClearance'):
@@ -396,6 +408,9 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
                       if moving else "Dig and lower concurrently → raise to travel → outbound → move to deposition pose → dump one pair → turn → dump second pair → return empty drums to travel pose → return route → relocate to fresh ground.")
     cycle_overlap_note = ("Moving excavation has no lowering/cutting overlap credit. Full-range arm motion and load allowances conservatively screen the plunge/recovery sweep."
                           if moving else "Lowering overlap is subtracted once.")
+    if parallel_motion:
+        cycle_sequence = "Lower both pairs together → drive the excavation pass → raise both pairs together → outbound → move both pairs to deposition → dump one pair → turn → dump second pair → return both pairs to travel → return route → relocate to a fresh lane."
+        cycle_overlap_note = "Each excavation arm phase lasts as long as the slower arm needs at its actual digging position. Lowering and cutting do not overlap. Maximum extension remains a separate load/capability check."
     excavation_section = ''
     if moving:
         excavation_guard_note = ('<p class="callout">Guarded moving-excavation trial: the requested geometry is outside the model domain. Diagnostic values and drawings do not establish valid operation.</p>'
@@ -404,6 +419,12 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
                            ("inlet_depth", "inlet_width", "front_dig_depth", "rear_dig_depth", "feed_speed", "drum_rpm", "feed_per_scoop",
                             "feed_speed_limit", "feed_distance", "feed_drive_distance", "feed_time",
                             "feed_drive_energy", "feed_drive_peak_power", "axle_ground_margin")]
+        if parallel_motion:
+            excavation_rows += [row([caption, q(n)]) for n, caption in (
+                ("excavation_lowering_time", "Lower both arms together"),
+                ("excavation_raising_time", "Raise both arms together"),
+                ("actuation_time", "Total excavation arm motion"),
+                ("arm_energy", "Excavation arm electrical energy · both actuators"))]
         excavation_section = ('<section id="excavation"><div class="section-heading"><span>Excavation / Forward feed</span>'
                               '<h2>Drive straight with the drums lowered</h2>'
                               '<p>Each pair cuts one inlet-depth fresh layer across its full drum width. Radial protrusion equals inlet depth; the rear cuts a second layer in the same tracks. Forward advance per scoop remains limited by inlet depth.</p></div>'+excavation_guard_note+

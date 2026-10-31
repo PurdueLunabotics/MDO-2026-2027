@@ -109,7 +109,7 @@ def main():
             print_report("Final optimizer iterate", final)
             print(f"Optimizer success: {success}")
         om.n2(problem, outfile=str(output.parent / f"{output.stem}_n2.html"), show_browser=False)
-        record = {"schema_version": 8, "model_metadata": problem.model_metadata, "report_context": context,
+        record = {"schema_version": 9, "model_metadata": problem.model_metadata, "report_context": context,
                   "openmdao_version": openmdao.__version__, "optimizer": problem.model_metadata["optimizer_settings"]["optimizer"],
                   "optimizer_success": success, "optimizer_result": message,
                   "status": "baseline" if baseline_mode else ("converged_feasible" if success and final["feasible"] else "failed_or_infeasible"),

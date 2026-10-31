@@ -339,7 +339,10 @@ def write_report(record, output, iterations=(), *, download_links=None):
     excavation, feed = "", ""
     if "front_dig_depth" in values:
         from .moving_excavation_drawing import moving_excavation_svg, feed_rpm_svg
-        excavation, feed = moving_excavation_svg(values), feed_rpm_svg(values)
+        metadata = record.get("model_metadata", final.get("model_metadata", {}))
+        parallel_motion = metadata.get("configuration", {}).get("excavation_arm_motion") == "parallel_operating_poses"
+        excavation = moving_excavation_svg(values, parallel_motion=parallel_motion)
+        feed = feed_rpm_svg(values)
     for name, svg in (("frame", frame), ("stability", stability), ("top", top), ("obstacle", obstacle),
                       ("excavation", excavation), ("feed_rpm", feed)):
         if svg:
