@@ -9,6 +9,12 @@ candidate, with all physical failures retained. See [release verification](REPOR
 for the full-suite/focused-rerun coverage, derivative checks, interrupted default
 reference search, completed bounded failed-run check, and PDF visual review.
 
+The 2026-10-31 calculated-default update has passing coverage for 219 distinct
+tests across discovery/continuation runs and focused reruns, plus the full
+baseline derivative check. Calculated timing is now the CLI, Problem factory
+and ModelSet default; explicit fixed-mode historical fixtures are retained.
+See [the update and verification record](REPORT_RELEASE.md#default-calculated-timing---2026-10-31).
+
 ## Pre-push actuator-range consistency (2026-10-30)
 
 The current generic actuator commands start at 0.454/0.454/0.706 m, with all

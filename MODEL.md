@@ -8,7 +8,7 @@ Four wheels with side rockers and skid steering; four bucket drums on front/rear
 
 The supplied 9/17/26 Lunabotics Guidebook sections 13.3/13.4/13.9 supplied the 1.50 x 0.75 x 0.75 m stowed envelope, 80 kg inspection mass (without regolith), 2.50 m deployed height and penetration-force requirement. Section 17.1 supplies the 4.4 and 1.5 score multipliers. Section 11.1 describes BP-1 and an approximately 0.45 m pit. The supplied requirements CSV identifies additional manual checks. Confirm current event interpretations independently.
 
-The one-way route is 2/3/3/1 m with 90/45/45-degree turns, `traversal_time_one_way` seconds each way in default fixed mode (45 s by default). Optional calculated mode predicts separate loaded outbound and empty return times from bounded BWR/motor profiles; the fixed-time input is inactive. Outbound turns are assumed left; return reverses sequence and yaw signs. A separate 180-degree deposition turn carries only the front pair's remaining payload.
+The one-way route is 2/3/3/1 m with 90/45/45-degree turns. Default calculated mode predicts separate loaded outbound and empty return times from bounded BWR/motor profiles; `traversal_time_one_way` is inactive. Explicit fixed mode uses that input for each leg (45 s unless overridden). Outbound turns are assumed left; return reverses sequence and yaw signs. A separate 180-degree deposition turn carries only the front pair's remaining payload.
 
 ## Data flow and interfaces
 
@@ -216,7 +216,7 @@ The previous 14 kg frame-inclusive fixed mass becomes computed tube mass plus a 
 
 Elementary load envelopes cover longitudinal supports, crossmember torsion under a single loaded pair, actuator towers and arms. Loaded weight, cutting, extraction and a structural load factor enter these cases. Stress combines axial+bending and torsional shear by von Mises; tip deflection uses FL^3/(3EI), buckling uses conservative effective length 2L. Eighth-norm aggregation smoothly upper-bounds maximum stress/deflection. Safety-factor and deflection margins size sections. This is not assembled-frame FEA: joints, stress concentrations, local shell buckling, fatigue and exact load sharing remain outside it.
 
-## Mass properties and fixed-time mobility
+## Mass properties and mobility
 
 Sum local component Izz plus m*(x^2+y^2) about chassis-center yaw. Include wheel/drive units, structure/equipment, linkage, drums and payload at their actual longitudinal/lateral stations. The reference linkage center uses the midpoint between the mean chassis pivots (A+B)/2 and mean distal endpoints (C+D)/2; local yaw inertia retains an equivalent rod between those means. The distal actuator endpoint is the eccentric pin D. Explicit axial tails are removed from the core linkage lump and placed at their actual centroid/inertia. Zero offsets reproduce the previous tip attachment; CAD should resolve the unequal arm and actuator masses. Full/empty states are symmetric; front-pair-only load shifts CG. Equivalent cylinder inertia and payload CG R/3 below the shaft are approximations needing CAD/material-distribution data. A displaced CG's translational kinetic contribution is included by using inertia about the actual yaw axis.
 
@@ -224,7 +224,8 @@ Each reference segment stops/starts: peak=min(requested_speed,sqrt(distance*acce
 
 Half-loaded turns reserve traction for tangential/centripetal CG acceleration. Axle transfer limits equal-wheel-torque traction through the lighter axle; pressure uses the heavier axle and a rocker factor. Pitch/roll support reserves are checked. Rolling/contact-pressure and scrub laws are uncalibrated. No terrain/controller simulation, detailed per-wheel friction circle or wheel rotational kinetic energy is claimed.
 
-`--traversal-mode calculated` selects an optional `ModelSet.mobility` factory.
+Calculated timing is selected by default through `ModelSet.mobility`;
+`--traversal-mode fixed` selects the prescribed reference schedule.
 It searches a fast common-acceleration profile for each loading state, with
 straight BWR slip/torque and motor speed/power limiting peak speed. Existing
 speed/acceleration inputs are upper bounds. The same profiles determine route

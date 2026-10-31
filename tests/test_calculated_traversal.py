@@ -93,17 +93,23 @@ class CalculatedTraversalTests(unittest.TestCase):
         with self.assertRaises(WheelDomainError):
             state_route(self.soil, v, UnlimitedMotor(), 63., 10., route=((0., 0.),))
 
-    def test_default_is_exact_fixed_mode_and_custom_models_are_preserved(self):
-        a, b = self.problem(), self.problem(traversal_mode="fixed")
+    def test_default_is_exact_calculated_mode_and_custom_models_are_preserved(self):
+        a, b = self.problem(), self.problem(traversal_mode="calculated")
         a.run_model(); b.run_model()
         sa, sb = snapshot(a), snapshot(b)
         self.assertEqual(sa["outputs"], sb["outputs"])
         self.assertEqual(sa["constraints"], sb["constraints"])
         self.assertEqual(sa["whole_cycles"], sb["whole_cycles"])
-        self.assertEqual(a.get_val("travel_time").item(), 90.)
+        self.assertEqual(a.model_metadata["traversal_mode"], "calculated")
+        self.assertNotEqual(a.get_val("travel_time").item(), 90.)
+        fixed = self.problem(traversal_mode="fixed")
+        fixed.run_model()
+        self.assertEqual(fixed.get_val("travel_time").item(), 90.)
         custom = replace(ModelSet(), mobility=Mobility)
         with self.assertRaisesRegex(ValueError, "not replaced"):
-            build_problem(models=custom, traversal_mode="calculated")
+            build_problem(models=custom)
+        preserved = self.problem(models=custom, traversal_mode="fixed")
+        self.assertIs(type(preserved.model.mobility), Mobility)
         with self.assertRaisesRegex(ValueError, "fixed or calculated"):
             build_problem(traversal_mode="unknown")
 
@@ -157,6 +163,25 @@ class CalculatedTraversalTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual(json.loads(fixed.read_text())["final"]["outputs"]["travel_time"]["value"], 74.)
             self.assertEqual(source.read_bytes(), before)
+
+    def test_cli_defaults_to_calculated_and_honors_explicit_fixed_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, output = Path(folder)/"case.json", Path(folder)/"result.json"
+            for explicit_mode in (None, "fixed"):
+                case = {"inputs": {"traversal_time_one_way": 37.}}
+                if explicit_mode:
+                    case["traversal_mode"] = explicit_mode
+                source.write_text(json.dumps(case), encoding="utf-8")
+                run = subprocess.run([sys.executable, "main.py", "--inputs", str(source),
+                                      "--output", str(output)], capture_output=True, text=True,
+                                     cwd=Path(__file__).resolve().parents[1])
+                self.assertEqual(run.returncode, 0, run.stderr)
+                record = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual(record["model_metadata"]["traversal_mode"], explicit_mode or "calculated")
+                if explicit_mode == "fixed":
+                    self.assertEqual(record["final"]["outputs"]["travel_time"]["value"], 74.)
+                else:
+                    self.assertNotEqual(record["final"]["outputs"]["travel_time"]["value"], 74.)
 
 
 if __name__ == "__main__":

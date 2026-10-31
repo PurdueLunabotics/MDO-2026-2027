@@ -32,7 +32,7 @@ class PhysicsTests(unittest.TestCase):
             'lin_act_side_arm_offset': (0., -.15, .15, 'm'),
             'lin_act_top_arm_offset': (0., -.15, .15, 'm'),
         }):
-            p=build_problem(**kwargs)
+            p=build_problem(traversal_mode="fixed", **kwargs)
         self.addCleanup(p.cleanup)
         p.run_model()
         return p

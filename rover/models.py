@@ -20,6 +20,7 @@ from .alternatives.obstacle_stability import ObstacleStability
 from .alternatives.parallel_cylinder_clearance import ParallelCylinderClearance
 from .alternatives.traversal_stability import TraversalStability
 from .alternatives.bekker_wong_reece import BekkerWongReeceMobility
+from .alternatives.calculated_traversal import CalculatedTraversalMobility
 from .alternatives.slope_traversal import SlopeTraversal
 from .wheels import WheelMass
 from .drums import DrumMass
@@ -46,7 +47,7 @@ class ModelSet:
     obstacle_stability: Callable = ObstacleStability
     obstacle_clearance: Callable = ParallelCylinderClearance
     traversal_stability: Callable = TraversalStability
-    mobility: Callable = BekkerWongReeceMobility
+    mobility: Callable = CalculatedTraversalMobility
     slope_traversal: Callable = SlopeTraversal
     ground_clearance: Callable = GroundClearance
 
@@ -66,15 +67,16 @@ def plate_frame_models():
 
 
 def traversal_models(models, mode):
-    """Select optional timing through factories without replacing student models."""
+    """Select route timing through factories without replacing custom models."""
     if mode not in ("fixed", "calculated"):
         raise ValueError("traversal_mode must be fixed or calculated")
     selected = getattr(models.mobility, "TRAVERSAL_MODE", "fixed")
     if mode == selected:
         return models
     if mode == "calculated" and models.mobility is BekkerWongReeceMobility:
-        from .alternatives.calculated_traversal import CalculatedTraversalMobility
         return replace(models, mobility=CalculatedTraversalMobility)
+    if mode == "fixed" and models.mobility is CalculatedTraversalMobility:
+        return replace(models, mobility=BekkerWongReeceMobility)
     raise ValueError("The selected mobility factory does not support this traversal mode; "
                      "select a compatible ModelSet explicitly. Student components were not replaced.")
 

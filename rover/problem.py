@@ -132,7 +132,7 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
         raise ValueError("ROUTE needs finite nonnegative distances and nonzero total travel.")
 
 
-def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", actuators="reference", solver_tol=None, freeze=None, ignore_constraints=None, traversal_mode="fixed", optimize_attachment=False, attachment_max=1.):
+def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", actuators="reference", solver_tol=None, freeze=None, ignore_constraints=None, traversal_mode="calculated", optimize_attachment=False, attachment_max=1.):
     # Plate envelopes contain min/max/contact branches. Use a small-step
     # derivative-free solve for that profile; keep explicit SLSQP available.
     optimizer = optimizer or ("COBYLA" if structure == "plate-frame" else "SLSQP")

@@ -110,11 +110,14 @@ class RigidWheelTests(unittest.TestCase):
     def test_default_modelset_contract_energy_and_point_turn_invariance(self):
         from rover.models import ModelSet
         from rover.mobility import Mobility
+        from rover.alternatives.calculated_traversal import CalculatedTraversalMobility
         from rover.problem import build_problem
-        self.assertIs(ModelSet().mobility, BekkerWongReeceMobility)
+        self.assertIs(ModelSet().mobility, CalculatedTraversalMobility)
         values = {"wheel_diameter": .33, "wheel_width": .125}
-        reference = build_problem(values, models=replace(ModelSet(), mobility=Mobility))
-        experiment = build_problem(values)
+        # Compare soil laws at the same prescribed timing, independently of the
+        # calculated timing selected by default in production.
+        reference = build_problem(values, models=replace(ModelSet(), mobility=Mobility), traversal_mode="fixed")
+        experiment = build_problem(values, traversal_mode="fixed")
         try:
             reference.run_model()
             experiment.run_model()

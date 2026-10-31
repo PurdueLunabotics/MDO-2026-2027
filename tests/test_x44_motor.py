@@ -11,6 +11,7 @@ import numpy as np
 from openmdao.utils.assert_utils import assert_check_totals
 from dataclasses import replace
 from rover.alternatives.x44_motor import CURVE
+from openmdao.api import AnalysisError
 from rover.motors import Gearmotor
 from rover.config import DESIGN, ASSUMPTIONS, configuration
 from historical_fixtures import HISTORICAL_ACTUATOR_DESIGN
@@ -90,8 +91,8 @@ class X44Tests(unittest.TestCase):
         self.assertAlmostEqual(result['energy'],1.6/.72)
         self.assertGreater(result['energy'],1.6)
 
-    def problem(self):
-        p=build_problem({'wheelbase':.5,'drum_gear_ratio':65},structure='plate-frame',motors='x44-standard')
+    def problem(self, **changes):
+        p=build_problem({'wheelbase':.5,'drum_gear_ratio':65,**changes},structure='plate-frame',motors='x44-standard')
         self.addCleanup(p.cleanup)
         p.run_model()
         return p
@@ -136,10 +137,18 @@ class X44Tests(unittest.TestCase):
         for n,x in before['outputs'].items(): self.assertAlmostEqual(x['value'],after['outputs'][n]['value'],places=8,msg=n)
         p.set_val('drive_stator_current_limit',1)
         p.set_val('drum_stator_current_limit',1)
-        p.run_model()
-        self.assertLess(p.get_val('straight_motor_margin').item(),0)
-        self.assertLess(p.get_val('drum_torque_margin').item(),0)
-        self.assertFalse(snapshot(p)['feasible'])
+        # Calculated timing rejects hardware that cannot sustain motion; it
+        # must not silently substitute the old prescribed travel schedule.
+        with self.assertRaisesRegex(AnalysisError, 'cannot sustain'):
+            p.run_model()
+        fixed=build_problem({'wheelbase':.5,'drum_gear_ratio':65,
+                             'drive_stator_current_limit':1,'drum_stator_current_limit':1},
+                            structure='plate-frame',motors='x44-standard',traversal_mode='fixed')
+        self.addCleanup(fixed.cleanup)
+        fixed.run_model()
+        self.assertLess(fixed.get_val('straight_motor_margin').item(),0)
+        self.assertLess(fixed.get_val('drum_torque_margin').item(),0)
+        self.assertFalse(snapshot(fixed)['feasible'])
         with self.assertRaises(ValueError): build_problem({'motor_bus_voltage':10},motors='x44-standard')
         with self.assertRaises(ValueError): build_problem({'drive_gear_ratio':90},motors='x44-standard')
 
@@ -196,7 +205,9 @@ class X44Tests(unittest.TestCase):
         self.assertAlmostEqual(np.asarray(outputs["drum_torque_margin"]).item(),expected)
 
     def test_total_derivatives(self):
-        p=self.problem()
+        # A supported, smooth speed/acceleration-cap point for calculated
+        # timing; avoid differentiating a route-profile selection boundary.
+        p=self.problem(wheel_diameter=.35,wheel_width=.18)
         checks=p.check_totals(of=['construction_points',*p.margin_specs],wrt=list(p.design_specs),method='fd',form='central',step=3e-5,step_calc='rel_avg',out_stream=None)
         assert_check_totals(checks,atol=1e-3,rtol=2e-3)
 
@@ -211,7 +222,12 @@ class X44Tests(unittest.TestCase):
             c.compute(inputs,base)
             for n in inputs:
                 shift={k:v.copy() for k,v in inputs.items()}
-                shift[n]+=1e-4*max(.01,abs(inputs[n].item()))
+                if n.endswith('_stator_current_limit') and inputs[n].item()==0:
+                    # Zero disables the cap; a tiny positive cap cannot drive.
+                    # Audit the enabled branch at a supported current instead.
+                    shift[n][...]=200.
+                else:
+                    shift[n]+=1e-4*max(.01,abs(inputs[n].item()))
                 changed={k:np.zeros(1) for k in out_names}
                 c.compute(shift,changed)
                 for out in out_names:
@@ -221,10 +237,13 @@ class X44Tests(unittest.TestCase):
 
     @patch.dict(DESIGN, HISTORICAL_ACTUATOR_DESIGN)
     def test_historical_feasible_start_fails_new_bwr_climb_requirements(self):
+        # Preserve the fixture's prescribed route; calculated timing can slow
+        # down enough to remove its historical straight-drive motor shortfall.
         fixture=json.loads((ROOT/'tests/fixtures/x44_standard_feasible_start.json').read_text())
         inputs={n.replace('cf_tube_', 'cross_tube_'): v for n,v in fixture['inputs'].items()}
         p=build_problem(inputs,structure=fixture['structure'],motors=fixture['motors'],
-                        optimizer=fixture['optimizer'],maxiter=2,cobyla_radius=fixture['cobyla_radius'])
+                        optimizer=fixture['optimizer'],maxiter=2,cobyla_radius=fixture['cobyla_radius'],
+                        traversal_mode='fixed')
         self.addCleanup(p.cleanup)
         p.run_model();before=snapshot(p)
         self.assertFalse(before['feasible'])

@@ -28,7 +28,7 @@ from openmdao.visualization.n2_viewer.n2_viewer import _get_viewer_data
                      'lin_act_side_arm_offset': (0., -.15, .15, 'm')})
 class RoverTests(unittest.TestCase):
     def problem(self, *, models=None, **overrides):
-        p = build_problem(overrides, models=models)
+        p = build_problem(overrides, models=models, traversal_mode="fixed")
         self.addCleanup(p.cleanup)
         p.run_model()
         return p
@@ -243,7 +243,8 @@ class RoverTests(unittest.TestCase):
         # must fail the new BWR climbs; it is no longer a feasible-start fixture.
         fixture=json.loads((Path(__file__).parent/"fixtures"/"traversal_stability_feasible_start.json").read_text())
         p = build_problem(fixture["inputs"], optimizer=fixture["optimizer"],
-                          maxiter=len(DESIGN)+2, cobyla_radius=fixture["cobyla_radius"])
+                          maxiter=len(DESIGN)+2, cobyla_radius=fixture["cobyla_radius"],
+                          traversal_mode="fixed")
         self.addCleanup(p.cleanup)
         p.run_model()
         self.assertFalse(snapshot(p)["feasible"])

@@ -1,6 +1,6 @@
 # Report release - 2026-10-30
 
-The baseline report is a fresh fixed evaluation of `design_baseline.json`,
+The baseline report evaluates the saved inputs in `design_baseline.json`,
 with its current values preserved. It describes the baseline configuration,
 conditional on 13 failed modeled checks. No physical constraint was removed
 or weakened to publish these reports.
@@ -16,7 +16,7 @@ These are separate cases, not a matched baseline/optimization pair:
 
 | Setting | Current baseline | Saved candidate |
 | --- | --- | --- |
-| Route timing | Fixed, 45 seconds each way | Calculated |
+| Route timing | Calculated, 25.8583 seconds each way | Calculated |
 | Empty/full climbing checks | 30 / 20 degrees | 0 / 0 degrees |
 | Required ground clearance | 0.1524 m | 0.1524 m |
 | Feed speed | 0.2 m/s | 0.0340718092 m/s |
@@ -92,3 +92,57 @@ visually inspected. Nine report tests passed; browser checks confirmed that the
 opening notices and methodology are absent from print and all 13 failed checks
 remain visible in the requirements table. PDF extraction confirmed that the
 removed student/BWR wording is absent from every page.
+
+## Default calculated timing - 2026-10-31
+
+The baseline explicitly saves `"traversal_mode": "calculated"`, which is also
+the default for the CLI and `build_problem()`. A case with no saved mode now
+uses calculated timing; explicit case settings and CLI overrides retain their
+precedence. Existing archived records keep their original recorded meanings.
+Use `--traversal-mode fixed` for the prescribed schedule. The traversal/fill
+study and historical numerical fixtures select fixed timing explicitly.
+
+No numerical baseline input or hardware dimension changed. Recomputed loaded
+and empty route durations are each 25.8583357 s (51.7166714 s total). Cycle time
+is 196.911466 s and electrical energy is 17.2780688 Wh per cycle. Four completed
+cycles deliver a conditional 247.828942 L estimate. The same 13 checks remain
+failed; the excavation-area shortfall increases because more cycles fit in
+the mission. No constraint was removed or weakened.
+
+The design PDF/HTML retain the simplified Design Baseline presentation. The
+existing optimized report remains unchanged. The baseline derivative step-size
+check passed, and independent phase sums reproduce route time and electrical
+cycle energy without double counting.
+
+Verification for the calculated-default update:
+
+- All 219 distinct tests have passing coverage across discovery, continuations
+  and focused reruns. The full discovery run was interrupted at a slow legacy
+  frame derivative fixture; 167 tests were already covered, including corrected
+  motor-interface reruns. All 52 remaining tests were subsequently covered,
+  with focused reruns for the historical X44 fixed-time case and current-limit
+  dependency perturbations. Logs and reconciled test IDs are under ignored
+  `results/default_calculated/`.
+- Nine calculated-traversal tests passed, including API/CLI defaults, explicit
+  fixed-file and CLI overrides, conservation, independent physical limits,
+  smooth derivatives and no-drive failure domains. Fresh checks also verified
+  the default ModelSet factory and explicit fixed/custom factory compatibility.
+- The baseline's full total-derivative step-size check passed. Its published
+  values exactly match the derivative-verified evaluation. Historical frame
+  and motor fixtures prescribe fixed timing explicitly; the calculated X44
+  total-derivative test uses a smooth supported point. Acceptance tolerances
+  were not changed.
+- Default calculated motion rejects unsupported current limits with an
+  AnalysisError. Explicit fixed mode still exposes negative motor margins.
+  Dependency audits enable a current cap at a supported positive value rather
+  than perturbing zero (disabled) to a non-driving near-zero cap.
+- The default reference baseline completed. The full reference derivative
+  attempt was stopped for runtime; a bounded reference check with only wheel
+  diameter and battery capacity active passed derivatives and wrote an honest
+  `failed_or_infeasible` result with optimizer success false. No reference
+  convergence is claimed. The independent full baseline derivative check above
+  covers all active baseline variables.
+- The final 34-page baseline PDF was rendered and visually checked. Embedded
+  input/source hashes match the current source, calculated timing is recorded,
+  and the simplified design presentation is preserved. No new calibration or
+  hardware/soil validation was introduced.

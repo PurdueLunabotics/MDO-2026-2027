@@ -15,7 +15,7 @@ from reporting.report import snapshot
 from rover.models import ModelSet, plate_frame_models
 from rover.alternatives.plate_frame import PlateStructureGeometry, PlateStructureLoads, arm_beam_screen
 from rover.alternatives.offset_attachment import OffsetArmMechanics
-from rover.alternatives.bekker_wong_reece import BekkerWongReeceMobility
+from rover.alternatives.calculated_traversal import CalculatedTraversalMobility
 from rover.excavation import Excavation
 from rover.alternatives.moving_excavation import MovingExcavation
 from rover.mobility import Mobility
@@ -97,7 +97,7 @@ class MotorInterfaceTests(unittest.TestCase):
                     inputs.update(cross_tube_density=1600., cross_tube_youngs_modulus=70e9,
                                   cross_tube_yield_strength=350e6)
                 p=build_problem(inputs,structure=c['structure'],motors=c['motors'],
-                                models=replace(models,mobility=Mobility,excavation=Excavation))
+                                models=replace(models,mobility=Mobility,excavation=Excavation), traversal_mode="fixed")
                 try:
                     p.run_model();result=snapshot(p)
                     # This fixture predates the intentional X44 energy simplification.
@@ -136,7 +136,7 @@ class MotorInterfaceTests(unittest.TestCase):
 
     def test_hardware_profile_keeps_the_same_discipline_classes(self):
         p=self.problem(motors='x44-standard')
-        for slot,cls in [('excavation',MovingExcavation),('mobility',BekkerWongReeceMobility),('relocation',SiteRelocation),
+        for slot,cls in [('excavation',MovingExcavation),('mobility',CalculatedTraversalMobility),('relocation',SiteRelocation),
                          ('drum_mass',DrumMass),('geometry',GeometryMass)]:
             self.assertIs(type(getattr(p.model,slot)),cls)
         self.assertIs(p.model.excavation.options['motor_model'],X44MotorProvider)
@@ -159,7 +159,7 @@ class MotorInterfaceTests(unittest.TestCase):
             c.compute(inp,changed)
             scalar=lambda result,n:np.asarray(result[n]).item()
             idle=multiplicity*p.get_val('actuator_idle_power').item()
-            duration=(2*p.get_val('traversal_time_one_way').item()+scalar(base,'turn_time')
+            duration=(scalar(base,'travel_time')+scalar(base,'turn_time')
                       if time is None else scalar(base,time))
             idle_energy = idle*duration
             idle_peak = idle

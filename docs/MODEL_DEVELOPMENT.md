@@ -154,9 +154,9 @@ simulation are numerical evidence, not experimental validation.
 
 ## Solver settings
 
-`build_problem(traversal_mode="calculated")` or `--traversal-mode calculated`
-selects the optional calculated route component through `ModelSet`; default
-`fixed` retains the prescribed schedule. Required scalar outputs and Mission's
+`build_problem()` and the CLI default to the calculated route component through
+`ModelSet`. `build_problem(traversal_mode="fixed")` or `--traversal-mode fixed`
+explicitly retains the prescribed schedule. Required scalar outputs and Mission's
 time/energy interface are preserved. Custom mobility factories are not silently
 replaced. Dependency declarations include the selected hardware and timing
 physics; the fixed-time input has no calculated-mode dependencies. Reports use

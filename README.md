@@ -20,7 +20,8 @@ the interactive report; PDFs can be read directly on GitHub.
 | Design Baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
 | Fixed-hardware optimizer candidate (infeasible) | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
 
-Reports were regenerated on **2026-10-30**. They include scores, mass and energy,
+The baseline report was refreshed on **2026-10-31** with calculated traversal.
+The saved candidate report was generated on **2026-10-30**. Reports include scores, mass and energy,
 travel/deposition/compact/recovery drawings, failed checks, and full input/output
 tables. The baseline evaluates the current `design_baseline.json` unchanged as
 the baseline configuration; it retains 13 failed modeled checks.
@@ -308,8 +309,7 @@ geometric check does not validate driving on the drums or motor-body clearance.
 See [moving-excavation equations and limits](docs/MOVING_EXCAVATION.md). Earlier
 saved reports describe the old excavation model until regenerated.
 
-Traversal timing is optional. Fixed timing remains the default (45 seconds each
-way unless overridden). Calculated timing selects separate BWR/motor-limited
+Calculated traversal timing is the default. It selects separate BWR/motor-limited
 outbound and return profiles, treating `travel_speed` and `acceleration` as upper
 bounds and leaving `traversal_time_one_way` inactive:
 
@@ -317,8 +317,11 @@ bounds and leaving `traversal_time_one_way` inactive:
 .\.venv\Scripts\python.exe main.py --inputs design_baseline.json --traversal-mode calculated --output results/calculated_timing.json
 ```
 
-Use `--traversal-mode fixed` to switch back; add `--optimize` for an optimization.
+Use `--traversal-mode fixed` for the prescribed schedule (45 seconds each way
+unless overridden); add `--optimize` for an optimization.
 Named cases can save `"traversal_mode": "calculated"` beside `structure`/`motors`.
+Cases without this field also use calculated timing. An explicit saved mode
+is respected, and the CLI overrides it.
 Reports identify the mode and actual leg times. This does not introduce BWR
 turning physics: legacy turn traction/stability checks remain, and deposition
 and fresh-site relocation retain reference timing. See

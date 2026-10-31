@@ -26,8 +26,8 @@ def inputs(**changes):
 
 
 class PlateFrameTests(unittest.TestCase):
-    def problem(self, **changes):
-        p = build_problem(changes, structure="plate-frame")
+    def problem(self, *, traversal_mode="calculated", **changes):
+        p = build_problem(changes, structure="plate-frame", traversal_mode=traversal_mode)
         self.addCleanup(p.cleanup)
         p.run_model()
         return p
@@ -254,8 +254,10 @@ class PlateFrameTests(unittest.TestCase):
 
     def test_total_derivatives_at_smooth_geometry(self):
         # Unequal box sides keep Euler's weak-axis selection at a smooth point.
+        # Isolate this historical frame derivative fixture from route-profile
+        # selection; calculated-route derivatives have independent coverage.
         p = self.problem(wheelbase=.46, bottom_pivot_height=.16,
-                         arm_box_width=.045, arm_box_height=.06)
+                         arm_box_width=.045, arm_box_height=.06, traversal_mode="fixed")
         checks = p.check_totals(of=["construction_points", *p.margin_specs], wrt=list(p.design_specs),
                                method="fd", form="central", step=3e-5, step_calc="rel_avg", out_stream=None)
         assert_check_totals(checks, atol=1e-3, rtol=2e-3)

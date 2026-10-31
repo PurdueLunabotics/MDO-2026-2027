@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--motors", choices=["reference", "x44-standard"],
                         help="Generic scalable motors or fixed standard X44s at 12 V, drive gearing 100:1")
     parser.add_argument("--traversal-mode", choices=["fixed", "calculated"],
-                        help="Fixed one-way schedule (default) or optional BWR/motor-limited route timing")
+                        help="Calculated motor/soil-limited route timing (default) or a fixed one-way schedule")
     parser.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="Override a config value in its stated units")
     parser.add_argument("--freeze", action="extend", nargs="+", default=[], metavar="NAME",
                         help="Hold design variables at their resolved input values; accepts multiple names and may be repeated")
@@ -57,7 +57,7 @@ def main():
         overrides = {**case_values, **cli_values}
         structure = args.structure or source.get("structure", "reference")
         motors = args.motors or source.get("motors", "reference")
-        traversal_mode = args.traversal_mode or source.get("traversal_mode", "fixed")
+        traversal_mode = args.traversal_mode or source.get("traversal_mode", "calculated")
         attachment_max = args.attachment_max if args.attachment_max is not None else source.get('attachment_max',1.)
         actuators = args.actuators or source.get("actuators", "reference")
         baseline_mode = args.baseline or (args.inputs is not None and not args.optimize)

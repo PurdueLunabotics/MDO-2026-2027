@@ -4,6 +4,7 @@
   "structure": "plate-frame",
   "motors": "x44-standard",
   "actuators": "pa04-900",
+  "traversal_mode": "calculated",
   "inputs": {
     "wheel_diameter": 0.359,
     "wheel_width": 0.18,

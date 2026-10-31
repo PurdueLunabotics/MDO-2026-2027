@@ -1,4 +1,4 @@
-"""Optional motor/BWR-limited route timing, with reference point-turn physics.
+"""Default motor/BWR-limited route timing, with reference point-turn physics.
 
 Pure, deterministic profile selection; no fitted data or persistent caches.
 See docs/CALCULATED_TRAVERSAL.md for search policy, domains and limitations.
@@ -151,6 +151,9 @@ def state_route(soil, values, motor, mass, inertia, route=ROUTE):
 
 class CalculatedTraversalMobility(BekkerWongReeceMobility):
     TRAVERSAL_MODE = "calculated"
+    # Timing diagnostics are mode-specific; fixed/custom replacements retain
+    # the shared mobility contract rather than requiring calculated-only ports.
+    REQUIRED_OUTPUT_UNITS = BekkerWongReeceMobility.OUTPUT_UNITS
     OUTPUT_UNITS = {**BekkerWongReeceMobility.OUTPUT_UNITS, **TIMING_OUTPUTS}
     DEPENDENCIES = {}
 

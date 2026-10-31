@@ -1,7 +1,8 @@
-# Optional calculated traversal timing — revision 1
+# Calculated traversal timing — revision 1
 
-`--traversal-mode fixed` is the default and preserves the original prescribed
-schedule. `--traversal-mode calculated` selects `CalculatedTraversalMobility`
+Calculated timing is the default for `build_problem()` and the CLI.
+`--traversal-mode fixed` explicitly selects the original prescribed schedule.
+`--traversal-mode calculated` selects `CalculatedTraversalMobility`
 through `ModelSet.mobility`. The route, mass boundaries, mission score, Earth
 gravity, constraints, dumping and excavation equations are unchanged.
 
@@ -12,12 +13,23 @@ gravity, constraints, dumping and excavation equations are unchanged.
 
 Add `--optimize`, `--freeze ...`, and other existing study options as needed.
 A named case may save `"traversal_mode": "calculated"` beside `structure` and
-`motors`; the CLI overrides it. Older cases without this field remain fixed.
+`motors`; the CLI overrides it. Cases without this field now use calculated
+timing when reevaluated. Save `"traversal_mode": "fixed"` or pass the explicit
+CLI option to reproduce a historical fixed-time evaluation. Existing archived
+reports retain their recorded modes and values; missing historical report
+metadata still means fixed, rather than reinterpreting old results.
 The traversal/fill sensitivity study explicitly retains fixed timing.
+
+`ModelSet().mobility` now defaults to `CalculatedTraversalMobility`. Explicit
+fixed mode selects the reference `BekkerWongReeceMobility` factory. Only these
+known factories are switched automatically; custom factories are preserved or
+rejected when incompatible with the requested mode. Fixed/custom replacements
+retain the shared mobility output contract; calculated per-leg diagnostics
+remain mode-specific.
 
 ## Scope and contract
 
-The optional implementation lives in `rover/alternatives/calculated_traversal.py`.
+The implementation lives in `rover/alternatives/calculated_traversal.py`.
 It predicts separate loaded outbound and empty return candidate profiles.
 `travel_speed` and `acceleration` are upper bounds in this mode, not guaranteed
 achieved values. `traversal_time_one_way` remains a positive legacy input but is

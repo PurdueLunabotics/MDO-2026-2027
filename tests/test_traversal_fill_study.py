@@ -24,7 +24,8 @@ class TraversalFillStudyTests(unittest.TestCase):
 
     def evaluate(self, seconds, fill):
         p = build_problem({**self.values, 'traversal_time_one_way': seconds, 'fill_fraction': fill},
-                          structure=self.structure, motors=self.motors, actuators=self.meta.get('actuators', 'reference'))
+                          structure=self.structure, motors=self.motors, actuators=self.meta.get('actuators', 'reference'),
+                          traversal_mode="fixed")
         self.addCleanup(p.cleanup)
         p.run_model()
         self.assertNotIn('traversal_time_one_way', p.design_specs)
