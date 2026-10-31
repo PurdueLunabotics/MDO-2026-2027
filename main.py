@@ -77,6 +77,7 @@ def main():
             "input_file_names": sorted(case_values), "cli_override_names": sorted(cli_values),
             "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "mode": "fixed_design" if baseline_mode else "optimization",
+            "audience": "design" if baseline_mode and args.inputs else "analysis",
         }
     except (ValueError, TypeError, OSError) as exc:
         parser.error(str(exc))

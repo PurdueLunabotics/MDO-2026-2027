@@ -1,5 +1,5 @@
 {
-  "name": "Design baseline",
+  "name": "Design Baseline",
   "revision": "PA-04 900 lbf actuator selection 2026-10-27; geometry pending; axle-relative actuator offsets 2026-10-28; unified full-width inlet 2026-10-30",
   "structure": "plate-frame",
   "motors": "x44-standard",

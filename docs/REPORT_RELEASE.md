@@ -1,7 +1,7 @@
 # Report release - 2026-10-30
 
 The baseline report is a fresh fixed evaluation of `design_baseline.json`,
-with its current values preserved. It is the student's best-case scenario,
+with its current values preserved. It describes the baseline configuration,
 conditional on 13 failed modeled checks. No physical constraint was removed
 or weakened to publish these reports.
 
@@ -45,7 +45,7 @@ soil/hardware measurements or experimental validation are claimed.
 The baseline was evaluated with:
 
 ```powershell
-.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --design-name "Student baseline - best-case scenario" --output results/report_release/baseline.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --output results/report_release/baseline.json
 ```
 
 The PDFs are printed from the published HTML with all noninteractive detail
@@ -76,3 +76,19 @@ case name when the deposition mass-properties table is present.
   baseline SHA-256 still matches the unchanged input file.
 - Both final PDFs were rendered and inspected: 37 baseline pages and 39
   candidate pages, including the full technical appendices.
+
+## Baseline presentation update - 2026-10-31
+
+The baseline PDF is now titled **Design Baseline**. Named fixed-input baseline
+exports use the design audience: the report starts with the design metrics and
+omits opening model notices, orange warning boxes, and the methodology section.
+Climbing descriptions use design terminology rather than soil-model names.
+Detailed analysis reports and embedded numeric/provenance records remain available.
+The optimized report is unchanged.
+
+All design inputs, calculated outputs, constraint margins and check statuses
+match the previous baseline. The updated 34-page baseline PDF was rendered and
+visually inspected. Nine report tests passed; browser checks confirmed that the
+opening notices and methodology are absent from print and all 13 failed checks
+remain visible in the requirements table. PDF extraction confirmed that the
+removed student/BWR wording is absent from every page.

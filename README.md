@@ -17,13 +17,13 @@ the interactive report; PDFs can be read directly on GitHub.
 
 | Design | Printable PDF | Interactive report |
 | --- | --- | --- |
-| Student-selected baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
+| Design Baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
 | Fixed-hardware optimizer candidate (infeasible) | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
 
 Reports were regenerated on **2026-10-30**. They include scores, mass and energy,
 travel/deposition/compact/recovery drawings, failed checks, and full input/output
 tables. The baseline evaluates the current `design_baseline.json` unchanged as
-the student's best-case scenario; it retains 13 failed modeled checks.
+the baseline configuration; it retains 13 failed modeled checks.
 
 The candidate preserves the final geometry from
 `results/fixed_hardware_optimization.json`; all 288 saved output values were

@@ -148,6 +148,7 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     metadata = record.get("model_metadata", final.get("model_metadata", {}))
     context = record.get("report_context", {})
     fixed = record.get("status") == "baseline"
+    design_report = fixed and context.get("audience") == "design"
     inputs = {**final["design"], **final["assumptions"]}
     bounds_inputs = dict(final["design"])
     for n, (_, lower, upper, units) in metadata.get("configuration", {}).get("frozen_design", {}).items():
@@ -217,7 +218,8 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
         display_name = label(check[:-7])+" search range" if bounds else label(check)
         if check in ("empty_slope_traversal_margin", "loaded_slope_traversal_margin"):
             state = check.split("_")[0]
-            display_name = f'{"Empty" if state == "empty" else "Full"} rover: {val(state+"_slope_degrees"):g}° BWR climb'
+            climb_label = "climb" if design_report else "BWR climb"
+            display_name = f'{"Empty" if state == "empty" else "Full"} rover: {val(state+"_slope_degrees"):g}° {climb_label}'
             actual = (f'{val(state+"_slope_slip"):.6g}' if val(state+"_slope_solution_valid") == 1 else
                       'No climbing solution<small>Slip = 1 is a failure sentinel</small>')
             limit = "Slip &lt; 1 (strict)"
@@ -228,6 +230,8 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
                                escape(quantity(item["margin"], item["units"], check)), badge(status)],
                               f'data-port="{escape(check, quote=True)}" data-check="{status.lower()}" data-kind="{"bounds" if bounds else "physical"}"'))
     for title, note in UNASSESSED:
+        if design_report:
+            note = note.replace("BWR climb checks", "climbing checks")
         check_rows.append(row([f'<strong>{escape(title)}</strong>', f'<span class="muted">{escape(note)}</span>', "—", "—", badge("Not assessed")], 'data-check="not-assessed" data-kind="unknown"'))
 
     def metric(title, value, note):
@@ -261,11 +265,14 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     for state in ("empty", "loaded"):
         if state+"_slope_solution_valid" in outputs:
             solved = val(state+"_slope_solution_valid") == 1
+            climb_description = f'Force shortfall per wheel: {val(state+"_slope_force_shortfall"):.2f} N. Acceptance: solved slip strictly below 1.'
+            if not design_report:
+                climb_description = ('BWR, GRC-1, equal mean wheel loads. '+climb_description+
+                                     f' Soil-fit range flags: {val(state+"_slope_transfer_flag_count"):g}.')
             performance_rows.append(row([
                 f'{"Empty" if state == "empty" else "Full"} rover · {val(state+"_slope_degrees"):g}° climb',
                 f'Slip {val(state+"_slope_slip"):.4f}' if solved else 'No climbing solution',
-                f'BWR, GRC-1, equal mean wheel loads. Force shortfall per wheel: {val(state+"_slope_force_shortfall"):.2f} N. '
-                f'Soil-fit range flags: {val(state+"_slope_transfer_flag_count"):g}. Acceptance: solved slip strictly below 1.']))
+                climb_description]))
     deposition_button = deposition_view = deposition_link = deposition_table = ""
     if len(drawings) > 3:
         deposition_button = '<button data-pose="deposition" aria-pressed="false">Deposition</button>'
@@ -344,6 +351,8 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
 
     nav = [("overview", "Overview"), ("geometry", "Rover views"), ("performance", "Performance"),
            ("requirements", "Requirements"), ("loads", "Loads"), ("notes", "Model notes")]
+    if design_report:
+        nav = [(target, title) for target, title in nav if target != "notes"]
     if not fixed:
         nav.append(("mdo", "Optimization study"))
     nav.append(("engineering-data", "Inputs & outputs"))
@@ -415,7 +424,7 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
                         for key, caption in (("analysis", "Analysis JSON"), ("inputs", "Design inputs JSON"),
                                              ("n2", "Model connections / N2")) if links[key])
     analysis_json = json.dumps(record, ensure_ascii=True, allow_nan=False).replace("<", "\\u003c")
-    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(name)} · rover design review</title><style>{CSS}{PRINT_CSS}</style></head><body>
+    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(name) if design_report else escape(name)+" · rover design review"}</title><style>{CSS}{PRINT_CSS}</style></head><body class="{'design-report' if design_report else 'analysis-report'}">
 <aside class="sidebar"><div class="brand">LUNABOTICS<span>Engineering design report</span></div><nav aria-label="Report sections">{nav_html}</nav><div class="sidebar-foot">Fixed inputs → model predictions<br>Constraints remain visible<br><b>Uncalibrated conceptual model</b></div></aside>
 <main><header><div class="eyebrow">{mode}</div><h1>{escape(name)}</h1><p class="subtitle">Revision {escape(revision)} · {escape(metadata.get("structure_profile", "reference"))} frame · {escape(metadata.get("motor_profile", "reference"))} motors</p><div class="header-bottom">{warning}<span class="muted">{escape(context.get("generated_utc", "Saved analysis"))}</span></div></header>{mobility_notice}{optimizer_notice}
 <section id="overview"><div class="verdict {overall}"><div><strong>{title_status}</strong><p>{len(physical)-sum(not c["passed"] for c in physical.values())} / {len(physical)} physical model checks pass · {len(UNASSESSED)} capabilities not assessed</p></div><a class="button" href="#requirements">Review checks ↓</a></div><p class="muted">{conditional} These are predictions from the stated inputs, not measured performance.</p>{guard_note}<div class="metrics">{metrics}</div><div class="score-summary"><h2>Construction score</h2><p class="muted">Continuous mission estimate using the configured mass and energy weights. The complete-cycle estimate is reported in Performance &amp; mass.</p><div class="metrics score-metrics">{score_metrics}</div></div></section>
@@ -437,6 +446,16 @@ CSS = '''
 '''
 
 PRINT_CSS = '''
+/* Design summaries show the configuration directly. Analysis provenance remains
+   in the embedded record and detailed analysis reports. Check rows stay visible. */
+.design-report main > .panel,
+.design-report main > .callout,
+.design-report header .eyebrow,
+.design-report header .subtitle,
+.design-report .sidebar-foot,
+.design-report #overview > .verdict,
+.design-report #overview > .muted,
+.design-report #notes { display: none !important; }
 .score-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .score-summary { margin-top: 36px; }
 .score-summary h2 { font-size: 22px; }
