@@ -20,7 +20,7 @@ the interactive report; PDFs can be read directly on GitHub.
 | Design Baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
 | Fixed-hardware optimizer candidate (infeasible) | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
 
-The baseline report was refreshed on **2026-10-31** with calculated traversal and parallel actual-pose excavation arm motion.
+The baseline report was refreshed on **2026-11-01** with equal 1500 kg/m3 regolith densities, calculated traversal and parallel actual-pose excavation arm motion.
 The saved candidate report was generated on **2026-10-30**. Reports include scores, mass and energy,
 travel/deposition/compact/recovery drawings, failed checks, and full input/output
 tables. The baseline evaluates the current `design_baseline.json` unchanged as

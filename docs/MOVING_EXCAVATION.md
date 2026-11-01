@@ -71,8 +71,11 @@ feasibility. The existing small-radius screen remains `R/4-d >= 0`. The old
 half-opening heuristic is retired because protrusion and layer depth are now
 the same dimension; keeping that heuristic would contradict the requested geometry.
 
-Storage continues to use four shells and the distinction between stored and
-in-situ bulk density:
+Storage continues to use four shells. Stored and in-situ bulk density both
+default to 1500 kg/m3, matching the current baseline without an assumed
+excavation-induced volume expansion. The separate density input names remain
+for compatibility and measured alternate cases; the common value is still
+an uncalibrated assumption. The equations and SI output contracts are unchanged:
 
 ```text
 storage_capacity = 4*pi*(R-d)^2*L*usable_volume_fraction*fill_fraction

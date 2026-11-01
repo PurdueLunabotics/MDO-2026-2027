@@ -74,7 +74,9 @@ feed_margin=d-feed_per_scoop
 ```
 
 Storage is supplied by the required fresh lane, rather than the old stationary
-endpoint intersection. Storage and in-situ soil densities remain distinct.
+endpoint intersection. Storage and in-situ density inputs both default to
+1500 kg/m3, as saved in the baseline: no excavation-induced bulking is assumed.
+The separate SI input names remain available for measured alternate cases.
 Both arms lower together to their distinct cutting poses and raise together
 after feeding. Feed drive distance retains productive lane length plus station
 separation as a conservative finite-pass budget; soil-entry transients under

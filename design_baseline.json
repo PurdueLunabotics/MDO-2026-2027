@@ -1,6 +1,6 @@
 {
   "name": "Design Baseline",
-  "revision": "PA-04 900 lbf actuator selection 2026-10-27; geometry pending; axle-relative actuator offsets 2026-10-28; unified full-width inlet 2026-10-30",
+  "revision": "PA-04 900 lbf actuator selection 2026-10-27; geometry pending; axle-relative actuator offsets 2026-10-28; unified full-width inlet 2026-10-30; equal regolith densities 2026-11-01",
   "structure": "plate-frame",
   "motors": "x44-standard",
   "actuators": "pa04-900",
@@ -104,7 +104,7 @@
     "actuator_mass_per_force": 0.0004,
     "actuator_mass_per_power": 0.003,
     "actuator_mass_per_length": 1.0,
-    "stored_soil_density": 1250.0,
+    "stored_soil_density": 1500.0,
     "usable_volume_fraction": 0.9,
     "scoops_per_revolution": 4.0,
     "max_dig_froude": 0.3,

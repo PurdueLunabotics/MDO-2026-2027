@@ -1074,3 +1074,28 @@ audits. These were corrected; all affected checks then passed. No physical
 constraint or test tolerance was weakened. Logs and reconciled test IDs remain
 under ignored `results/parallel_excavation/`. The final baseline all-variable
 derivative step-size check also passed after the adapter correction.
+
+## Equal regolith density defaults - 2026-11-01
+
+Stored, in-situ and deposited bulk density defaults/baseline now equal
+1500 kg/m3. The unchanged storage volume produces exactly 20% more payload.
+All baseline-variable total derivatives passed; reference baseline and bounded
+reference derivative/one-iteration smoke checks completed, retaining failed
+reference feasibility/optimizer status. Independent mass, fresh-soil supply,
+cycle time and electrical energy sums close. Density N2 sources, input/source
+hashes and the published 34-page PDF were verified. The same 13 baseline
+checks remain failed. No new soil calibration or physical validation is claimed.
+
+All 223 distinct tests have passing coverage across three partitions of standard
+`python -m unittest discover -s tests -v` and a focused three-test rerun.
+The initial failures were a legacy storage endpoint that no longer supplied the
+heavier target mass, and the synthetic teaching table correctly rejecting the
+new density outside its fixed conditions. The storage test now evaluates a
+full-supply endpoint and verifies supply exceeds capacity; its mass bounds use
+the actual configured densities. The synthetic consumer/test explicitly passes
+the archived table's recorded conditions and verifies that 1500 kg/m3 remains
+rejected by that 1250 kg/m3 slice. The synthetic example executes successfully;
+its dataset, tolerances, domain checks and provenance were not altered. No
+physical constraint or test acceptance tolerance was weakened.
+
+See [release details](REPORT_RELEASE.md#equal-regolith-densities---2026-11-01) for numeric results and reproduction.

@@ -111,7 +111,7 @@ ASSUMPTIONS = {
     "actuator_mass_per_force": (0.0004, "kg/N"),
     "actuator_mass_per_power": (0.003, "kg/W"),
     "actuator_mass_per_length": (1.0, "kg/m"),
-    "stored_soil_density": (1250.0, "kg/m**3"),
+    "stored_soil_density": (1500.0, "kg/m**3"),  # same as in-situ default; no assumed bulking
     "usable_volume_fraction": (0.90, None),
     "scoops_per_revolution": (4.0, None),
     "max_dig_froude": (0.30, None),  # legacy diagnostic reference only; NOT enforced

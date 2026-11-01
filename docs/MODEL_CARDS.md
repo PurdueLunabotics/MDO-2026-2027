@@ -35,6 +35,12 @@ needs a card with provenance, domain, held-out validation error and reproduction
 
 ## Assumptions requiring particular attention
 
+- Stored, in-situ and deposited regolith densities default to 1500 kg/m3;
+  the saved baseline uses the same value in all three states. This removes the
+  former unsupported 1250 kg/m3 drum-density reduction. Equal density is a
+  baseline assumption, not measured evidence about loosening or compaction.
+  Separate input ports and their existing equations remain compatible.
+
 - At the user’s request `actuator_body_margin` is diagnostic only for both actuator profiles. The generic body-length heuristic and PA-04 signed catalog interval reserve are still calculated, but neither is enforced by the optimizer or included in feasibility. This removal does not establish real actuator packaging or stroke compatibility. Force, chart-domain, minimum-stroke, triangle/toggle and other checks remain.
 
 - Axle-relative actuator offsets revision 2: replaces the fraction with signed side/top lengths in metres, with local positive directions outward and above. Generic defaults are zero; requested baseline is +0.05 m each. Uniform axial continuation includes mass, gravity, actual tail inertia, eccentric tube moment and envelope checks. The normal bracket is rigid and massless, with mass/strength/collisions unverified. Independent coordinate, circle-closure, virtual-work, eccentric equilibrium/end-couple beam, failure-domain, derivative and N2 tests are in test_arm_attachment.py and the retained extension/PA-04 tests. No calibration data introduced. See [ARM_OFFSETS.md](ARM_OFFSETS.md). Historical fraction evidence is retained in Git history.

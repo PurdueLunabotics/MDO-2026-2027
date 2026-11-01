@@ -21,6 +21,7 @@ These are separate cases, not a matched baseline/optimization pair:
 | Required ground clearance | 0.1524 m | 0.1524 m |
 | Feed speed | 0.2 m/s | 0.0340718092 m/s |
 | Drum RPM | 120 | 120 |
+| Stored regolith density | 1500 kg/m3 | 1250 kg/m3 (archived assumption) |
 | Excluded optimizer constraints | None | `dig_traction_margin`, `turn_traction_margin` |
 | Frozen hardware during saved optimization | Not applicable | Drum diameter, wheel diameter, wheel width |
 
@@ -212,3 +213,64 @@ audits. These were corrected; all affected checks then passed. No physical
 constraint or test tolerance was weakened. Logs and reconciled test IDs remain
 under ignored `results/parallel_excavation/`. The final baseline all-variable
 derivative step-size check also passed after the adapter correction.
+
+## Equal regolith densities - 2026-11-01
+
+The model default and saved baseline now set `stored_soil_density=1500 kg/m3`,
+matching `soil_density` and `berm_density`. This removes the previous unsupported
+20% excavation-induced volume expansion. The separate input names and SI
+contracts are retained for compatibility and measured alternate cases; no
+schema or dependency change is needed. The common density is still an assumed
+baseline value, not new calibration or experimental validation.
+
+Only the stored-density numerical setting changed. Drum volume, fill fraction,
+hardware dimensions, Earth gravity, parallel arm operation, calculated traversal,
+route, force laws, scoring definitions and constraint acceptance are preserved.
+The archived optimized case/report retains its original explicit 1250 kg/m3
+stored density and has not been reoptimized or republished under the new assumption.
+
+| Quantity | Updated baseline |
+| --- | --- |
+| Payload across four drums | 123.9144708 kg |
+| Filled storage volume | 82.6096472 L |
+| Required productive lane | 3.7379931 m |
+| Digging including spinup | 34.6373581 s |
+| Concurrent excavation arm motion | 28.0683259 s |
+| Excavation plus deposition, including actuation and turn | 82.9051327 s |
+| Full cycle | 160.8253431 s |
+| Electrical energy per cycle | 19.2821960 Wh |
+
+The payload rises by exactly 20% at the same filled drum volume. Five complete
+cycles deliver a conditional 371.743412 L mission estimate. All 13 previously
+failed checks remain failed; heavier loading worsens several force, torque,
+power and stability margins. No physical constraint was removed or weakened.
+
+The current baseline's all-variable total-derivative step-size check passed.
+The default reference baseline completed. A bounded reference CLI check with
+wheel diameter/battery capacity active and one optimizer iteration passed
+derivatives and honestly retained optimizer success false and failed/infeasible
+status. This is not a claim of reference optimization convergence. Independent
+mass, fresh-soil supply, cycle-time and electrical-energy sums are checked;
+N2 sources and input/model-source hashes remain explicit.
+
+The 34-page Design Baseline PDF/HTML were regenerated from the evaluated record.
+All pages were rendered and visually inspected; the simplified title/clean
+opening, concurrent-motion description and removed student/BWR wording remain.
+Raw runs and logs stay in ignored `results/equal_regolith_density/`.
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --output results/equal_regolith_density/baseline.json
+.\.venv\Scripts\python.exe main.py --baseline --output results/equal_regolith_density/reference_baseline.json
+```
+
+All 223 distinct tests have passing coverage across three partitions of standard
+`python -m unittest discover -s tests -v` and a focused three-test rerun.
+The initial failures were a legacy storage endpoint that no longer supplied the
+heavier target mass, and the synthetic teaching table correctly rejecting the
+new density outside its fixed conditions. The storage test now evaluates a
+full-supply endpoint and verifies supply exceeds capacity; its mass bounds use
+the actual configured densities. The synthetic consumer/test explicitly passes
+the archived table's recorded conditions and verifies that 1500 kg/m3 remains
+rejected by that 1250 kg/m3 slice. The synthetic example executes successfully;
+its dataset, tolerances, domain checks and provenance were not altered. No
+physical constraint or test acceptance tolerance was weakened.

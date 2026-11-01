@@ -48,7 +48,11 @@ def demonstration_model():
 
 
 def main():
-    p=build_problem(models=ModelSet(excavation=demonstration_model))
+    table=ResponseTable(Path(__file__).parent/"data"/"synthetic_response.json",allow_synthetic=True)
+    # Run at the manifest's explicit fixed conditions, including its historical
+    # density, rather than extrapolating when the live model defaults change.
+    conditions={name:spec["value"] for name,spec in table.data["conditions"].items()}
+    p=build_problem(conditions,models=ModelSet(excavation=demonstration_model))
     try:
         p.run_model()
         print("SYNTHETIC ADAPTER DEMONSTRATION — not measured BP-1 performance")

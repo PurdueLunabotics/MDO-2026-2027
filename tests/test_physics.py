@@ -68,8 +68,8 @@ class PhysicsTests(unittest.TestCase):
         large=self.evaluate(comp,extended_y=.10)
         self.assertGreater(large['payload_mass'],small['payload_mass'])
         for result in (small,large):
-            self.assertLessEqual(result['payload_mass'],result['fresh_volume']*1500)
-            self.assertLessEqual(result['payload_mass'],result['storage_capacity']*1250)
+            self.assertLessEqual(result['payload_mass'],result['fresh_volume']*p.get_val('soil_density').item())
+            self.assertLessEqual(result['payload_mass'],result['storage_capacity']*p.get_val('stored_soil_density').item())
         storage=self.evaluate(comp,fill_fraction=.9)
         self.assertAlmostEqual(storage['payload_mass'],p.get_val('payload_mass').item())
         nearly_full=self.evaluate(comp,fill_fraction=.001,extended_y=.10)
@@ -83,13 +83,15 @@ class PhysicsTests(unittest.TestCase):
         p=self.problem(models=ModelSet(excavation=Excavation))
         comp=p.model.excavation
         shallow=self.evaluate(comp,extended_y=.13)
-        deep=self.evaluate(comp,extended_y=.02)
+        # Axle at grade supplies enough soil to reach the denser storage target.
+        deep=self.evaluate(comp,extended_y=0.)
         for result in (shallow,deep):
             expected=4*p.get_val('drum_length').item()*segment_area(
                 p.get_val('drum_diameter').item()/2,result['trench_depth'])*p.get_val('soil_density').item()*p.get_val('capture_fraction').item()
             self.assertAlmostEqual(result['reachable_soil_mass'],expected)
         self.assertNotIn('full_fill_margin',MARGINS)
         self.assertLess(shallow['payload_mass'],shallow['target_payload_mass'])
+        self.assertGreater(deep['reachable_soil_mass'],deep['target_payload_mass'])
         self.assertAlmostEqual(deep['payload_mass'],deep['target_payload_mass'])
 
     def test_start_travel_dig_positions_and_short_wheelbase(self):
@@ -283,7 +285,11 @@ class PhysicsTests(unittest.TestCase):
             bad.write_text(json.dumps(malformed))
             with self.assertRaisesRegex(ValueError,'strictly increasing'):
                 ResponseTable(bad,allow_synthetic=True)
-        p=self.problem(models=ModelSet(excavation=demonstration_model))
+        # This archived synthetic slice explicitly keeps its recorded density;
+        # changing the live default must not silently extrapolate the table.
+        with self.assertRaisesRegex(ValueError,'fixed-condition'):
+            table.evaluate(.1,{**conditions,'stored_soil_density':1500.})
+        p=self.problem(overrides=conditions,models=ModelSet(excavation=demonstration_model))
         self.assertGreater(p.get_val('payload_mass').item(),0)
         self.assertEqual(p.model_metadata['evidence']['excavation']['data_kind'],'synthetic')
         with self.assertRaisesRegex(ValueError,'fixed-condition'):
