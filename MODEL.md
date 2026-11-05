@@ -158,10 +158,10 @@ axle diameter design variables. The reference profile exposes the same nominal
 shaft dimension defaults as fixed clearance inputs, without changing its mass
 model. The three allowances/requirement remain fixed configuration inputs.
 This is a level-ground screen using user-specified assumptions, without hardware
-calibration. The radial deflection applies only here; the existing diameter-based
-contact-pressure deflection input, nominal drawings and terrain/stability models
-are unchanged. Slope/rock clearance, unequal wheel compression and actual bar
-shape are not predicted by this screen.
+calibration. Its fixed radial deduction is independent of the new load-scaled
+static tipping law below. The diameter-based contact-pressure deflection input
+and nominal drawings retain their conventions. Slope/rock clearance, unequal
+wheel compression and actual bar shape are not predicted by this screen.
 
 ## Structure and mass
 
@@ -306,6 +306,20 @@ trajectory remain unverified. See [equations and domain](docs/OBSTACLE_TRAVERSAL
 Empty relocation translates to a neighboring fresh lane with two 90-degree turns; rest-to-rest time, kinetic/scrub/rolling energy, torque and level-ground traction are charged. Lane offset must exceed total drum width. Each cycle reserves the rectangle enclosing the complete forward pass and both drum stations, including the center gap; cumulative area must fit available_excavation_area. A real site planner must still check maneuver space and legal-zone topology. Trench traversal currently requires wheel_diameter >= trench_depth; this is a geometric placeholder, not a traction or exit simulation. These area/path values are planning assumptions, not asserted competition rules.
 
 ## Mission and numerical verification
+
+The plate-frame profile now selects static tipping adapters with uniform wheel
+compression: `delta=(wheel_diameter/2)*0.20*(dry_mass+payload_mass)/
+(dry_mass+payload_mass*0.9/fill_fraction)`. The student's 20% uses the unloaded
+overall radius, including rigid 18 mm grousers. Tread radius is overall radius
+minus grouser height; tip-supported axle height is overall radius minus delta,
+without adding the grousers twice. Slope support uses `loaded_cg_z-delta`.
+Wheel-center contacts are retained by student choice. Uniform heave leaves
+horizontal-platform rock and level-dump reserves unchanged; posed CG-z
+diagnostics decrease by delta. Original rigid ModelSet factories remain
+available. Unequal compression, grouser penetration and soil sinkage are
+unmodeled; no calibration is implied. The reference mass is for the same
+design at 0.9 fill, independent of the current run's fill. Above-reference
+loads are rejected. See [static tipping equations, research and schema 10](docs/STATIC_TIPPING.md).
 
 `ModelSet.traversal_stability` additionally enforces 30-degree full-load travel
 support using the gravity-line intersection with the planar support rectangle.

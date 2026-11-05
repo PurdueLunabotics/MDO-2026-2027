@@ -1,5 +1,12 @@
 # Traversal: obstacles, clearance, slopes, and wheel unloading
 
+The plate-frame profile now selects the uniform-compression static tipping
+adapters described in [STATIC_TIPPING.md](STATIC_TIPPING.md). Its slope CG
+height is reduced by the prescribed load-scaled radial deflection. Wheel-center
+contacts remain unchanged, so uniform heave leaves horizontal-platform rock
+reserves and reactions invariant while lowering posed CG-z diagnostics.
+The original rigid factories and derivations below remain available.
+
 The user requires traversal of a 0.30 m obstacle and a 0.50 m deep ditch while
 fully loaded in the travel pose. The optimizer now enforces geometric reach,
 gravity-support and parallel-cylinder drum–wheel clearance screens for the obstacle. These do not establish climbing

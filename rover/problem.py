@@ -7,7 +7,7 @@ from dataclasses import replace
 import openmdao.api as om
 from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS, ROUTE, configuration, migrate_inlet_inputs
 from .components import Mission
-from .models import ModelSet, plate_frame_models, traversal_models, extended_attachment_models
+from .models import ModelSet, compliant_plate_frame_models, traversal_models, extended_attachment_models
 from .contracts import validate_interfaces
 
 # Every margin must be >= 0. Values below are scales, not additional limits.
@@ -96,7 +96,8 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
                     "drive_stator_current_limit", "drum_stator_current_limit",
                     "empty_slope_degrees", "loaded_slope_degrees", "actuator_installation_allowance",
                     "lin_act_side_arm_offset", "lin_act_top_arm_offset",
-                    "clearance_radius_deflection_fraction", "differential_bar_clearance_allowance"}
+                    "clearance_radius_deflection_fraction", "differential_bar_clearance_allowance",
+                    "grouser_height", "tipping_radius_deflection_fraction"}
     fractions = {name for name in assumptions if "fraction" in name or "efficiency" in name}
     fractions |= {"cut_engagement", "delivery_efficiency", "force_imbalance"}
     for name, value in values.items():
@@ -111,6 +112,10 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
         raise ValueError("wheel_deflection_fraction must be between 0 and 0.5.")
     if not 0 <= values["clearance_radius_deflection_fraction"] < 1:
         raise ValueError("clearance_radius_deflection_fraction must be in [0, 1).")
+    if not 0 <= values["tipping_radius_deflection_fraction"] < 1:
+        raise ValueError("tipping_radius_deflection_fraction must be in [0, 1).")
+    if values["grouser_height"] >= values["wheel_diameter"]/2:
+        raise ValueError("grouser_height must leave a positive wheel tread radius inside wheel_diameter.")
     if not 0 <= values["slope_angle"] < math.pi/2:
         raise ValueError("slope_angle must be in [0, pi/2) radians.")
     for name in ("empty_slope_degrees", "loaded_slope_degrees"):
@@ -150,10 +155,18 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         cobyla_radius = .02
     if cobyla_radius is not None and (optimizer != "COBYLA" or not math.isfinite(cobyla_radius) or cobyla_radius <= 0):
         raise ValueError("cobyla_radius needs a positive finite value and optimizer='COBYLA'.")
-    models = models or (plate_frame_models() if structure == "plate-frame" else ModelSet())
+    models = models or (compliant_plate_frame_models() if structure == "plate-frame" else ModelSet())
     models = traversal_models(models, traversal_mode)
     excavation_component = models.excavation()
     moving_excavation = getattr(excavation_component, "MOVING_EXCAVATION", False)
+    traversal_component = models.traversal_stability()
+    obstacle_component = models.obstacle_stability()
+    static_wheel_compliance = getattr(traversal_component, "STATIC_WHEEL_COMPLIANCE", False)
+    requires_linear_payload = any(getattr(component, "REQUIRES_LINEAR_FILL_PAYLOAD", False)
+                                  for component in (traversal_component, obstacle_component))
+    if requires_linear_payload and not moving_excavation:
+        raise ValueError("Load-scaled static tipping requires payload proportional to fill_fraction "
+                         "from moving excavation. Select the original rigid tipping factories for legacy excavation.")
     if not moving_excavation:
         from .tip_stability import TipStability, DepositionTipStability
         if models.tip_stability is DepositionTipStability:
@@ -254,7 +267,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
     parallel_motion = getattr(models.linkage_loads, "PARALLEL_EXCAVATION_MOTION", False)
     arm_motion = "parallel_operating_poses" if parallel_motion else "custom_or_legacy"
-    problem.model_metadata = {"schema_version": 9, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
+    problem.model_metadata = {"schema_version": 10, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
                               "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                               "traversal_mode": traversal_mode,
                               "optimize_attachment": optimize_attachment,
@@ -264,6 +277,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
                                                 "ignored_optimizer_constraints": sorted(ignored_constraints),
                                                 "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                                                 "excavation_arm_motion": arm_motion,
+                                                "static_wheel_compliance": static_wheel_compliance,
                                                 "traversal_mode": traversal_mode, "attachment_max": attachment_max},
                               "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": solver_tol, "cobyla_radius": cobyla_radius},
                               "diagnostic_only_screens": diagnostic_screens,
@@ -345,7 +359,9 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         "ditch_status": "unverified: width/radius and crossing contact sequence unknown"}
     model = problem.model
     def add_discipline(slot):
-        component = excavation_component if slot == "excavation" else getattr(models,slot)()
+        component = (excavation_component if slot == "excavation" else
+                     traversal_component if slot == "traversal_stability" else
+                     obstacle_component if slot == "obstacle_stability" else getattr(models,slot)())
         # Preserve the selected discipline (including student replacements).
         # Motor hardware changes only its declared provider/inventory options.
         if motors == "x44-standard":

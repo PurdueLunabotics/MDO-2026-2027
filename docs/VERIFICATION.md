@@ -4,6 +4,85 @@ Checked locally using the repository's `.venv`. This page
 describes the current implementation; Git history retains earlier run notes.
 Software verification is separate from physical calibration and validation.
 
+## Static tipping compression (2026-11-05)
+
+The current default plate-frame selection uses the uniform-compression static
+tipping adapters in [STATIC_TIPPING.md](STATIC_TIPPING.md). Explicit
+`ModelSet()` and `plate_frame_models()` preserve their original rigid factories,
+including the historical stationary motor regression's exact expectations.
+No mass boundary, score, energy equation, constraint or numerical reserve was
+relaxed. Schema 10 records the optional compression/height diagnostics.
+
+At identical saved `design_baseline.json` geometry:
+
+| Quantity | Fill 0.4 | Fill 0.9 |
+| --- | ---: | ---: |
+| Loaded mass, kg | 98.950264 | 167.791636 |
+| Same-design 0.9-fill reference mass, kg | 167.791636 | 167.791636 |
+| Wheel compression, mm | 21.170986 | 35.900000 |
+| Nominal loaded CG height, mm | 412.617344 | 428.210556 |
+| Compressed CG height used for slope tipping, mm | 391.446358 | 392.310556 |
+| Previous 30-degree pitch reserve, mm | 11.775265 | 2.772520 |
+| Revised 30-degree pitch reserve, mm | 23.998340 | 23.499395 |
+| Revised 30-degree roll reserve, mm | 58.998340 | 58.499395 |
+| Revised all-heading static tip angle, degrees | 32.564626 | 32.507335 |
+
+The near-equal revised margins follow from the prescribed compression nearly
+offsetting the nominal CG rise; weight cancels from static moment balance.
+The 18 mm rigid grousers are inside the overall 359 mm diameter and are not
+added twice. Center contacts remain the student's chosen boundary. Unequal
+wheel compression, soil sinkage and grouser penetration are unmodeled; these
+results are not calibrated wheel/soil validation.
+
+The same-input pre/post comparison found **zero difference** in dry/payload
+mass, nominal mass-property heights, endpoint and swept rock reserves/reactions,
+level dumping reserve, digging/cycle energy and score. The largest absolute
+cycle energy accounting residual was `3.64e-12 J`. Uniform hardware lowering
+at fixed platform contacts leaves projected rock moment arms unchanged.
+The 0.4/0.9 evaluations retain 12/13 failed modeled checks, respectively;
+neither baseline is declared feasible. Saved source hashes match the final
+physics files. The existing N2 connections include explicit mass/fill and
+corrected-height dependencies; no auto-IVC source supplies the added inputs.
+
+The full final discovery run passed **all 231 tests in 714.754 s**. The eight
+focused compression tests also passed, including independent zero/half/
+rated total-load limits, fixed reference mass across fills, gravitational moment
+balance, grouser accounting, invariant rock/dump/energy outputs, invalid-domain
+and extrapolation rejection, factory preservation, recorded outputs, N2 and
+smooth total derivatives. The saved plate-frame baseline's **full** derivative
+step-size check also passed. Existing slope graphics use the corrected height;
+no new plots were introduced.
+
+The required generic baseline command completed, retaining its failures. The
+required generic `--check-derivatives` run passed its derivative check, then
+was interrupted after **four recorded driver evaluations**. Its existing
+ground-clearance upper bound is
+`0.8*(0.359/2)+0.10-0.055/2-0.0254 = 0.1907 m`, below the unchanged 0.2032 m
+requirement by 12.5 mm. No optimizer termination or converged candidate is
+claimed. The reason, recording and derivative result are saved in
+`results/static_tipping_reference_optimization_interrupted.json`.
+
+A bounded affected-profile optimizer smoke run (`--maxiter 1`, raised by SciPy
+to 39 evaluations) completed with optimizer success false and
+`failed_or_infeasible`. All final physical and design-bound failures, including
+a slightly out-of-bounds inlet depth, remain reported. This checks failure
+reporting, not convergence or physical validation.
+
+Reproduction commands, using the local `.venv`:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe main.py --baseline --output results/static_tipping_reference_baseline.json
+.\.venv\Scripts\python.exe main.py --check-derivatives --output results/static_tipping_reference_optimization.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --output results/static_tipping_fill09.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --set fill_fraction=0.4 --output results/static_tipping_fill04.json
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --optimize --maxiter 1 --output results/static_tipping_plate_optimization.json
+```
+
+Local run logs, comparison JSON, SQL and generated reports remain ignored under
+`results/static_tipping_*`. On this restricted Windows runner, `TEMP` and `TMP`
+were directed to `results/static_tipping_tmp` for temporary-file tests.
+
 The 2026-10-30 report release adds a fresh baseline and the saved fixed-hardware
 candidate, with all physical failures retained. See [release verification](REPORT_RELEASE.md#verification)
 for the full-suite/focused-rerun coverage, derivative checks, interrupted default

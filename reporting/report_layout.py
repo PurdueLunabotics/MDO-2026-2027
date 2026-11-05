@@ -19,6 +19,16 @@ LABELS = {
     "rocker_pivot_ground_clearance": "Rocker-pivot clearance after deductions",
     "minimum_ground_clearance": "Required ground clearance",
     "clearance_radius_deflection_fraction": "Radial wheel deflection for clearance",
+    "grouser_height": "Radial grouser height (inside overall diameter)",
+    "tipping_radius_deflection_fraction": "Rated radial wheel compression for static tipping",
+    "tipping_reference_fill_fraction": "Drum fill at rated compression load",
+    "tipping_reference_mass": "Static tipping: reference loaded mass",
+    "tipping_wheel_outer_radius": "Unloaded overall wheel radius",
+    "tipping_wheel_tread_radius": "Unloaded tread radius without grousers",
+    "tipping_wheel_deflection": "Loaded static wheel compression",
+    "tipping_wheel_deflection_ratio": "Loaded static radial compression ratio",
+    "tipping_wheel_support_height": "Loaded static wheel-center height",
+    "tipping_loaded_cg_z": "Loaded CG height used for static slope tipping",
     "differential_bar_clearance_allowance": "Differential-bar clearance allowance",
     "actuator_body_margin": "Actuator packaging reserve (diagnostic only)",
     "wheel_diameter": "Wheel diameter", "wheel_width": "Wheel width",
@@ -345,6 +355,14 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     if metadata.get("actuator_profile") == "pa04-900":
         motor_note += f'<details open><summary>PA-04 actuators · 900 lbf / 12 V</summary><p>Two actuators. Continuous catalog stroke: {q("actuator_catalog_stroke")}; installed hardware limits: {q("actuator_catalog_retracted_length")} to {q("actuator_catalog_extended_length")}. These include {q("actuator_installation_allowance")} added to each endpoint. Compact, travel, deposition and digging commands are compared with these limits diagnostically; packaging is not an active constraint.</p><p>Mass per actuator: {q("actuator_unit_mass")}. Raising envelope: {q("actuator_loaded_speed")} and {q("actuator_raising_current")}; maximum-reach diagnostic times: raising {q("actuator_raising_time")}, lowering {q("lowering_time")}. Lowering assumes rated-load speed and 14 A. Electrical energy uses 12 V × current × time for both actuators, including motor losses.</p><p>Mass fit supports 2–40 inch strokes; load curves support 0–900 lbf. Guarded out-of-domain diagnostics retain failed checks. Independent hardware, gravity-assisted lowering, duty cycle, temperature and installation-hardware mass remain unverified. A continuous stroke must be replaced with an available catalog size and reevaluated before purchase.</p></details>'
     obstacle_note = "Guarded pose: requested height is unreachable. Endpoint and path diagnostics are evaluated at a guarded height, not the requested rock height." if val("obstacle_pose_valid", 1) < .5 else "Requested endpoint rock pose is geometrically reachable; this alone does not establish traversal."
+    if "tipping_loaded_cg_z" in outputs:
+        obstacle_note += (f' Static tipping uses {val("tipping_wheel_deflection")*1000:.2f} mm uniform wheel compression '
+                          f'at this load, referenced to {val("tipping_reference_mass"):.2f} kg at '
+                          f'{val("tipping_reference_fill_fraction"):.2f} fill. '
+                          'Overall wheel diameter already includes the rigid grousers; support is at their tips. '
+                          'Center contacts are retained. Unequal compression, grouser penetration and soil sinkage are unmodeled. '
+                          'Uniform heave changes slope CG height; horizontal-platform rock reserves and level dumping reserves are invariant. '
+                          'Other mass-property heights, geometry and clearance schematics retain their nominal coordinates.')
     clearance_note = "Guarded clearance: requested pose is unreachable. Clearance diagnostics are not predictions at the requested height." if val("obstacle_clearance_pose_valid", 1) < .5 else "Requested-height obstacle clearance screen."
     if metadata.get('models', {}).get('obstacle_clearance', '').endswith('ParallelCylinderClearance'):
         clearance_note += ' Parallel finite cylinders: shared roll is removed, then circular-plane and axial-width gaps are combined. Negative gap means overlap of the ideal solids.'

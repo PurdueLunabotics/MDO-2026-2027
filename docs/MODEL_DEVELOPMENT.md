@@ -72,6 +72,15 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 
 ## Contracts that must remain explicit
 
+Schema 10 adds the plate-frame load-scaled static tipping adapters and seven
+optional compression/height diagnostics. `wheel_diameter` includes rigid 18 mm
+grousers; 20% compression uses its unloaded overall radius at the same design's
+0.9-fill mass. Existing mass-property ports stay nominal; static slope tipping
+uses `tipping_loaded_cg_z`. Rock/dump reserves are invariant under the assumed
+uniform heave. Recorded configuration selects the extra diagnostics without
+changing required replacement ports. Rigid factories remain available. See
+[STATIC_TIPPING.md](STATIC_TIPPING.md) for equations, domains and limitations.
+
 Schema 9 selects parallel actual-pose excavation motion for the known generic
 and PA-04 load factories with MovingExcavation. `actuation_time` remains total
 excavation seconds and `arm_energy` total electrical joules across both arms.

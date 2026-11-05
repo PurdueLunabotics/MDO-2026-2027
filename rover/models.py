@@ -66,6 +66,13 @@ def plate_frame_models():
                     traversal_stability=PlateTraversalStability)
 
 
+def compliant_plate_frame_models():
+    """Current student profile; explicit rigid reference factories stay intact."""
+    from .alternatives.compliant_tipping import CompliantPlateTraversalStability, CompliantPlateObstacleStability
+    return replace(plate_frame_models(), obstacle_stability=CompliantPlateObstacleStability,
+                   traversal_stability=CompliantPlateTraversalStability)
+
+
 def traversal_models(models, mode):
     """Select route timing through factories without replacing custom models."""
     if mode not in ("fixed", "calculated"):

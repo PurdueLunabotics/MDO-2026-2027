@@ -246,7 +246,7 @@ def stability_svg(values):
     max_angle = min(89., max(40., math.degrees(values["slope_angle"])+5))
     angles = [max_angle*i/80 for i in range(81)]
     slope = [slope_support(values["wheelbase"], values["track_width"], values["loaded_cg_x"],
-                           values["loaded_cg_z"], math.radians(a)) for a in angles]
+                           values.get("tipping_loaded_cg_z", values["loaded_cg_z"]), math.radians(a)) for a in angles]
     height = [r["height"] for r in rock["trace"]]
     parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 410" role="img" aria-label="Static slope and one-wheel articulation stability curves">',
              '<rect width="1200" height="410" fill="#f7fafc"/><g font-family="sans-serif" fill="#203249">',

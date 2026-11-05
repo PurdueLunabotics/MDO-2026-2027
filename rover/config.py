@@ -47,6 +47,9 @@ DESIGN = {
 ASSUMPTIONS = {
     "minimum_ground_clearance": (0.2032, "m"),  # USER: 8 inches after deductions
     "clearance_radius_deflection_fraction": (0.20, None),  # USER: radial compression, clearance screen only
+    "grouser_height": (0.018, "m"),  # USER: radial height, INSIDE overall wheel_diameter
+    "tipping_radius_deflection_fraction": (0.20, None),  # USER: delta / unloaded OVERALL radius at reference mass
+    "tipping_reference_fill_fraction": (0.90, None),  # USER: rated load is dry + this design's payload at 0.9 fill
     "differential_bar_clearance_allowance": (0.0254, "m"),  # USER: 1 inch below the lower axle
     # Fixed for each solve; CLI --set accepts degrees. Separate from static slope_angle.
     "empty_slope_degrees": (30.0, "deg"),

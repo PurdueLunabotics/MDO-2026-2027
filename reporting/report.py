@@ -55,6 +55,9 @@ def snapshot(problem, configuration=None):
     assumptions = specs.get("assumptions", ASSUMPTIONS)
     margins = specs.get("margins", MARGINS)
     output_units = dict(OUTPUTS)
+    if specs.get("static_wheel_compliance"):
+        from rover.alternatives.compliant_tipping import COMPLIANCE_OUTPUTS
+        output_units.update(COMPLIANCE_OUTPUTS)
     loads = getattr(getattr(problem, "model", None), "linkage_loads", None)
     if (getattr(loads, "PARALLEL_EXCAVATION_MOTION", False)
             or specs.get("excavation_arm_motion") == "parallel_operating_poses"):
