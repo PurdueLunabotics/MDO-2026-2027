@@ -45,7 +45,7 @@ class PA04Tests(unittest.TestCase):
                     self.assertAlmostEqual(lo, float(row['retracted_in'])*INCH+.1613408)
                     self.assertAlmostEqual(hi, float(row['extended_in'])*INCH+.1613408)
                     self.assertAlmostEqual(hi-lo, stroke)
-        # Fractional, unavailable catalog size remains continuous for the solver.
+        # The catalog helper remains continuous; configurations reject unavailable sizes.
         a, b, _ = catalog_geometry(7.123*INCH, .20)
         self.assertAlmostEqual(a, (7.123+7.87)*INCH+.20)
         c, d, _ = catalog_geometry(7.123*INCH, 0.)
@@ -101,7 +101,8 @@ class PA04Tests(unittest.TestCase):
         design, assumptions = configuration(actuators='pa04-900')
         self.assertNotIn('actuator_force_rating', design)
         self.assertNotIn('actuator_speed', design)
-        self.assertIn('actuator_catalog_stroke', design)
+        self.assertNotIn('actuator_catalog_stroke', design)
+        self.assertEqual(assumptions['actuator_catalog_stroke'][0], .2032)
         self.assertEqual(assumptions['actuator_force_rating'][0], RATED_FORCE)
         self.assertEqual(DESIGN['actuator_speed'][0], .025)
         self.assertNotIn('actuator_installation_allowance', ASSUMPTIONS)
@@ -130,7 +131,9 @@ class PA04Tests(unittest.TestCase):
         self.assertIn('linkage_loads.actuation_time > linkage_loads.payload_mass', declared)
 
     def test_overload_domains_stay_failed_and_packaging_is_diagnostic(self):
-        p = self.problem({'breakout_force': 10000.})
+        p = self.problem()
+        p.set_val('linkage_loads.actuator_leverage_max', 10000.)
+        p.model.linkage_loads.run_solve_nonlinear()
         report = snapshot(p)
         self.assertFalse(report['constraints']['actuator_curve_margin']['passed'])
         self.assertEqual(p.get_val('actuator_curve_valid').item(), 0)
@@ -139,8 +142,8 @@ class PA04Tests(unittest.TestCase):
         # Even a domain excursion smaller than normal report tolerances fails.
         v = lambda n: p.get_val(n).item()
         weight = (v('drum_mass')/2+v('payload_mass')/2+v('arm_linear_mass')*v('arm_length')/2)*v('gravity')
-        p.set_val('breakout_force', (RATED_FORCE+1e-4)/v('actuator_leverage_max')-weight)
-        p.run_model()
+        p.set_val('linkage_loads.actuator_leverage_max', (RATED_FORCE+1e-4)/weight)
+        p.model.linkage_loads.run_solve_nonlinear()
         self.assertFalse(snapshot(p)['constraints']['actuator_curve_margin']['passed'])
         p.set_val('actuator_catalog_stroke', 40*INCH+1e-8)
         p.run_model()
@@ -196,11 +199,11 @@ class PA04Tests(unittest.TestCase):
             self.assertIn('900 lbf / 12 V', html)
             self.assertIn('gravity-assisted lowering', html)
             self.assertIn('actuator_catalog_retracted_length', html)
-            self.assertIn('Actuator packaging is not enforced', html)
+            self.assertIn('Actuator body packaging remains unverified', html)
 
     def test_combined_cli_freeze_calculated_timing_and_ignored_constraint(self):
         frozen = ['wheel_diameter', 'wheel_width', 'travel_actuator_length',
-                  'actuator_retracted_length', 'actuator_extended_length', 'actuator_catalog_stroke']
+                  'actuator_retracted_length', 'actuator_extended_length']
         source = ROOT/'design_baseline.json'
         before = source.read_bytes()
         with tempfile.TemporaryDirectory() as folder:
@@ -209,7 +212,7 @@ class PA04Tests(unittest.TestCase):
                 sys.executable, str(ROOT/'main.py'), '--inputs', str(source), '--optimize',
                 '--freeze', *frozen, '--set', 'empty_slope_degrees=0', '--set', 'loaded_slope_degrees=0',
                 '--ignore-constraint', 'turn_traction_margin', '--traversal-mode', 'calculated',
-                '--maxiter', '1', '--output', str(output)], cwd=ROOT, capture_output=True, text=True)
+                '--quick', '--maxiter', '2', '--report', 'full', '--output', str(output)], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(result.returncode, 1, result.stdout+result.stderr)
             record = json.loads(output.read_text(encoding='utf-8'))
             self.assertEqual(record['model_metadata']['actuator_profile'], 'pa04-900')
@@ -248,7 +251,7 @@ class PA04Tests(unittest.TestCase):
         expected_mass = 2*(v('actuator_unit_mass')+fraction*v('arm_length')*v('arm_linear_mass'))
         expected_force = ((v('drum_mass')+v('payload_mass'))/2
                           +v('arm_linear_mass')*fraction**2*v('arm_length')/2)*v('gravity')
-        expected_force = (expected_force+v('breakout_force'))*v('actuator_leverage_max')
+        expected_force = expected_force*v('actuator_leverage_max')
         self.assertAlmostEqual(v('linkage_mass'), expected_mass)
         self.assertAlmostEqual(v('required_actuator_force'), expected_force)
         self.assertAlmostEqual(v('actuation_time'), v('excavation_lowering_time')+v('excavation_raising_time'))
@@ -256,7 +259,13 @@ class PA04Tests(unittest.TestCase):
         from studies.linkage_multistart import geometry_seed, make_problem
         seed = geometry_seed({'final': a, 'model_metadata': ordinary.model_metadata}, .9, 'matched', 0.)
         self.assertEqual(seed['actuator_force_rating'], RATED_FORCE)
-        study = make_problem(seed, actuators='pa04-900', maxiter=1)
+        # This inward-pin pose exceeds the fixed hardware command interval.
+        # Reject it rather than clipping commands and changing the intended pose.
+        with self.assertRaisesRegex(ValueError, 'positive bounds'):
+            make_problem(seed, actuators='pa04-900', maxiter=1)
+        valid_seed = {n: item['value'] for group in ('design', 'assumptions')
+                      for n, item in a[group].items()}
+        study = make_problem(valid_seed, actuators='pa04-900', maxiter=1)
         self.addCleanup(study.cleanup)
         study.run_model()
         self.assertEqual(study.get_val('actuator_force_rating').item(), RATED_FORCE)

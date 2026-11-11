@@ -10,7 +10,7 @@ import numpy as np
 
 from ..components import scalar
 from ..discipline import Discipline
-from .obstacle_stability import raised_wheel_pose, posed_loaded_cg, projected_support_margin
+from .obstacle_stability import raised_wheel_pose, posed_loaded_cg, projected_support_margin, drive_centers
 
 ROCK_SAMPLES = 41  # includes level ground and the requested endpoint
 
@@ -36,11 +36,11 @@ def slope_support(wheelbase, track, cg_x, cg_z, angle):
 
 
 def articulated_cg(pose, radius, offset, sprung_mass, sprung_x, sprung_z,
-                   wheel_drive_mass, rocker_mass, rocker_centroid_fraction):
+                   wheel_drive_mass, rocker_mass, rocker_centroid_fraction, *, drive_mass=0., drive_cg_offset=0.):
     """Conserve existing mass groups; interpolate uniform rocker centroid only.
 
-    Fraction 1 reproduces the reference wheel-midpoint rocker placement;
-    fraction 0.5 reproduces the plate-profile sloping half-arm placement.
+    Fraction 1 retains reference wheel-midpoint placement; fraction 0.5 is the
+    historical V rocker; fraction 0 puts a straight rocker at its shaft bearing.
     """
     if (not all(math.isfinite(v) for v in (wheel_drive_mass, rocker_mass, rocker_centroid_fraction))
             or min(wheel_drive_mass, rocker_mass) < 0 or not 0 <= rocker_centroid_fraction <= 1):
@@ -49,49 +49,57 @@ def articulated_cg(pose, radius, offset, sprung_mass, sprung_x, sprung_z,
     wheel = np.mean(pose["centers"], axis=0)
     rocker = (1-rocker_centroid_fraction)*np.asarray(pose["shaft_origin"])+rocker_centroid_fraction*wheel
     total = sprung_mass+wheel_drive_mass+rocker_mass
-    return tuple((sprung_mass*body+wheel_drive_mass*wheel+rocker_mass*rocker)/total)
+    if not math.isfinite(drive_mass) or not 0 <= drive_mass <= wheel_drive_mass:
+        raise ValueError("Drive mass must be a nonnegative subset of wheel/drive mass.")
+    motor_offset = np.mean(drive_centers(pose, drive_cg_offset),axis=0)-wheel
+    return tuple((sprung_mass*body+wheel_drive_mass*wheel+rocker_mass*rocker+drive_mass*motor_offset)/total)
 
 
 def wheel_reactions(pose, cg, sprung_mass, wheel_drive_mass, rocker_mass,
-                    gravity, rocker_centroid_fraction=1.):
-    """Unique vertical platform reactions under ideal differential equilibrium.
+                    gravity, rocker_centroid_fraction=1., *, drive_mass=0., drive_cg_offset=0.):
+    """Force/moment and ideal differential balance; signed normals [N].
 
-    FL,FR,RL,RR. Three equations balance whole-rover weight and moments.
-    The fourth equates the left/right external rocker pitch moments after
-    subtracting each side's wheel/drive and rocker gravity moment. Equal pitch
-    moments follow ideal virtual work for theta_body=(theta_L+theta_R)/2.
-    Negative forces are returned unchanged: the prescribed four-contact pose
-    would require a wheel to pull on the ground and cannot be held statically.
+    Gravity may be a positive magnitude (horizontal platforms) or a vector in
+    the terrain frame. Holding forces are parallel to opposite gravity, with
+    the same tangential/normal ratio at each contact. Adequate friction and
+    motor holding torque are assumed. Negative reactions remain failures.
     """
-    contacts = np.asarray(pose["contacts"], dtype=float)
-    cg = np.asarray(cg, dtype=float)
-    if (contacts.shape != (4, 3) or cg.shape != (3,)
-            or not np.isfinite(contacts).all() or not np.isfinite(cg).all()
-            or not all(math.isfinite(v) for v in (sprung_mass, wheel_drive_mass, rocker_mass, gravity, rocker_centroid_fraction))
-            or sprung_mass <= 0 or gravity <= 0 or min(wheel_drive_mass, rocker_mass) < 0
+    contacts, cg = np.asarray(pose["contacts"], float), np.asarray(cg, float)
+    g = np.array((0., 0., -gravity)) if np.ndim(gravity) == 0 else np.asarray(gravity, float)
+    if (contacts.shape != (4, 3) or cg.shape != (3,) or g.shape != (3,)
+            or not all(np.isfinite(a).all() for a in (contacts, cg, g)) or g[2] >= 0
+            or not all(math.isfinite(v) for v in (sprung_mass, wheel_drive_mass, rocker_mass, rocker_centroid_fraction))
+            or sprung_mass <= 0 or min(wheel_drive_mass, rocker_mass) < 0
             or not 0 <= rocker_centroid_fraction <= 1):
         raise ValueError("Four finite contacts and valid mass/gravity data required.")
-    x, y = contacts[:, 0], contacts[:, 1]
-    # Translate to the shaft origin; conditioning scales do not alter physics.
-    x = x-float(pose["shaft_origin"][0])
-    y = y-float(pose["shaft_origin"][1])
+    origin = np.asarray(pose["shaft_origin"])
+    x, y, z = (contacts-origin).T
+    cx, cy, cz = (np.asarray(pose["centers"])-origin).T
     span_x, span_y = np.ptp(x), np.ptp(y)
     if min(span_x, span_y) <= 1e-9:
         raise ValueError("Degenerate contact support.")
+    cr, sr = math.cos(pose["roll"]), math.sin(pose["roll"])
     side = np.array((1., -1., 1., -1.))
-    matrix = np.array((np.ones(4), x/span_x, y/span_y, side*x/span_x))
+    direction = -g/(-g[2])  # contact force per unit normal force
+    torque = side*(direction[0]*(cr*z-sr*y)+x*(sr*direction[1]-cr))
+    own_moment = (wheel_drive_mass+rocker_centroid_fraction*rocker_mass)/4*float(
+        side @ (g[0]*(cr*cz-sr*cy)+cx*(sr*g[1]-cr*g[2])))
+    if not math.isfinite(drive_mass) or not 0 <= drive_mass <= wheel_drive_mass:
+        raise ValueError("Drive mass must be a nonnegative subset of wheel/drive mass.")
+    dx,dy,dz = (np.asarray(drive_centers(pose,drive_cg_offset))-np.asarray(pose["centers"])).T
+    own_moment += drive_mass/4*float(side @ (g[0]*(cr*dz-sr*dy)+dx*(sr*g[1]-cr*g[2])))
+    matrix = np.array((np.ones(4), (x-direction[0]*z)/span_x,
+                       (y-direction[1]*z)/span_y, torque/span_x))
     if np.linalg.cond(matrix) > 1e10:
         raise ValueError("Differential reaction balance is singular.")
-    mass = sprung_mass+wheel_drive_mass+rocker_mass
-    difference = (wheel_drive_mass+rocker_centroid_fraction*rocker_mass)/4*float(side @ x)
-    target = gravity*np.array((mass, mass*(cg[0]-pose["shaft_origin"][0])/span_x,
-                               mass*(cg[1]-pose["shaft_origin"][1])/span_y, difference/span_x))
+    mass, c = sprung_mass+wheel_drive_mass+rocker_mass, cg-origin
+    target = np.array((mass*(-g[2]), mass*(-g[2])*(c[0]-direction[0]*c[2])/span_x,
+                       mass*(-g[2])*(c[1]-direction[1]*c[2])/span_y, -own_moment/span_x))
     forces = np.linalg.solve(matrix, target)
-    residual = float(np.max(np.abs(matrix @ forces-target)))
-    return forces, residual
+    return forces, float(np.max(np.abs(matrix @ forces-target)))
 
 
-def rock_path_screen(values, *, samples=ROCK_SAMPLES, rocker_centroid_fraction=1., include_trace=False):
+def rock_path_screen(values, *, samples=ROCK_SAMPLES, rocker_centroid_fraction=1., include_trace=False, wheel_model=None):
     """Sample all four one-wheel raises from zero to obstacle_height.
 
     Finite sampling is explicit; denser independent re-evaluation is required
@@ -106,15 +114,28 @@ def rock_path_screen(values, *, samples=ROCK_SAMPLES, rocker_centroid_fraction=1
     end = raised_wheel_pose(v("wheelbase"), v("track_width"), radius, offset, v("obstacle_height"))
     wd = v("wheel_mass")+v("drive_mass")
     tips, loads = [], []
-    error = 0.
+    error, poses, previous = 0., [], {}
+    # Mirrored masses give identical left/right (and, at x=0, fore/aft) cases.
+    choices = range(4) if wheel_model is None else ((0,) if abs(wheel_model.sprung_x) < 1e-14 else (0, 2))
     for height in np.linspace(0., end["used_height"], samples):
-        for raised in range(4):
-            pose = raised_wheel_pose(v("wheelbase"), v("track_width"), radius, offset, float(height), raised)
-            cg = articulated_cg(pose, radius, offset, v("loaded_sprung_mass"),
-                                 v("loaded_sprung_cg_x"), v("loaded_sprung_cg_z"),
-                                 wd, v("rocker_mass"), rocker_centroid_fraction)
-            forces, residual = wheel_reactions(pose, cg, v("loaded_sprung_mass"), wd,
-                                               v("rocker_mass"), v("gravity"), rocker_centroid_fraction)
+        for raised in choices:
+            if wheel_model is None:
+                pose = raised_wheel_pose(v("wheelbase"), v("track_width"), radius, offset, float(height), raised)
+                cg = articulated_cg(pose, radius, offset, v("loaded_sprung_mass"),
+                                     v("loaded_sprung_cg_x"), v("loaded_sprung_cg_z"),
+                                     wd, v("rocker_mass"), rocker_centroid_fraction,
+                                     drive_mass=v("drive_mass"), drive_cg_offset=values.get("drive_motor_cg_offset",0.))
+                forces, residual = wheel_reactions(pose, cg, v("loaded_sprung_mass"), wd,
+                                                   v("rocker_mass"), v("gravity"), rocker_centroid_fraction,
+                                                   drive_mass=v("drive_mass"), drive_cg_offset=values.get("drive_motor_cg_offset",0.))
+            else:
+                terrain = np.zeros(4)
+                terrain[raised] = height
+                pose = wheel_model.solve(terrain=terrain, initial=previous.get(raised))
+                cg, forces, residual = pose["cg"], pose["normal"], pose["force_error"]
+                if pose["equation_valid"]:
+                    previous[raised] = pose["q"]
+            poses.append(pose)
             error = max(error, residual)
             tips.append((projected_support_margin(pose["contacts"], cg), float(height), raised, pose, cg))
             unloaded = int(np.argmin(forces))
@@ -132,18 +153,26 @@ def rock_path_screen(values, *, samples=ROCK_SAMPLES, rocker_centroid_fraction=1
             "rock_sweep_load_raised_wheel": float(load_raised), "rock_sweep_unloaded_wheel": float(unloaded),
             "rock_sweep_pose_valid": float(end["valid"]), "rock_sweep_evaluated_height": end["used_height"],
             "rock_sweep_samples": float(samples), "rock_sweep_force_balance_error": error}
+    if wheel_model is not None:
+        endpoint = min(tips[-len(choices):], key=lambda c: c[0])
+        result.update(rock_equilibrium_margin=min(p["equilibrium_margin"] for p in poses),
+                      rock_equilibrium_valid=float(end["valid"] and all(p["contact_valid"] for p in poses)),
+                      rock_pose_error=max(p["pose_error"] for p in poses),
+                      endpoint=endpoint[3], endpoint_wheel=endpoint[2], reach=end)
+        if not end["valid"]:
+            result["rock_equilibrium_margin"] = min(result["rock_equilibrium_margin"], -1.)
     if include_trace:
         result["trace"] = [
-            {"height": tips[i][1], "tip": min(c[0] for c in tips[i:i+4]),
-             "load": min(c[0] for c in loads[i:i+4])}
-            for i in range(0, len(tips), 4)
+            {"height": tips[i][1], "tip": min(c[0] for c in tips[i:i+len(choices)]),
+             "load": min(c[0] for c in loads[i:i+len(choices)])}
+            for i in range(0, len(tips), len(choices))
         ]
     return result
 
 
 class TraversalStability(Discipline):
     CONFIG_INPUTS = ("wheelbase", "track_width", "wheel_diameter", "rocker_pivot_offset",
-                     "obstacle_height", "slope_angle", "gravity")
+                     "obstacle_height", "slope_angle", "gravity", "drive_motor_cg_offset")
     COUPLED_INPUTS = {"loaded_cg_x": "m", "loaded_cg_z": "m", "loaded_sprung_mass": "kg",
                       "loaded_sprung_cg_x": "m", "loaded_sprung_cg_z": "m",
                       "wheel_mass": "kg", "drive_mass": "kg", "rocker_mass": "kg"}
@@ -181,6 +210,6 @@ class TraversalStability(Discipline):
 
 
 class PlateTraversalStability(TraversalStability):
-    rocker_centroid_fraction = .5
+    rocker_centroid_fraction = 0.
     model_evidence = {**TraversalStability.model_evidence,
-                      "rocker_mass": "plate-profile uniform sloping half-arms; centroid midway between shaft and wheel midpoint"}
+                      "rocker_mass": "one straight tube per side, centered on its shaft bearing; rigid massless end brackets"}

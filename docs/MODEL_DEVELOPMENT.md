@@ -72,14 +72,32 @@ strict interpolation using **synthetic data**, not a calibrated drum:
 
 ## Contracts that must remain explicit
 
-Schema 10 adds the plate-frame load-scaled static tipping adapters and seven
-optional compression/height diagnostics. `wheel_diameter` includes rigid 18 mm
-grousers; 20% compression uses its unloaded overall radius at the same design's
-0.9-fill mass. Existing mass-property ports stay nominal; static slope tipping
-uses `tipping_loaded_cg_z`. Rock/dump reserves are invariant under the assumed
-uniform heave. Recorded configuration selects the extra diagnostics without
-changing required replacement ports. Rigid factories remain available. See
-[STATIC_TIPPING.md](STATIC_TIPPING.md) for equations, domains and limitations.
+Schema 12 selects the provisional NASA force option through the existing
+plate-frame MovingExcavation factory. Setup verifies/prepares the existing
+versioned data; compute does no fitting or I/O. `cut_force` remains the four-drum
+magnitude sum, not net reaction. `nasa_force_source_valid` (1 inside source
+coordinates, 0 unsupported, -1 inactive) and `nasa_tip_feed_ratio` are diagnostics.
+Unsupported transfers retain a visible report notice. Exact opposing-drum
+cancellation removes wheel cutting-reaction work and the feed traction check.
+`feed_traction_margin` is retired; its `dig_traction_margin` alias is diagnostic
+only for moving excavation. Motor/power and separate route traction remain.
+`drive_motor_cg_offset` is metres along each side rocker's local up direction.
+Plate-profile value is 0.05842 m; reference value zero. Four drive assemblies
+remain `drive_mass`, counted once. New `rocker_length` reports wheelbase minus
+0.0635 m. The straight rocker's centroid follows its shaft bearing; rigid
+massless brackets transmit load and tip rotation. All active pose/reaction
+and nominal mass paths must use the same stations. No new module is introduced.
+
+Schema 11 updates the existing compliant tipping adapters in place: normal
+loads, compression and rocker/body pose are solved together using the student's
+linear spring and `wheel_compression_hard_stop` = 0.064 m. Stop reaction carries
+excess load. Schema-10 overall-radius/grouser and same-design 0.9-fill conventions
+remain; nominal mass-property ports remain nominal. Added slope-unloading and
+numerical-equilibrium margins reject negative reactions and failed/irregular
+poses. Global hull zero and first unloading are separate diagnostics. Recorded
+configuration selects optional per-wheel and validity outputs. Required scalar
+ports/units, rigid ModelSet factories and custom replacements are preserved.
+See [STATIC_TIPPING.md](STATIC_TIPPING.md).
 
 Schema 9 selects parallel actual-pose excavation motion for the known generic
 and PA-04 load factories with MovingExcavation. `actuation_time` remains total
@@ -97,7 +115,7 @@ Schema 7 unifies moving excavation under `inlet_depth` (metres): radial scoop
 protrusion and fresh-layer cut depth are equal. The front cuts one inlet depth
 and the rear two below original grade. `inlet_width=drum_length` enforces full
 width. The old `cut_depth` source is now a derived compatibility output for
-linkage breakout work. Moving inputs no longer contain `scoop_opening`,
+legacy depth diagnostics. Moving inputs no longer contain `scoop_opening`,
 `scoop_depth_fraction` or `cut_engagement`. Old input dictionaries are explicitly
 migrated and their retired values recorded in model metadata; mixed new/old
 depth keys are rejected. Explicit stationary reference factories keep their old

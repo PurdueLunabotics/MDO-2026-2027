@@ -39,7 +39,7 @@ def evaluate_pose_states(values, evaluator):
 
 
 class MassProperties(Discipline):
-    CONFIG_INPUTS = tuple(sorted(names("wheelbase track_width wheel_diameter wheel_width drum_diameter drum_length drum_pair_gap fixed_mass chassis_height pivot_x actuator_pivot_x bottom_pivot_height top_pivot_height lin_act_side_arm_offset lin_act_top_arm_offset arm_length")))
+    CONFIG_INPUTS = tuple(sorted(names("wheelbase track_width wheel_diameter wheel_width drum_diameter drum_length drum_pair_gap fixed_mass chassis_height pivot_x actuator_pivot_x bottom_pivot_height top_pivot_height lin_act_side_arm_offset lin_act_top_arm_offset arm_length drive_motor_cg_offset")))
     COUPLED_INPUTS = {"wheel_mass": "kg", "drive_mass": "kg", "drum_mass": "kg", "battery_mass": "kg", "structure_mass": "kg", "rocker_mass": "kg", "linkage_mass": "kg", "arm_extension_mass": "kg", "payload_mass": "kg", "travel_x": "m", "travel_y": "m", "deposition_x": "m", "deposition_y": "m"}
     OUTPUT_UNITS = {f"{state}_{quantity}": units for state in ("empty", "loaded", "half")
                     for quantity,units in (("yaw_inertia","kg*m**2"),("cg_x","m"),("cg_z","m"))}
@@ -73,7 +73,7 @@ def reference_pose_properties(values):
         for sy in (-1,1):
             mw = v("wheel_mass")/4
             parts.append((mw, sx*wb/2, sy*track/2, rw, mw*(3*rw**2+v("wheel_width")**2)/12))
-            parts.append((v("drive_mass")/4, sx*wb/2, sy*track/2, rw, 0))
+            parts.append((v("drive_mass")/4, sx*wb/2, sy*track/2, rw+values.get("drive_motor_cg_offset",0.), 0))
             md = v("drum_mass")/4
             parts.append((md, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2, v("travel_y"), md*(3*rd**2+length**2)/12))
             sprung.append(parts[-1])

@@ -6,7 +6,7 @@ from openmdao.utils.assert_utils import assert_check_totals
 
 from rover.problem import build_problem
 from reporting.report import snapshot
-from rover.alternatives.obstacle_stability import raised_wheel_pose, projected_support_margin
+from rover.alternatives.obstacle_stability import raised_wheel_pose, projected_support_margin, drive_centers
 from rover.alternatives.plate_frame import plate_frame_posed_cg
 from rover.alternatives.traversal_stability import (
     slope_support, articulated_cg, wheel_reactions, rock_path_screen,
@@ -21,6 +21,36 @@ def rock_inputs(**changes):
 
 
 class TraversalStabilityTests(unittest.TestCase):
+    def test_raised_drive_mass_has_correct_rigid_bracket_moments(self):
+        for height in (0.,.3):
+            pose=raised_wheel_pose(.8,.7,.15,.1,height)
+            centers=np.asarray(pose['centers']);motors=np.asarray(drive_centers(pose,.05842))
+            np.testing.assert_allclose(np.linalg.norm(motors-centers,axis=1),.05842,atol=1e-12)
+            for side in (0,1):
+                self.assertAlmostEqual(float((motors[side]-centers[side]) @ (centers[side]-centers[side+2])),0.,places=12)
+            old=np.asarray(articulated_cg(pose,.15,.1,60.,.02,.3,16.,4.,0.))
+            cg=articulated_cg(pose,.15,.1,60.,.02,.3,16.,4.,0.,drive_mass=6.,drive_cg_offset=.05842)
+            np.testing.assert_allclose(cg,old+6/80*np.mean(motors-centers,axis=0),atol=1e-12)
+            forces,error=wheel_reactions(pose,cg,60.,16.,4.,9.80665,0.,drive_mass=6.,drive_cg_offset=.05842)
+            contacts=np.asarray(pose['contacts'])
+            np.testing.assert_allclose(contacts[:,:2].T @ forces,80*9.80665*np.asarray(cg[:2]),atol=1e-10)
+            self.assertAlmostEqual(sum(forces),80*9.80665,places=10)
+            self.assertLess(error,1e-9)
+            axis=np.array((0.,math.cos(pose['roll']),math.sin(pose['roll'])))
+            gravity=np.array((0.,0.,-9.80665));torques=[]
+            for sy,indices in ((1,[0,2]),(-1,[1,3])):
+                pivot=np.asarray(pose['shaft_origin'])+sy*.7/2*axis
+                support=np.column_stack((np.zeros(2),np.zeros(2),forces[indices]))
+                torque=np.cross(contacts[indices]-pivot,support).sum(axis=0)
+                torque+=np.cross(centers[indices]-pivot,10/4*gravity).sum(axis=0)
+                torque+=np.cross(motors[indices]-pivot,6/4*gravity).sum(axis=0)
+                torques.append(float(torque@axis))
+            self.assertAlmostEqual(*torques,places=10)
+            if height==0.:self.assertAlmostEqual(cg[2]-old[2],6*.05842/80)
+        with self.assertRaises(ValueError):drive_centers(pose,-.001)
+        with self.assertRaises(ValueError):
+            articulated_cg(pose,.15,.1,60.,0.,.3,16.,4.,.5,drive_mass=17.,drive_cg_offset=.05842)
+
     def test_slope_exact_moment_limit_and_both_axes(self):
         # h=0.6, longitudinal half-span 0.4: mg moments balance at tan(a)=2/3.
         limit = math.atan(2/3)
@@ -83,7 +113,7 @@ class TraversalStabilityTests(unittest.TestCase):
 
     def test_mass_placement_matches_plate_and_reference_zero_pose(self):
         pose = raised_wheel_pose(.8, .7, .15, .1, .2)
-        cg = articulated_cg(pose, .15, .1, 60., 0., .3, 16., 4., .5)
+        cg = articulated_cg(pose, .15, .1, 60., 0., .3, 16., 4., 0.)
         np.testing.assert_allclose(cg, plate_frame_posed_cg(pose, .15, .1, 60., 0., .3, 16., 4.))
         flat = raised_wheel_pose(.8, .7, .15, .1, 0.)
         for fraction in (.5, 1.):

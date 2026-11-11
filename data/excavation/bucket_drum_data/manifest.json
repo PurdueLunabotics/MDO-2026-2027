@@ -1,0 +1,142 @@
+{
+  "revision": "bucket-drum-literature-points-v1-2026-11-08",
+  "scope": "Published point catalogue and scatter plots only; no fitting/interpolation or model integration",
+  "sources": [
+    {
+      "id": "NASA22",
+      "authors": "Schuler et al.",
+      "year": 2022,
+      "title": "ISRU Pilot Excavator: Bucket drum scaling experimental results",
+      "url": "https://ntrs.nasa.gov/citations/20210025846",
+      "status": "Points extracted: Figures 13-15 and Table 3",
+      "evidence": "Terrestrial BP-1 experiments",
+      "extracted_record_count": 43,
+      "source_pdf_sha256": "e84c7608056de5f434f0850afbcd94b5b9738c457b434c20203d73e8cd042218"
+    },
+    {
+      "id": "GAL26",
+      "authors": "Galati et al.",
+      "year": 2026,
+      "title": "Physics-Based Torque Prediction Model for Excavating Drums on Granular Soil",
+      "url": "https://doi.org/10.1002/rob.70146",
+      "status": "Pending full text / author data; zero numerical response points extracted",
+      "evidence": "Physical torque tests described; data offered by author on request",
+      "extracted_record_count": 0,
+      "source_pdf_sha256": null
+    },
+    {
+      "id": "LI24",
+      "authors": "Li et al.",
+      "year": 2024,
+      "title": "Performance analysis of a bucket drum for lunar regolith collection in lunar base construction",
+      "url": "https://doi.org/10.1016/j.autcon.2024.105617",
+      "status": "Pending full text; zero numerical response points extracted",
+      "evidence": "DEM forces/torque; physical collection-mass tests described",
+      "extracted_record_count": 0,
+      "source_pdf_sha256": null
+    },
+    {
+      "id": "KAF26",
+      "authors": "Kafi et al.",
+      "year": 2026,
+      "title": "Designing an Efficient Excavator Bucket for Lunar ISRU: A Comparative Study with Vision-Based Fill and Displacement Analysis",
+      "url": "https://arxiv.org/html/2609.25724v1",
+      "status": "All nine Table II conditions extracted; as-reported inconsistencies flagged",
+      "evidence": "Fixed-position silica-sand experiments; actuator-log torque",
+      "extracted_record_count": 9,
+      "source_pdf_sha256": "3a8ed7620d7e8f381a3b1108b43944985a7000f17ea8f03c1d4c15da81fa0e42"
+    },
+    {
+      "id": "GIE25",
+      "authors": "Giel et al.",
+      "year": 2025,
+      "title": "Design and Development of a Modular Bucket Drum Excavator for Lunar ISRU",
+      "url": "https://arxiv.org/html/2511.00492v1",
+      "status": "Figure 4 trial markers, four Table II trials, two author summaries extracted",
+      "evidence": "Silica-sand experiments on a two-drum tool; summary energy is estimated",
+      "extracted_record_count": 20,
+      "source_pdf_sha256": "6093a7e0b692f49f0d58cd3c1c227eebc106c0c7fef109b51648cbb2afa3e96a"
+    }
+  ],
+  "record_count": 72,
+  "record_count_note": "Records are mixed trial markers, condition summaries and author estimates; not a count of independent experiments.",
+  "missing_value_policy": "Blank means unreported/unavailable, never zero. Kafi fixed-position feed is explicitly zero.",
+  "nasa_force": {
+    "image_sha256": "3ebc904838fbce1dfdc33fc72807fcc0b614648128ef9ee7f2a184aa6d04b23d",
+    "axis_calibration": {
+      "x_pixels": [
+        150,
+        1170
+      ],
+      "feed_mm_s": [
+        0,
+        35
+      ],
+      "y_pixels": [
+        924,
+        183
+      ],
+      "force_N_m": [
+        0,
+        180
+      ]
+    },
+    "method": "Distinct coloured marker-core locations only; no sampling of fitted lines. 28 recoverable locations retained.",
+    "omitted": "Merged/occluded blue groups at feed 10 (y 757-779 and 790-794 px), feed 30 (y 613-619, 690-704, 715-730 px). Fully hidden markers and coincident multiplicity cannot be recovered.",
+    "resolution": "Approximate coordinate reading resolution 1 N/m, not measurement uncertainty",
+    "source_sample_size": "Paper reports 48 tests; this catalogue does not reconstruct those 48 raw trials."
+  },
+  "nasa_performance": {
+    "rate_image_sha256": "7072149967080ea8397093ff07fb0b631ec0c8c0f52f00b2d20567709675eef6",
+    "energy_image_sha256": "5782ae9b8b8b03ef1ae8165f9c294e8afea83246778db78184781f5b031e8866",
+    "rate_y_pixels": [
+      721,
+      149
+    ],
+    "rate_kg_s": [
+      0,
+      0.45
+    ],
+    "energy_y_pixels": [
+      720,
+      148
+    ],
+    "energy_printed_values": [
+      0,
+      400
+    ]
+  },
+  "giel_digitization": {
+    "image_sha256": "c5423b35a31cbb9f83e433354b7a350db82cbbdadf3ee071a3665daee44323ee",
+    "x_pixels": [
+      84,
+      690
+    ],
+    "mass_kg": [
+      0,
+      8
+    ],
+    "y_pixels": [
+      489.5,
+      21
+    ],
+    "time_s": [
+      0,
+      45
+    ],
+    "resolution": "Approximate 0.03 kg and 0.2 s coordinate reading resolution, not experiment error bars"
+  },
+  "exclusions": [
+    "No previous IPEx fitted-line readings or fitted surface values included.",
+    "No inferred horizontal force from shaft torque.",
+    "No missing Galati/Li values replaced by zeros, simulation output or another paper.",
+    "No raw experimental runs inferred from published means or overlapping marks."
+  ],
+  "model_fingerprint_before": "79d8cf1738e80cb9fc4f012777d54ba951c118e32a8d99118a855035c143a01c",
+  "csv_sha256": {
+    "giel_points.csv": "df5d826a625ace9779044547fd645aa8a7587b11f6438d4ad998c74e8c3c5034",
+    "kafi_points.csv": "87b24b49bc7de106213272a02fb516b3e5031d948e203dda06a9f159f3eac6a2",
+    "nasa_points.csv": "7964fc0ef1257d365c707a02f26dd2bf887e63fd26526e49af3013216dd8cf38",
+    "points.csv": "2c5e8b07cf8baff634f4597a277449965e8cb76a557b2dae4e2a790b40a222de"
+  }
+}

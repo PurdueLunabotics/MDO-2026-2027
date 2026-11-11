@@ -1,128 +1,98 @@
 # Static tipping with wheel compression
 
-On 2026-11-05 the student specified a linear wheel-compression law, 18 mm
-radial grousers, and retention of the existing wheel-center contact boundary.
-They confirmed that the 20% ratio uses the unloaded **overall radius**, and
-that `wheel_diameter` **includes** the grousers. These are design assumptions,
-not measured wheel stiffness or soil calibration. No dataset was fitted.
+The plate-frame tipping model includes unequal wheel compression and downhill
+body lean. The student specifies 20% of unloaded **overall radius** at the same
+design's 0.9-fill reference load, a provisional linear force/displacement law
+through **6.4 cm (64 mm)**, and a rigid stop thereafter. These are assumptions
+pending nonlinear FEA and independent hardware tests; no fit or measured error
+is available. Center contacts remain selected pending the wheel team's work.
 
-## Equations and conventions
+## Wheel law and geometry
 
-For the same design's dry mass m_d, current four-drum payload m_p, fill f and
-reference fill f_ref = 0.9:
-
-```text
-reference_payload = m_p * f_ref / f
-reference_mass = m_d + reference_payload
-loaded_mass = m_d + m_p
-R_outer = wheel_diameter / 2
-R_tread = R_outer - grouser_height
-deflection_ratio = tipping_radius_deflection_fraction * loaded_mass / reference_mass
-delta = R_outer * deflection_ratio
-wheel_support_height = (R_tread - delta) + grouser_height = R_outer - delta
-tipping_loaded_cg_z = loaded_cg_z - delta
-```
-
-`tipping_radius_deflection_fraction` defaults to 0.20. Each of the four wheels
-is assigned the same compression at the level-load equivalent mass; the
-quarter-load factors cancel. Empty rover weight still compresses the wheels;
-zero compression occurs only at zero total supported mass. The pure helper
-accepts zero supported mass for this physical limit. The same-design reference
-mass remains fixed when comparing different fill fractions; it is recomputed
-when sizing a different design. This assumes wheels designed for that design's
-rated load, rather than a measured fixed stiffness shared by all designs.
-
-The moving-excavation storage contract is linear in fill, so scaling the
-existing payload gives the reference load without duplicating storage physics
-or adding mass. Valid run fill is `0 < f <= f_ref <= 1`. Legacy stationary
-excavation can be soil-supply limited and does not support this normalization;
-it requires the original rigid tipping factories. Above-reference loads and
-nonpositive remaining tread radius are rejected, without clipping or silent
-extrapolation. Dimensions, masses and ratios must be finite and physical.
-
-For the baseline's 359 mm overall diameter and 18 mm grousers, the unloaded
-tread radius is 161.5 mm. At the reference mass, compression is 35.9 mm and
-the axle is 143.6 mm above the support plane. Counting the grousers again
-outside the 359 mm diameter would double-count their height. At fixed overall
-diameter and the specified overall-radius deflection law, grouser height
-changes the body/grouser split but does not independently raise the axle.
-
-Grousers are assumed rigid and supported at their tips. Their penetration into
-soil is unknown and is not assumed equal to their length. Soil sinkage is also
-not subtracted or borrowed from the separate rigid-wheel driving model.
-
-## What changes in the static screens
-
-On the planar slope, the compressed CG height is normal to the plane:
+For dry mass m_d, current four-drum payload m_p and current fill f:
 
 ```text
-pitch reserve = wheelbase/2 - abs(loaded_cg_x) - tipping_loaded_cg_z*tan(slope_angle)
-roll reserve = track_width/2 - tipping_loaded_cg_z*tan(slope_angle)
-slope_tip_margin = min(pitch reserve, roll reserve)
-slope_tip_angle = atan2(min(wheelbase/2-abs(loaded_cg_x), track_width/2), tipping_loaded_cg_z)
+M_ref = m_d + m_p*tipping_reference_fill_fraction/f
+R = wheel_diameter/2
+k = M_ref*g/(4*tipping_radius_deflection_fraction*R)
+delta_i = min(N_i/k, wheel_compression_hard_stop)
+N_i = k*delta_i + S_i; S_i >= 0; S_i*(hard_stop-delta_i) = 0
 ```
 
-Margins retain metres and positive-feasible semantics. Weight cancels out of
-the static gravity moment balance. Fill therefore affects slope stability
-through CG distribution and compression, rather than directly through mass.
-Higher payload can raise the nominal CG while greater compression lowers it;
-those effects may partly cancel. A more detailed model need not produce a
-larger difference between fill settings.
+Defaults are reference fill 0.9, radial fraction 0.20, and stop 0.064 m.
+The quarter-load reference sets stiffness, rather than capping wheel force.
+Beyond the stop, S_i carries extra reaction without further compression.
+Zero radial fraction selects the rigid limit. Empty rover weight compresses
+the wheels; zero force gives zero compression.
 
-For the horizontal-platform rock screens, uniform compression lowers the wheel
-centers, shaft and mounted masses by delta at fixed platform contact heights.
-Every projected contact and CG x/y coordinate is unchanged, as are the
-differential reaction moment arms.
-Endpoint/sweep tip reserves, reach and signed wheel reactions therefore retain
-their original values. Endpoint and sweep world CG-z diagnostics decrease by
-delta. Uniform translation also leaves the level-ground asymmetric dumping
-margin unchanged. This is an exact limit of the chosen simplified model.
+Moving-excavation payload is proportional to fill, so M_ref stays fixed across
+same-design fill comparisons. Legacy soil-supply-limited excavation requires
+the rigid factories. Candidate designs imply wheels sized for each design's
+reference load, rather than one measured spring shared across all designs.
+Inputs must be finite and physical; reference compression cannot exceed the
+stop, and full travel must leave positive tread radius.
 
-Unequal load-dependent compression on an incline or rock is **not solved**.
-The model uses the prescribed total-mass law, without a cos(slope) load
-correction, per-wheel elastic equilibrium, lateral compliance or a changing
-contact sequence. It remains a static conceptual screen, without experimental
-prediction-error estimates. Incline holding friction/torque remains assumed.
+The 18 mm radial grousers are rigid and **inside wheel_diameter**. Thus tread
+radius is R-0.018, and tip-supported axle height is R-delta_i. Grousers are not
+added twice or assumed buried. For the saved 359 mm wheel, nominal reference
+compression is 35.9 mm; the stop permits further individual wheel compression.
+
+## Coupled static equilibrium
+
+The existing `compliant_tipping.py` supplies pure helpers and adapters. It reuses
+`rocker_pose`, `articulated_cg`, `wheel_reactions` and `rock_path_screen` in the
+existing obstacle/traversal modules. Shaft height, shaft roll and left/right
+rocker pitches satisfy four wheel-height equations:
+
+```text
+wheel_center_z_i = terrain_height_i + R - delta_i
+body_pitch = (left_rocker_pitch + right_rocker_pitch)/2
+```
+
+At each pose, four normal reactions balance weight, global moments and equal
+left/right external rocker pitch torques for the ideal differential. Sprung,
+wheel/drive and rocker masses retain their existing placements and are counted
+once. On slopes, holding reactions are parallel to opposite gravity, assuming
+the same tangential/normal ratio at each wheel and adequate friction/motor
+holding torque. On horizontal platforms this reduces to vertical reactions.
+
+Negative normals remain unloading failures. Their zero-compression arithmetic
+continuation is guarded, not a physical four-contact pose or a prediction after
+lift-off. Root closure, nonfolded geometry and positive incremental-compliance
+branch indicator are checked separately. An algebraic root alone is insufficient.
+
+Slope headings use a 5-degree grid with local bounded refinement and exact
+mirror reductions. This is a numerical search, not an analytical continuum
+proof. Pitch/roll margins and existing graph curves evaluate coupled cardinal
+poses. Global hull zero (`slope_tip_angle`) and first wheel unloading
+(`slope_contact_limit_angle`) are separate; the former may occur after the
+four-contact model has ceased to be physical. Losing one wheel is not necessarily
+complete rollover. The 41-height rock sweep and endpoint use the same equilibrium
+and retain the original rigid reach screen as an additional conservative gate.
 
 ## Selection and report contract
 
-`rover/alternatives/compliant_tipping.py` supplies pure helpers and optional
-OpenMDAO adapters. `compliant_plate_frame_models()` selects
-`CompliantPlateTraversalStability` and `CompliantPlateObstacleStability`, so
-the default `build_problem(structure="plate-frame")` and the student's saved
-plate-frame baseline use the change automatically. Explicit `ModelSet()` and
-`plate_frame_models()` retain their original rigid selection. The original `TraversalStability`,
-`PlateTraversalStability`, `ObstacleStability` and `PlateObstacleStability`
-remain available and retain their equations. Explicit custom factories are
-preserved. `CompliantTraversalStability` and `CompliantObstacleStability` can
-be selected together for a moving-excavation reference-frame comparison.
+`compliant_plate_frame_models()` keeps the existing
+`CompliantPlateTraversalStability` / `CompliantPlateObstacleStability` classes;
+the uniform-heave approximation is replaced in place. `ModelSet()` and explicit
+`plate_frame_models()` retain rigid reference physics. Custom factories are
+preserved. Schema 11 adds stop travel, per-wheel normal/compression/stop-reaction
+diagnostics, heading/limit and numerical-validity outputs. Existing compression
+and support-height diagnostics retain their nominal equal-load, level-ground
+meanings; `tipping_loaded_cg_z` is the solved level CG, not the inclined CG.
 
-Schema 10 adds fixed inputs `grouser_height` [m],
-`tipping_radius_deflection_fraction` [dimensionless], and
-`tipping_reference_fill_fraction` [dimensionless]. Selected compliant reports
-include seven diagnostics: reference mass [kg], outer/tread radii [m],
-deflection [m], radial ratio, support height [m], and corrected loaded CG height
-[m]. Configuration records `static_wheel_compliance` so saved optimizer cases
-retain the same output units. Existing margin names, loading states, units,
-constraints and numerical reserves are preserved. Explicit dependencies include
-the fill/reference-mass path; the rock margins have no uniform-heave dependency.
+Two additional active screens are `slope_wheel_load_margin` [N] and
+`wheel_equilibrium_margin` [dimensionless]. Existing margin names, SI units,
+positive-feasible sign and loading states remain. No constraints are relaxed.
+Recorded configuration identifies optional outputs. Nominal mass properties,
+level dumping, geometry/clearance drawings, route dynamics, energy and score
+remain outside this change. No additional graph is introduced.
 
-`loaded_cg_z`, sprung CG ports, inertia, geometry, collision screens, the
-independent worst-case ground-clearance deduction, and mission energy retain
-their nominal conventions. The new `tipping_loaded_cg_z` is used only for
-static slope tipping. Existing slope curves consume that same height; no new
-plots are added. Geometry drawings remain nominal and the report notes that
-convention. Historical reports must be regenerated for comparisons.
-
-For the original rigid plate comparison, pass `models=plate_frame_models()`
-explicitly:
-
-```python
-from rover.models import plate_frame_models
-from rover.problem import build_problem
-
-rigid = build_problem(structure="plate-frame", models=plate_frame_models())
-```
+Finite footprints, camber contact corrections, lateral wheel elasticity, soil
+bearing/sinkage, grouser penetration, stop/joint strength, post-lift contact
+sequence and dynamics remain unmodeled. The absolute 64 mm travel is a current-wheel
+assumption; alternate hardware needs its own travel input. FEA agreement alone
+will not establish experimental validation.
 
 ## Contact-boundary research and student decision
 
@@ -154,10 +124,8 @@ measurements under the relevant normal loads, followed by loaded tilt tests.
 
 ## Verification
 
-`tests/test_compliant_tipping.py` checks zero/half/rated total-load limits,
-rover-weight inclusion, fixed reference mass across fills, independent gravity
-moment balance, grouser accounting, signed instability, invalid/collapsed and
-above-reference cases, uniform-heave invariance of rock/dump/energy outputs,
-factory/recorded-output contracts, N2 dependencies and smooth derivatives.
-See [VERIFICATION.md](VERIFICATION.md) for actual run outcomes. These checks
-are software/analytical verification, not hardware or soil validation.
+`tests/test_compliant_tipping.py` checks force/moment/differential conservation,
+flat and rigid limits, reference-fill/grouser accounting, downhill lean, hard-stop
+load conservation, unloading/unstable/invalid cases, dense headings, mass/energy
+invariance, records/N2/dependencies and derivatives. Actual run outcomes are in
+[VERIFICATION.md](VERIFICATION.md); these are software checks, not soil validation.

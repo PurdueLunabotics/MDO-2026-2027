@@ -2,6 +2,26 @@ Current attachment interface: [axle-relative side/top offsets, revision 2](ARM_O
 
 # Preliminary aluminum cross-tube / aluminum-plate frame
 
+2026-11-08 rocker update: one continuous straight **box tube**, not a plate,
+on each side, centered on the existing rocker shaft. Its length is wheelbase
+minus 63.5 mm; width, height and wall keep their existing meanings. Total rocker
+mass is `2*(wheelbase-0.0635)*rho*A`; its nominal CG is at shaft height and yaw
+inertia uses the shortened tube length. Older V-half-arm descriptions below
+are historical. In level-ground structural screens, each half is length L,
+with rigid end extension a=31.75 mm. Axle deflection includes both beam-tip
+translation and bracket rotation:
+`delta = abs(F*(L^3/3+a*L^2+a^2*L)-W*(L^3/8+a*L^2/6))/(E*I)`.
+Here W is that half tube's distributed total weight, and F excludes the wheel
+and motor's own weight from the wheel reaction. Root bending still sees the
+full wheelbase lever. The connecting brackets are perfectly rigid and massless
+by the student's assumption; no bracket stress or joint capacity is established.
+
+Each baseline wheel-drive assembly is now 1.5 kg with its CG 58.42 mm above the
+wheel axle along rocker local up. This direction rotates with each side rocker
+and the common roll. Nominal CG, articulated CG, differential moments and
+compressed-wheel equilibrium all retain the assembly mass once at that point.
+The reference profile retains zero drive CG offset.
+
 The four transverse tubes now use aluminum with the existing 2700 kg/m3,
 69 GPa and 240 MPa screening assumptions. Geometry, four-tube mass ownership,
 beam equations and safety factors are unchanged. This is a material/input-name

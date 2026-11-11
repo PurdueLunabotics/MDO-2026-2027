@@ -105,14 +105,18 @@ def wheel_forces(soil, radius, width, entry_angle, slip):
     peak = (soil.stress_c1+soil.stress_c2*slip)*entry_angle
     normal = thrust = resistance = torque = 0.
     peak_pressure = (soil.kc/width+soil.kphi)*(radius*(math.cos(peak)-math.cos(entry_angle)))**soil.n
-    for lo, hi in ((0., peak), (peak, entry_angle)):
-        theta = lo+(hi-lo)*(_NODES+1)/2
-        weights = _QUAD_WEIGHTS*(hi-lo)/2
-        pressure, shear, _ = contact_stress(soil, radius, width, entry_angle, slip, theta)
-        normal += width*radius*np.dot(weights, pressure*np.cos(theta)+shear*np.sin(theta))
-        thrust += width*radius*np.dot(weights, shear*np.cos(theta))
-        resistance += width*radius*np.dot(weights, pressure*np.sin(theta))
-        torque += width*radius**2*np.dot(weights, shear)
+    # The SAME two 64-node panels, evaluated together. Keep the individual
+    # panel reductions and their order; no quadrature accuracy is reduced.
+    spans = np.array((peak, entry_angle-peak))[:, None]
+    theta = np.array((0., peak))[:, None]+spans*(_NODES+1)/2
+    weights = _QUAD_WEIGHTS*spans/2
+    pressure, shear, _ = contact_stress(soil, radius, width, entry_angle, slip, theta)
+    cosine, sine = np.cos(theta), np.sin(theta)
+    for i in range(2):
+        normal += width*radius*np.dot(weights[i], pressure[i]*cosine[i]+shear[i]*sine[i])
+        thrust += width*radius*np.dot(weights[i], shear[i]*cosine[i])
+        resistance += width*radius*np.dot(weights[i], pressure[i]*sine[i])
+        torque += width*radius**2*np.dot(weights[i], shear[i])
     return {"normal_force_n": float(normal), "thrust_n": float(thrust),
             "compaction_resistance_n": float(resistance), "drawbar_pull_n": float(thrust-resistance),
             "torque_nm": float(torque), "entry_angle_rad": entry_angle,

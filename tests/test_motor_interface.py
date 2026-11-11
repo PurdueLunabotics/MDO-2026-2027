@@ -119,17 +119,47 @@ class MotorInterfaceTests(unittest.TestCase):
                                       if n not in ('empty_slope_traversal_margin','loaded_slope_traversal_margin',
                                                    'ground_clearance_margin')]
                         self.assertEqual(all(old_checks),c['feasible'])
-                    for n,expected in c['outputs'].items():
+                    # Remove the fixture's old 100 N extraction work using
+                    # W=F*distance for two arms. Keep its mechanical references.
+                    removed_work = 2*100*p.get_val('cut_depth').item()/p.get_val('actuator_efficiency').item()
+                    expected_outputs = dict(c['outputs'])
+                    expected_outputs['arm_energy'] -= removed_work
+                    expected_outputs['cycle_energy'] -= removed_work/3600
+                    expected_outputs['run_energy'] -= removed_work/3600*p.get_val('cycles').item()
+                    old_energy = c['outputs']['run_energy']
+                    volume = p.get_val('berm_volume').item()
+                    duration = p.get_val('run_time').item()/60
+                    old_energy_points = 1.5*volume*1e6/(duration*old_energy)
+                    new_energy_points = 1.5*volume*1e6/(duration*expected_outputs['run_energy'])
+                    expected_outputs['construction_points'] += p.get_val('energy_score_weight').item()*(new_energy_points-old_energy_points)
+                    # Lower actuator demand may change the governing peak phase.
+                    if c['motors'] == 'reference':
+                        self.assertLessEqual(p.get_val('peak_power').item(), c['outputs']['peak_power']+1e-9)
+                    for n,expected in expected_outputs.items():
+                        if n == 'peak_power':
+                            continue
                         if c["motors"] == "x44-standard" and n in changed_outputs | retired_outputs:
                             continue
                         actual=p.get_val(current_frame_name(n)).item()
                         self.assertLessEqual(abs(actual-expected),1e-11*max(1.,abs(expected)),n)
                     for n,expected in c['constraint_margins'].items():
+                        if n == 'actuator_force_margin':
+                            expected += 100*p.get_val('actuator_leverage_max').item()
+                        if n == 'battery_energy_margin':
+                            expected += removed_work/3600*p.get_val('cycles').item()
+                        if n == 'battery_power_margin':
+                            expected += c['outputs']['peak_power']-p.get_val('peak_power').item()
                         if n == 'actuator_body_margin':
                             continue  # User retired this criterion; historical fixture data are unchanged.
                         if c["motors"] == "x44-standard" and n in {"battery_energy_margin", "battery_power_margin"}:
                             continue  # intentionally changed energy model; tested independently below
                         actual=result['constraints'][current_frame_name(n)]['margin']
+                        if c['structure'] == 'reference' and n in {
+                                'structure_stress_margin', 'structure_deflection_margin', 'structure_buckling_margin'}:
+                            # These envelopes include actuator force. Removing a
+                            # positive load must improve their signed reserves.
+                            self.assertGreaterEqual(actual, expected-1e-11*max(1.,abs(expected)), n)
+                            continue
                         self.assertLessEqual(abs(actual-expected),1e-11*max(1.,abs(expected)),n)
                 finally:
                     p.cleanup()

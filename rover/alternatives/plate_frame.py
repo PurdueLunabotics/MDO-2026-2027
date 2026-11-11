@@ -103,8 +103,10 @@ def geometry_inventory(values, arm_section=round_arm_section):
     arm = arm_section(values)
     ax, _, _ = tube_section(v("axle_outer_diameter"), v("axle_wall"))
     ac, _, _ = tube_section(g["cross_tube_od"], v("cross_tube_wall"))
-    half = math.hypot(v("wheelbase")/2, v("rocker_pivot_offset"))
-    rocker_mass = 4*half*ar*v("tube_density")
+    rocker_length = v("wheelbase")-2.5*.0254  # USER: single straight tube, 2.5 inches shorter than axle spacing
+    if rocker_length <= 0:
+        raise ValueError("Wheelbase must exceed the 2.5-inch total rocker shortening.")
+    rocker_mass = 2*rocker_length*ar*v("tube_density")
     cross_tube_mass = 4*v("cross_tube_span")*ac*v("cross_tube_density")
     axle_mass = max(g["rocker_span"], 1e-6)*ax*v("tube_density")
     sprung_mass = 2*g["plate_mass"]+cross_tube_mass+axle_mass+v("joint_mass")+v("differential_mass")
@@ -115,7 +117,7 @@ def geometry_inventory(values, arm_section=round_arm_section):
     plate_mz = float(strip_mass @ strip_mids[:, 1])+hub_mass*shaft_z
     cross_tube_z = (v("top_pivot_height")+v("bottom_pivot_height"))/2
     sprung_mz = 2*plate_mz+cross_tube_mass*cross_tube_z+(axle_mass+v("joint_mass")+v("differential_mass"))*shaft_z
-    rocker_z = v("wheel_diameter")/2+v("rocker_pivot_offset")/2
+    rocker_z = shaft_z  # Straight member is centered on its existing transverse pivot.
     # Line-member mass moments; joints/differential are lumps at shaft origin.
     # Plate widths' in-plane local inertia w2/12 is an inventory approximation.
     plate_izz = 0.0
@@ -124,9 +126,9 @@ def geometry_inventory(values, arm_section=round_arm_section):
         plate_izz += mass*((xi*xi+xi*xj+xj*xj)/3+v("cross_tube_span")**2/4+v("plate_spoke_width")**2/12)
     plate_izz += hub_mass*(v("cross_tube_span")**2/4+v("plate_hub_radius")**2/4)
     cross_tube_izz = cross_tube_mass*(v("cross_tube_span")**2/12+(v("actuator_pivot_x")**2+v("pivot_x")**2)/2)
-    rocker_izz = rocker_mass*(v("wheelbase")**2/12+g["rocker_span"]**2/4+v("rocker_box_width")**2/12)
+    rocker_izz = rocker_mass*(rocker_length**2/12+g["rocker_span"]**2/4+v("rocker_box_width")**2/12)
     total = sprung_mass+rocker_mass
-    return {**g, "structure_mass": total, "rocker_mass": rocker_mass,
+    return {**g, "structure_mass": total, "rocker_mass": rocker_mass, "rocker_length": rocker_length,
             "arm_linear_mass": arm['area']*v("tube_density"),
             "arm_envelope_radius": math.hypot(values.get("arm_box_width",arm["depth"]), arm["depth"])/2 if "arm_box_width" in values else arm["depth"]/2,
             "plate_mass_total": 2*g["plate_mass"], "cross_tube_mass_total": cross_tube_mass,
@@ -331,19 +333,20 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
     tube_motion = np.asarray(tube_motion)
     mount_difference = displacements[1]-displacements[2]+(tube_motion[:, 0]-tube_motion[:, 1]).T
     mount_delta = float(np.max(np.linalg.norm(mount_difference, axis=0)))
-    # Net wheel-to-rocker force excludes wheel/drive mass and half rocker mass;
-    # distributed self-weight of each sloping half-rocker is handled separately.
+    # Each continuous straight rocker is symmetric about its central bearing.
+    # Rigid massless end brackets extend to the wheel axles beyond the tube.
     total_weight = (v("dry_mass")+v("payload_mass"))*grav*factor
     wheel_reaction = total_weight/4
     end_force = wheel_reaction-(v("wheel_mass")+v("drive_mass"))/4*grav*factor
-    half_length = math.hypot(v("wheelbase")/2, v("rocker_pivot_offset"))
-    cos = v("wheelbase")/(2*half_length)
-    sin = -v("rocker_pivot_offset")/half_length
+    half_length = g["rocker_length"]/2
+    overhang_bracket = (v("wheelbase")-g["rocker_length"])/2
     own_weight = g["rocker_mass"]/4*grav*factor
-    rocker_moment = (end_force-own_weight/2)*v("wheelbase")/2
-    rocker_axial = abs(end_force*sin)+own_weight*abs(sin)
+    rocker_moment = end_force*v("wheelbase")/2-own_weight*half_length/2
+    rocker_axial = 0.  # Symmetric level-ground gravity loads are transverse to the straight tube.
     rocker_sigma = rocker_axial/ar+abs(rocker_moment)*v("rocker_box_height")/(2*ir)
-    rocker_delta = abs(end_force*cos*half_length**3/3-own_weight*cos*half_length**3/8)/(e*ir)
+    # Deflection at the axle includes rigid-bracket rotation: y(L)+a*theta(L).
+    rocker_delta = abs(end_force*(half_length**3/3+overhang_bracket*half_length**2+overhang_bracket**2*half_length)
+                       -own_weight*(half_length**3/8+overhang_bracket*half_length**2/6))/(e*ir)
     rocker_buckling = math.pi**2*e*min(ir, iw)/(2*half_length)**2/sf-rocker_axial
     arm_buckling = math.pi**2*e*arm['buckling_inertia']/(2*physical_arm_length)**2/sf-max(arm_compression)
     # Axle overhang screen: plate-to-rocker bearing span, not wheel-center span.
@@ -373,11 +376,12 @@ def evaluate_frame_loads(values, arm_section=round_arm_section, arm_mechanics=No
 
 
 GEOMETRY_INPUTS = names("wheelbase track_width wheel_diameter wheel_width rocker_pivot_offset pivot_x actuator_pivot_x top_pivot_height bottom_pivot_height arm_tube_diameter arm_wall tube_density joint_mass differential_mass cross_tube_span cross_tube_wall cross_tube_inner_diameter cross_tube_density plate_spoke_width plate_thickness plate_hub_radius plate_cutout_clearance frame_mount_clearance minimum_axle_overhang wheel_rocker_gap rocker_box_width rocker_box_height rocker_wall axle_outer_diameter axle_wall")
-EXTRA_GEOMETRY_OUTPUTS = {"plate_mass_total": "kg", "cross_tube_mass_total": "kg", "suspension_axle_mass": "kg",
+EXTRA_GEOMETRY_OUTPUTS = {"rocker_length": "m", "plate_mass_total": "kg", "cross_tube_mass_total": "kg", "suspension_axle_mass": "kg",
                           "suspension_bearing_span": "m", "cross_tube_outer_diameter": "m",
                           "plate_geometry_margin": "m", "frame_packing_margin": "m", "plate_geometry_valid": None,
                           "structure_cg_z": "m", "structure_sprung_cg_z": "m", "structure_yaw_inertia": "kg*m**2"}
-EVIDENCE = {"revision": 3, "status": "analytical preliminary frame; NOT hardware validated",
+EVIDENCE = {"revision": 4, "status": "analytical preliminary frame; NOT hardware validated",
+            "rocker": "USER: one straight box tube per side, same section, wheelbase minus 0.0635 m, centered on the existing pivot; rigid massless end brackets",
             "hardware": "user: 6.35 mm 6061-T6 plates, 25.4 mm ID aluminum cross-tubes, aluminum box rockers; bonded inserts/bolts and rotating bushings",
             "topology": "PROVISIONAL: four radial and three perimeter strips; lower boundary B+-S-B-, three triangular cutouts; no hub/lower-mount vertical ordering",
             "cross_tubes": "aluminum: 2700 kg/m3, 69 GPa Young's modulus, 240 MPa yield screening default; actual stock/joint allowables unverified",
@@ -461,7 +465,7 @@ def plate_pose_properties(values):
         for sy in (-1, 1):
             mw = v("wheel_mass")/4
             parts.append((mw, sx*wb/2, sy*track/2, rw, mw*(3*rw**2+v("wheel_width")**2)/12))
-            parts.append((v("drive_mass")/4, sx*wb/2, sy*track/2, rw, 0))
+            parts.append((v("drive_mass")/4, sx*wb/2, sy*track/2, rw+values.get("drive_motor_cg_offset",0.), 0))
             md = v("drum_mass")/4
             parts.append((md, sx*v("travel_x"), sy*(length+v("drum_pair_gap"))/2, v("travel_y"), md*(3*rd**2+length**2)/12))
             sprung.append(parts[-1])
@@ -498,16 +502,14 @@ def plate_pose_properties(values):
     return outputs
 
 
-def plate_frame_posed_cg(pose, radius, offset, sprung_mass, sprung_x, sprung_z, wheel_drive_mass, rocker_mass):
-    """Separate wheel/drive centers from uniform V-half-rocker centroids."""
+def plate_frame_posed_cg(pose, radius, offset, sprung_mass, sprung_x, sprung_z, wheel_drive_mass, rocker_mass, *, drive_mass=0., drive_cg_offset=0.):
+    """Separate motor CG offsets and straight-rocker centroids at shaft bearings."""
     if min(wheel_drive_mass, rocker_mass) < 0:
         raise ValueError("Nonnegative unsprung masses required.")
-    body = np.asarray(posed_loaded_cg(pose, radius, offset, sprung_mass, sprung_x, sprung_z, 0))
-    wheels = np.mean(pose["centers"], axis=0)
-    # Equal two-half rockers: centroid halfway from shaft to wheel midpoint.
-    # Symmetric wheel outboard offsets cancel in the two-rocker aggregate CG.
-    rocker = (wheels+np.asarray(pose["shaft_origin"]))/2
-    return tuple((sprung_mass*body+wheel_drive_mass*wheels+rocker_mass*rocker)/(sprung_mass+wheel_drive_mass+rocker_mass))
+    from .traversal_stability import articulated_cg
+    return articulated_cg(pose, radius, offset, sprung_mass, sprung_x, sprung_z,
+                          wheel_drive_mass, rocker_mass, 0.,
+                          drive_mass=drive_mass, drive_cg_offset=drive_cg_offset)
 
 
 class PlateObstacleStability(Discipline):
@@ -516,7 +518,7 @@ class PlateObstacleStability(Discipline):
     OUTPUT_UNITS = ObstacleStability.OUTPUT_UNITS
     DEPENDENCIES = ObstacleStability.DEPENDENCIES
     model_evidence = {**ObstacleStability.model_evidence,
-                      "rockers": "uniform sloping box half-arms; distinct wheel/drive and rocker centroids",
+                      "rockers": "single straight box tubes centered on shaft bearings; rigid massless end brackets; raised drive assembly CG",
                       "shaft": "longitudinally centered; contact-track kinematics include symmetric lateral wheel overhang"}
 
     def compute(self, inputs, outputs):
@@ -527,7 +529,8 @@ class PlateObstacleStability(Discipline):
                                      v("rocker_pivot_offset"), v("obstacle_height"), wheel)
             cg = plate_frame_posed_cg(pose, v("wheel_diameter")/2, v("rocker_pivot_offset"),
                                       v("loaded_sprung_mass"), v("loaded_sprung_cg_x"), v("loaded_sprung_cg_z"),
-                                      v("wheel_mass")+v("drive_mass"), v("rocker_mass"))
+                                      v("wheel_mass")+v("drive_mass"), v("rocker_mass"),
+                                      drive_mass=v("drive_mass"), drive_cg_offset=v("drive_motor_cg_offset"))
             cases.append((projected_support_margin(pose["contacts"], cg), wheel, pose, cg))
         margin, wheel, pose, cg = min(cases, key=lambda case: case[0])
         outputs["obstacle_tip_margin"] = margin

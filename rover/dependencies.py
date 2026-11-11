@@ -76,11 +76,11 @@ def dependencies(component):
         }
     if component == "LinkageLoads":
         weights = names("drum_mass arm_linear_mass arm_length lin_act_side_arm_offset payload_mass gravity")
-        force = weights | names("breakout_force actuator_leverage_max")
+        force = weights | names("actuator_leverage_max")
         return {"required_actuator_force": force,
                 "actuation_time": {"lowering_time"},
                 "actuator_force_margin": force | names("actuator_force_rating actuator_safety_factor"),
-                "arm_energy": weights | names("travel_y extended_y breakout_force cut_depth actuator_efficiency actuator_idle_power lowering_time"),
+                "arm_energy": weights | names("travel_y extended_y actuator_efficiency actuator_idle_power lowering_time"),
                 "arm_peak_power": force | names("actuator_speed actuator_efficiency actuator_idle_power")}
     if component == "Mobility":
         profile = names("track_width travel_speed acceleration turn_speed_fraction turn_accel_fraction traversal_time_one_way")

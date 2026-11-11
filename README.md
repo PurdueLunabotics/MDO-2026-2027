@@ -9,6 +9,16 @@ drums, arms, frame, wheels, motors, battery, stability, and mission timing using
 will work in soil or meet every competition requirement.** Soil response,
 efficiencies, and several structural and mobility assumptions need testing.
 
+The **2026-11-07 geometry study candidate** retains 359 mm wheels/drums and
+selects 6-inch PA-04 actuators. Its modeled pitch/roll tipping
+limits are 37.2/38.7 degrees, with 136 mm deposition edge distance against a
+25 mm minimum. The trade is 120 mm drum length and 43.7 kg full payload.
+Traction/climbing and drum torque still fail the full-system audit. See the
+[geometry study](docs/GEOMETRY_STUDY.md) for scope, results and reproduction.
+The student subsequently requested restoration of `design_baseline.json` to
+its exact pre-search inputs; the study candidate is retained separately under
+`results/geometry_search/optimized_baseline_before_restore.json`.
+
 ## Just want to see the design?
 
 No Python is needed to read the saved reports. Download or clone the repository,
@@ -17,30 +27,21 @@ the interactive report; PDFs can be read directly on GitHub.
 
 | Design | Printable PDF | Interactive report |
 | --- | --- | --- |
-| Design Baseline | [Baseline PDF](output/pdf/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
-| Fixed-hardware optimizer candidate (infeasible) | [Candidate PDF](output/pdf/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
+| Design Baseline | [Baseline PDF](output/baseline.pdf) | [Baseline HTML](docs/design_reports/baseline.html) |
+| CDR optimization candidate (infeasible) | [Candidate PDF](output/optimized.pdf) | [Candidate HTML](docs/design_reports/optimized.html) |
 
-The baseline report was refreshed on **2026-11-01** with equal 1500 kg/m3 regolith densities, calculated traversal and parallel actual-pose excavation arm motion.
-The saved candidate report was generated on **2026-10-30**. Reports include scores, mass and energy,
-travel/deposition/compact/recovery drawings, failed checks, and full input/output
-tables. The baseline evaluates the current `design_baseline.json` unchanged as
-the baseline configuration; it retains 13 failed modeled checks.
+The November 11 baseline report is a fixed evaluation of `design_baseline.json`
+and records ten failed modeled checks. The candidate report preserves the final
+iterate and recorded outputs from the November 9 `CDR_Baseline_optimization_test`
+run. That run ended with failed empty-climb, loaded-climb, and startup-position
+checks. `design_optimized.json` contains its final inputs and provenance.
 
-The candidate preserves the final geometry from
-`results/fixed_hardware_optimization.json`; all 288 saved output values were
-reproduced at its original release. Its archived staged arm schedule is preserved
-in that report; reevaluation with the current model changes motion accounting. Its optimizer converged, but turning traction
-still fails. This separate study uses calculated route timing, zero-degree climb
-checks and two excluded optimizer constraints. It did not start from the current
-baseline, so the two scores are not a controlled before/after comparison.
-Effective candidate inputs and provenance are in `design_optimized.json`.
-See [report release details](docs/REPORT_RELEASE.md).
+Both reports include the rover poses, performance estimates, constraint results,
+and full input/output tables. The candidate reflects the model used for its
+saved run. See [report release details](docs/REPORT_RELEASE.md).
 
-Both cases use **PA-04 900 lbf / 12 V actuators** and separate travel/deposition
-commands. Installed-length fit remains diagnostic only; passing the other
-geometry screens does not establish actuator packaging. See
-[the actuator assumptions](docs/PA04_ACTUATORS.md). These are saved snapshots:
-changing inputs does not refresh them.
+The [bucket drum data catalogue](data/excavation/bucket_drum_data/README.md)
+contains published points, source notes, and plots.
 
 ## First run
 
@@ -253,6 +254,19 @@ With Python 3.12 and Git installed, clone the repository and use
 `.venv/bin/python`, and open the generated HTML report in your browser.
 
 ## Edit, evaluate, optimize
+
+For short development work, use `--profile-model` to time one fixed evaluation,
+or `--quick` for a bounded optimization with numeric output only. `--vary`
+selects the active variables while retaining all bounds and physical checks:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --profile-model
+.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --quick --vary wheelbase arm_length pivot_x deposition_actuator_length
+```
+
+Quick runs default to 80 objective evaluations and a 60-second driver budget;
+an interrupted run remains unsuccessful. See [profiling, budgets and report
+options](docs/PERFORMANCE.md). Normal solver/report defaults are unchanged.
 
 There are **two maintained design JSON files**, both in the repository root:
 

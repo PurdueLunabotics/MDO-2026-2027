@@ -7,8 +7,8 @@ analysis files in ignored `results/` are generated data, not extra baselines.
 
 | Saved design | HTML | PDF |
 | --- | --- | --- |
-| Baseline | [Browser report](design_reports/baseline.html) | [PDF](../output/pdf/baseline.pdf) |
-| Candidate | [Browser report](design_reports/optimized.html) | [PDF](../output/pdf/optimized.pdf) |
+| Baseline | [Browser report](design_reports/baseline.html) | [PDF](../output/baseline.pdf) |
+| Candidate | [Browser report](design_reports/optimized.html) | [PDF](../output/optimized.pdf) |
 
 Download/clone the files before opening HTML in a browser. GitHub displays its
 source rather than the interactive report. Every HTML embeds its full numeric
@@ -46,7 +46,7 @@ returning 0 because the evaluation itself completed.
 1. Open the refreshed HTML in Chrome or Edge.
 2. Press **Ctrl+P**, or select **Print / save PDF** in the report.
 3. Choose **Save as PDF**, **Letter**, **Portrait**, with background graphics on.
-4. Check the preview and save to `output/pdf/baseline.pdf` or `optimized.pdf`.
+4. Check the preview and save to `output/baseline.pdf` or `output/optimized.pdf`.
 5. Upload the PDF to the club Drive folder. Use a new version of an existing
    Drive file if you want to preserve its sharing link.
 

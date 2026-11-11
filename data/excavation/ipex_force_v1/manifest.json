@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "revision": "ipex-force-figure13-v1-2026-11-08",
+  "data_kind": "digitized_published_trend",
+  "source": {
+    "title": "ISRU Pilot Excavator: Bucket drum scaling experimental results",
+    "ntrs_id": "20210025846",
+    "url": "https://ntrs.nasa.gov/citations/20210025846",
+    "figure": 13,
+    "pdf_page": 12,
+    "pdf_sha256": "e84c7608056de5f434f0850afbcd94b5b9738c457b434c20203d73e8cd042218",
+    "native_image": "Image111.png",
+    "native_image_rgb_sha256": "d5c3ec0f3dab339c6e9a7d230421272e4b751b0c550770d0f74454c9b9f59985"
+  },
+  "files": {
+    "figure13_trends.csv": "142a6fad8e729af8961b9ab3763a441a51c3735fc6161a2c7758e5d76841ed58"
+  },
+  "units": {
+    "depth_m": "m",
+    "feed_speed_m_s": "m/s",
+    "force_per_width_N_m": "N/m"
+  },
+  "conversion": "Figure 13 mN/mm equals N/m exactly; width multiplier is one whole drum axial width in metres.",
+  "extraction": {
+    "native_size_px": [
+      1223,
+      1063
+    ],
+    "plot_x_px": [
+      150,
+      1170
+    ],
+    "plot_speed_mm_s": [
+      0,
+      35
+    ],
+    "plot_y_px": [
+      924,
+      183
+    ],
+    "plot_force_mN_mm": [
+      0,
+      180
+    ],
+    "line_roi_xyxy_px": [
+      470,
+      250,
+      990,
+      900
+    ],
+    "rgb_max_absolute_difference_exclusive": 3,
+    "method": "Least-squares line through colored dotted-trend pixels away from end-point data markers; evaluate at 10 and 30 mm/s.",
+    "series": [
+      {
+        "series": "blue",
+        "depth_m": 0.01,
+        "rgb": [
+          68,
+          114,
+          196
+        ],
+        "line_pixels": 363,
+        "pixel_slope": -0.1852723580144686,
+        "pixel_intercept": 886.3466851105046
+      },
+      {
+        "series": "orange",
+        "depth_m": 0.0127,
+        "rgb": [
+          237,
+          125,
+          49
+        ],
+        "line_pixels": 351,
+        "pixel_slope": -0.21786311792811022,
+        "pixel_intercept": 880.7314277714695
+      },
+      {
+        "series": "gray",
+        "depth_m": 0.016,
+        "rgb": [
+          165,
+          165,
+          165
+        ],
+        "line_pixels": 366,
+        "pixel_slope": -0.24005088677049063,
+        "pixel_intercept": 824.5045668013768
+      },
+      {
+        "series": "yellow",
+        "depth_m": 0.025,
+        "rgb": [
+          255,
+          192,
+          0
+        ],
+        "line_pixels": 387,
+        "pixel_slope": -0.49056150101034907,
+        "pixel_intercept": 871.1517309123832
+      }
+    ],
+    "approx_digitization_resolution_N_m": 0.5,
+    "resolution_note": "Approximate pixel-coordinate resolution, not a statistical force uncertainty or instrument accuracy."
+  },
+  "source_envelope": {
+    "depth_m": [
+      0.01,
+      0.025
+    ],
+    "feed_speed_m_s": [
+      0.01,
+      0.03
+    ],
+    "drum_diameter_m": [
+      0.2375,
+      0.4371
+    ],
+    "drum_width_m": [
+      0.1989,
+      0.3526
+    ],
+    "tip_speed_to_feed_speed": 8.5,
+    "tip_ratio_relative_tolerance": 0.01,
+    "tip_ratio_tolerance_note": "1% bookkeeping allowance for published rounding; not a measured validity range.",
+    "width_to_diameter_ratio": [
+      0.8066803935026311,
+      0.8374736842105264
+    ],
+    "gravity_m_s2": 9.80665,
+    "material": "BP-1; prepared terrestrial test bed"
+  },
+  "limitations": [
+    "Eight curve readings, not eight raw experimental trials. No individual run/size identities or measurement uncertainties are available from this plot.",
+    "Figure 13 labels depths 10, 12.7, 16, 25 mm. Table 2 says 10 mm and 40% scoop height; combined with Table 1 the latter would be 10.56, 13.8, 19.12 mm. This inconsistency is unresolved; the surface uses Figure 13 labels.",
+    "Depth, drum size and scoop geometry are confounded in the source design; the width-normalized plot is pooled across sizes. Rectangular parameter bounds do not establish support at every interior combination.",
+    "Speed and RPM were linked through tip/feed ratio 8.5. The data do not identify an independent RPM response.",
+    "Width scaling assumes source-like staggered scoop geometry. Our baseline width/diameter ratio differs from the source drums.",
+    "Published trend curves already fit their underlying measurements. Curve approximation or held-out-depth validation does not establish independent hardware validation.",
+    "Earth-gravity horizontal force only. No vertical load, tangential force, shaft torque, mean-to-peak conversion, counteracting-drum cancellation or material recirculation law is identified."
+  ],
+  "validation": {
+    "strategy": "Leave one complete depth series (both speeds) out of the fitting inputs for each of four folds. Also report in-sample curve approximation residuals.",
+    "independent_hardware_validation": "unavailable",
+    "release_status": "research_only_not_a_production_replacement"
+  }
+}

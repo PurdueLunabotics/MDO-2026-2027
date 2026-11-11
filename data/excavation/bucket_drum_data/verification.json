@@ -1,0 +1,19 @@
+{
+  "record_count": 72,
+  "source_counts": {
+    "NASA22": 43,
+    "KAF26": 9,
+    "GIE25": 20
+  },
+  "unique_ids": true,
+  "source_locators_present": true,
+  "missing_force_not_imputed": true,
+  "NASA_energy_unconverted": true,
+  "no_fits_or_interpolation": true,
+  "NASA_force_visible_marker_count": 28,
+  "Kafi_table_condition_count": 9,
+  "Giel_figure_trial_marker_count": 14,
+  "Giel_tabulated_trial_count": 4,
+  "model_fingerprint_before": "79d8cf1738e80cb9fc4f012777d54ba951c118e32a8d99118a855035c143a01c",
+  "model_fingerprint_after": "79d8cf1738e80cb9fc4f012777d54ba951c118e32a8d99118a855035c143a01c"
+}

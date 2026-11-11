@@ -9,7 +9,7 @@ import math
 
 # name: (initial value, lower bound, upper bound, OpenMDAO units)
 DESIGN = {
-    "lin_act_side_arm_offset": (-0.0508, -0.30, -0.0508, "m"),
+    "lin_act_side_arm_offset": (-0.0508, -0.50, -0.0508, "m"),
     "lin_act_top_arm_offset": (0.0, -0.15, 0.15, "m"),
     "wheel_diameter": (0.30, 0.18, 0.359, "m"),
     "wheel_width": (0.10, 0.05, 0.359, "m"),
@@ -50,6 +50,7 @@ ASSUMPTIONS = {
     "grouser_height": (0.018, "m"),  # USER: radial height, INSIDE overall wheel_diameter
     "tipping_radius_deflection_fraction": (0.20, None),  # USER: delta / unloaded OVERALL radius at reference mass
     "tipping_reference_fill_fraction": (0.90, None),  # USER: rated load is dry + this design's payload at 0.9 fill
+    "wheel_compression_hard_stop": (0.064, "m"),  # USER: linear radial law to 6.4 cm, then a rigid stop
     "differential_bar_clearance_allowance": (0.0254, "m"),  # USER: 1 inch below the lower axle
     # Fixed for each solve; CLI --set accepts degrees. Separate from static slope_angle.
     "empty_slope_degrees": (30.0, "deg"),
@@ -95,6 +96,7 @@ ASSUMPTIONS = {
     "motor_mass_per_watt": (0.006, "kg/W"),
     "gear_mass_per_torque": (0.05, "kg/(N*m)"),
     "drive_fixed_mass": (0.35, "kg"),  # per wheel motor/gearbox
+    "drive_motor_cg_offset": (0.0, "m"),  # reference: assembly CG at wheel axle; local rocker-normal offset
     "drum_fixed_mass": (0.50, "kg"),  # per pair motor/gearbox
     "battery_specific_energy": (140.0, "W*h/kg"),  # complete pack
     "battery_usable_fraction": (0.80, None),
@@ -109,7 +111,7 @@ ASSUMPTIONS = {
     "pit_depth": (0.45, "m"),
     "actuator_efficiency": (0.65, None),
     "actuator_safety_factor": (1.0, None),  # USER: compare demand directly with actuator rating
-    "breakout_force": (100.0, "N"),  # each pair; preliminary extraction resistance
+    "breakout_force": (0.0, "N"),  # inactive legacy input; retained for saved-case compatibility
     "actuator_fixed_mass": (0.60, "kg"),
     "actuator_mass_per_force": (0.0004, "kg/N"),
     "actuator_mass_per_power": (0.003, "kg/W"),
@@ -161,6 +163,7 @@ PLATE_FRAME_DESIGN = {
     "rocker_pivot_offset": (0.10, 0.020, 0.150, "m"),  # centered longitudinally; adjustable axle height
 }
 PLATE_FRAME_ASSUMPTIONS = {
+    "drive_motor_cg_offset": (2.3*.0254, "m"),  # USER: drive assembly CG 2.3 inches above its wheel axle
     "plate_thickness": (0.00635, "m"),  # USER: 1/4 inch 6061-T6 sheet
     "cross_tube_inner_diameter": (0.0254, "m"),  # USER: connector requires 1 inch ID
     "wheel_rocker_gap": (0.0127, "m"),  # USER: wheel inner face to rocker outer face
@@ -184,9 +187,16 @@ X44_ASSUMPTIONS = {
 }
 
 
-PA04_DESIGN = {"actuator_catalog_stroke": (0.1524, 0.0508, 1.016, "m")}
+PA04_STROKES = {
+    0.1524: (0.352298, 0.504698),  # 6-inch stroke: student-supplied installed endpoints [m]
+    0.2032: (0.403098, 0.606298),  # 8-inch stroke: student-supplied installed endpoints [m]
+    0.2286: (0.428498, 0.657098),  # 9-inch stroke: supplied table A=16.87 in, B=25.87 in
+    0.2540: (0.453898, 0.707898),  # 10-inch stroke: supplied table A=17.87 in, B=27.87 in
+}
+PA04_DESIGN = {}  # Stroke is a discrete hardware case, never a continuous design variable.
 PA04_ASSUMPTIONS = {
-    "actuator_installation_allowance": (0.1613408, "m"),  # USER, added once to EACH endpoint
+    "actuator_catalog_stroke": (0.2032, "m"),
+    "actuator_installation_allowance": (0., "m"),  # supplied endpoints already define installed lengths
 }
 
 
@@ -197,7 +207,7 @@ LEGACY_DRUM_ASSUMPTIONS = {"scoop_opening": (0.035, "m"),
                            "cut_engagement": (0.15, None)}
 
 
-def configuration(structure="reference", motors="reference", actuators="reference", *, excavation_mode="moving"):
+def configuration(structure="reference", motors="reference", actuators="reference", *, excavation_mode="moving", actuator_stroke=None):
     """Independent dictionaries per Problem; no mutation of reference config."""
     if structure not in ("reference", "plate-frame"):
         raise ValueError(f"Unknown structure profile {structure!r}")
@@ -240,6 +250,18 @@ def configuration(structure="reference", motors="reference", actuators="referenc
             assumptions[name] = (value, entry[-1])
         design.update(PA04_DESIGN)
         assumptions.update(PA04_ASSUMPTIONS)
+        stroke = PA04_ASSUMPTIONS["actuator_catalog_stroke"][0] if actuator_stroke is None else actuator_stroke
+        choices = [s for s in PA04_STROKES if not isinstance(stroke, bool)
+                   and math.isclose(stroke, s, rel_tol=0., abs_tol=1e-12)]
+        if len(choices) != 1:
+            raise ValueError("PA-04 hardware must use a 6-inch (0.1524 m), 8-inch (0.2032 m), 9-inch (0.2286 m) or 10-inch (0.254 m) stroke")
+        stroke = choices[0]
+        low, high = PA04_STROKES[stroke]
+        assumptions["actuator_catalog_stroke"] = (stroke, "m")
+        for name in ("travel_actuator_length", "deposition_actuator_length",
+                     "actuator_retracted_length", "actuator_extended_length"):
+            default = min(max(design[name][0], low), high)
+            design[name] = (default, low, high, "m")
     return design, assumptions
 
 
@@ -272,3 +294,7 @@ REQUIREMENTS = {
     "rover_width": (0.75, "m"),
     "rover_height": (0.75, "m"),
 }
+
+# Raw geometric distances required before their reported reserve is positive.
+# Keep tip_stability_margin's physical output as distance to the support edge.
+MINIMUM_MARGINS = {"tip_stability_margin": (0.025, "m")}

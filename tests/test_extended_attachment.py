@@ -73,7 +73,7 @@ class ExtendedAttachmentTests(unittest.TestCase):
         heights=sum(abs(get('travel_y')-get(n)) for n in ('front_dig_y','rear_dig_y'))
         distances=sum(abs(get('travel_actuator_length')-get(n)) for n in
                       ('front_dig_actuator_length','rear_dig_actuator_length'))
-        expected=((loaded+empty)*heights+2*get('breakout_force')*get('cut_depth'))/get('actuator_efficiency')
+        expected=((loaded+empty)*heights)/get('actuator_efficiency')
         expected+=2*get('actuator_idle_power')*distances/get('actuator_speed')
         self.assertAlmostEqual(get('arm_energy'),expected,places=8)
         self.assertEqual(get('frame_load_solution_valid'),1.)

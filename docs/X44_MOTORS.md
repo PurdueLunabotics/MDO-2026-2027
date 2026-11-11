@@ -1,5 +1,15 @@
 # Motor models, X44 hardware, and replacement API
 
+2026-11-08 baseline override: complete drive assemblies are user-specified at
+1.5 kg each, four total. With the retained X44 motor mass 0.3401942775 kg,
+`drive_gearbox_mass=1.1598057225 kg` is now this case's remaining assembly mass
+budget, not a newly verified REV catalog mass. Drum assembly inventory is
+unchanged. `drive_motor_cg_offset=0.05842 m` positions each assembly above its
+wheel axle along side-rocker local up. Brackets are rigid and massless by user
+assumption. Flat, articulated and compressed-wheel CG/reaction paths use the
+same offset; four assemblies enter total mass exactly once. Other saved cases
+retain their explicit mass inputs, and the generic reference offset is zero.
+
 Select `--motors x44-standard` alongside `--structure plate-frame`, or
 `build_problem(structure="plate-frame", motors="x44-standard")`.
 The generic `ModelSet()` and motor configuration remain available as reference.

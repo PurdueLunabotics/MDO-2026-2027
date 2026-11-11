@@ -41,7 +41,7 @@ The existing output contracts remain:
 | --- | --- |
 | `travel_time` | Outbound plus return, including all route turns, seconds |
 | `route_translation_time` / `route_turn_time` | Translation and turn portions of that same round trip |
-| `turn_time` | Separate half-loaded deposition turn; reference timing retained |
+| `turn_time` | Half-loaded deposition maneuver time for the 0.5 m reverse, point turn and 0.5 m forward. Explicit legacy excavation retains point-turn-only time. |
 | `relocation_time` | Fresh-site motion; reference component/timing retained |
 | `mobility_energy` | Route plus deposition electrical energy, joules, including actuator idle power |
 | `actual_travel_speed` | Highest straight ground speed in the selected profiles |
@@ -49,7 +49,7 @@ The existing output contracts remain:
 Mission already consumes `travel_time`, so cycle duration, electronics energy,
 cycle count, delivered volume and score use the selected duration without a
 separate scoring branch. Route distance and requested turn angles are unchanged.
-The half-loaded deposition turn and fresh-site relocation are not automatically
+The half-loaded deposition maneuver and fresh-site relocation are not automatically
 made motor-limited by selecting this mode. Their existing failure screens remain.
 Loaded and empty leg times can coincide when both reach the same speed and
 acceleration upper bounds; their BWR slip, motor demand and energy can still differ.

@@ -1,11 +1,11 @@
 # Traversal: obstacles, clearance, slopes, and wheel unloading
 
-The plate-frame profile now selects the uniform-compression static tipping
-adapters described in [STATIC_TIPPING.md](STATIC_TIPPING.md). Its slope CG
-height is reduced by the prescribed load-scaled radial deflection. Wheel-center
-contacts remain unchanged, so uniform heave leaves horizontal-platform rock
-reserves and reactions invariant while lowering posed CG-z diagnostics.
-The original rigid factories and derivations below remain available.
+The default plate-frame profile now selects coupled wheel-load/compression
+equilibrium with a student-specified linear spring law and 64 mm hard stop,
+described in [STATIC_TIPPING.md](STATIC_TIPPING.md). Downhill body tilt and
+rocker/differential balance are included. Global hull tipping, first unloading
+and root validity are reported separately. Point contacts remain the chosen
+boundary. The original rigid factories and derivations below remain available explicitly.
 
 The user requires traversal of a 0.30 m obstacle and a 0.50 m deep ditch while
 fully loaded in the travel pose. The optimizer now enforces geometric reach,

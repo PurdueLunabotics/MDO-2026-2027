@@ -51,7 +51,7 @@ def excavation_motion(values, profile="reference"):
         speed, efficiency = v("actuator_speed"), v("actuator_efficiency")
         if not math.isfinite(speed) or speed <= 0 or not math.isfinite(efficiency) or not 0 < efficiency <= 1:
             raise ValueError("Excavation motion needs positive speed and efficiency in (0,1]")
-        nonnegative = names("drum_mass arm_linear_mass payload_mass gravity actuator_idle_power breakout_force cut_depth")
+        nonnegative = names("drum_mass arm_linear_mass payload_mass gravity actuator_idle_power")
         if (any(not math.isfinite(v(n)) or v(n) < 0 for n in nonnegative)
                 or not math.isfinite(v("arm_length")) or v("arm_length") <= 0
                 or not math.isfinite(v("lin_act_side_arm_offset"))
@@ -65,8 +65,7 @@ def excavation_motion(values, profile="reference"):
                  (2*v("arm_length")))*v("gravity")
         loaded = empty+v("payload_mass")*v("gravity")/2
         active_heights = sum(h for h, d in zip(heights, distances) if d > 0)
-        breakout = sum(d > 0 for d in distances)*v("breakout_force")*v("cut_depth")
-        energy = ((empty+loaded)*active_heights+breakout)/efficiency
+        energy = ((empty+loaded)*active_heights)/efficiency
         energy += v("actuator_idle_power")*2*sum(distances)/speed
         lowering = raising = max(distances)/speed
     return dict(actuation_time=lowering+raising, arm_energy=energy,
@@ -94,7 +93,7 @@ class ParallelExcavationMotion:
             self.DEPENDENCIES["arm_energy"] = COMMANDS | names(
                 "actuator_speed actuator_efficiency actuator_idle_power drum_mass payload_mass "
                 "arm_linear_mass arm_length lin_act_side_arm_offset gravity travel_y front_dig_y "
-                "rear_dig_y breakout_force cut_depth")
+                "rear_dig_y")
         self.DEPENDENCIES["excavation_lowering_time"] = (COMMANDS if self.ACTUATOR_PROFILE == "pa04-900"
                                                        else COMMANDS | {"actuator_speed"})
         self.DEPENDENCIES["excavation_raising_time"] = set(self.DEPENDENCIES["actuation_time"])

@@ -202,11 +202,30 @@ class PlateFrameTests(unittest.TestCase):
     def test_pose_mass_conservation_distinct_rocker_centroid(self):
         pose = raised_wheel_pose(.46, .54, .15, .10, 0.)
         cg = plate_frame_posed_cg(pose, .15, .1, 40., 0., .5, 8., 4.)
-        self.assertAlmostEqual(cg[2], (40*.5+8*.15+4*.20)/52)
-        # On an obstacle, rocker aggregate centroid lies halfway to shaft origin.
+        self.assertAlmostEqual(cg[2], (40*.5+8*.15+4*.25)/52)
+        # The continuous straight rocker's aggregate centroid is the shaft origin.
         pose = raised_wheel_pose(.46, .54, .15, .10, .2)
         cg = plate_frame_posed_cg(pose, .15, .1, 40., 0., .5, 8., 4.)
         self.assertTrue(all(math.isfinite(x) for x in cg))
+
+    def test_continuous_rocker_mass_centroid_and_rigid_bracket_deflection(self):
+        values=inputs(wheelbase=.55,rocker_box_width=.0508,rocker_box_height=.0508,rocker_wall=.0015875)
+        inv=geometry_inventory(values)
+        length=.55-2.5*.0254
+        area=.0508**2-(.0508-2*.0015875)**2
+        self.assertAlmostEqual(inv['rocker_length'],.4865)
+        self.assertAlmostEqual(inv['rocker_mass'],2*length*area*2700.)
+        loaded=evaluate_frame_loads(values)
+        # Independently integrate curvature M(x)/(EI), including the rigid axle overhang.
+        x=np.linspace(0,length/2,20001)
+        factor=values['gravity']*values['structure_load_factor']
+        force=(values['dry_mass']+values['payload_mass']-values['wheel_mass']-values['drive_mass'])/4*factor
+        weight=inv['rocker_mass']/4*factor
+        moment=force*(.55/2-x)-weight/(length/2)*(length/2-x)**2/2
+        inertia=(.0508**4-(.0508-2*.0015875)**4)/12
+        expected=np.trapezoid((.55/2-x)*moment,x)/(values['tube_youngs_modulus']*inertia)
+        self.assertAlmostEqual(loaded['rocker_deflection'],expected,places=10)
+        with self.assertRaises(ValueError):geometry_inventory({**values,'wheelbase':.0635})
 
     def test_profile_contract_mass_energy_and_reference_preservation(self):
         before_design, before_assumptions = dict(DESIGN), dict(ASSUMPTIONS)

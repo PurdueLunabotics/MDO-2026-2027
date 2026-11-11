@@ -142,7 +142,7 @@ actuation_time = excavation_lowering_time + excavation_raising_time
 
 Generic reference speed is `actuator_speed` in both directions. Its arm work
 sums each arm's actual axle-height excursion with empty lowering and loaded
-raising, existing breakout work and per-actuator idle loss. PA-04 uses the
+raising and per-actuator idle loss; no breakout work is added. PA-04 uses the
 existing 0.39 inch/s, 14 A lowering envelope and load-dependent raising curve:
 `arm_energy=12*sum(14*s_i/v_lower + I_raise*s_i/v_raise)`. Energy is summed,
 not divided by two because the actuators run concurrently. No regeneration
@@ -157,6 +157,16 @@ seconds and `arm_energy` remains total electrical joules across both arms.
 fit, hardware calibration or validated controller trajectory is claimed.
 
 ## Loads, drive work and electrical accounting
+
+The student selected NASA's provisional force surface for the existing plate
+profile on 2026-11-08. That option uses `cut_force=4*L*d*(a+b*feed_speed)` with
+the versioned [IPEx coefficients, domain and limitations](IPEX_FORCE_SURFACE.md).
+Generic reference runs retain the pressure law below. `cut_force` is still a
+sum of four magnitudes, not net chassis reaction. NASA source validity and the
+tip/feed ratio are recorded; unsupported transfer has a visible report notice.
+The model does not claim independent RPM response or measured shaft torque.
+NASA cutting work is `4*L*d*R*omega*(a*t_cut+b*feed_distance)` under the retained
+force-times-radius sizing assumption; it is not inferred NASA torque data.
 
 The pressure screen uses the raw advance per scoop at the commanded speed cap:
 
@@ -177,17 +187,18 @@ torque and power capability are checked with the selected shared motor
 provider. Fr remains a diagnostic; there is no newly invented RPM-dependent
 capture law.
 
-Feeding also requires wheel drive. The drive screen includes rolling
-resistance, the full horizontal cut reaction without cancellation credit,
-wheel-speed-dependent motor
-capability and available traction after vertical tool reaction unloads the
-wheels. Full load is used for drive force acceptance; traction uses empty
-rover weight after the vertical reaction as a conservative normal-load reserve.
+Feeding also requires wheel drive. The student now assumes equal and opposite
+drum cutting reactions cancel exactly. Drive force includes full-load rolling
+resistance and acceleration, with wheel-speed-dependent motor capability.
+No horizontal cutting force or tool-feed work is charged to the wheel motors.
+Local drum cutting and vertical-load screens are retained; cancellation does
+not erase their internal loads.
 Rolling work uses half the final payload on average, consistent with the two
 equal target fills. Every drive segment receives a full-load translational
-startup allowance without regenerative credit. `feed_motor_margin`,
-`feed_traction_margin` and `feed_power_margin`
-remain separate signed constraints.
+startup allowance without regenerative credit. `feed_motor_margin` and
+`feed_power_margin` remain signed constraints. `feed_traction_margin` is removed
+from outputs, reports and optimizer constraints; its legacy
+`dig_traction_margin` duplicate remains diagnostic only for moving excavation.
 
 `feed_drive_energy` and `feed_drive_peak_power` are electrical J and peak W.
 They are included once in `dig_energy` and the simultaneous `dig_power`
@@ -232,7 +243,7 @@ rejected. This is a model change, not a geometry-preserving translation: old
 the former partial-width force factor. Old reports require reevaluation.
 
 `cut_depth` survives only as a derived output equal to `inlet_depth` for the
-existing linkage breakout-work port. The legacy `cut_depth_margin` output now
+legacy depth diagnostic port. The legacy `cut_depth_margin` output now
 reports the radial `R/4-inlet_depth` reserve. Explicitly selected stationary
 reference factories retain their original independent inputs and equations
 for historical regression comparisons.

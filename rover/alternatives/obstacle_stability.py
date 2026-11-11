@@ -53,6 +53,19 @@ def projected_support_margin(contacts, center_of_mass):
                for a, b in zip(hull, hull[1:] + hull[:1]))
 
 
+def rocker_pose(wheelbase, track, pivot_offset, shaft_height, roll, left, right):
+    """Shared rocker geometry for rigid and compressed wheels; FL, FR, RL, RR."""
+    cr, sr = math.cos(roll), math.sin(roll)
+    centers = []
+    for wx, wy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+        c, s = math.cos(left if wy == 1 else right), math.sin(left if wy == 1 else right)
+        centers.append((wx*wheelbase*c/2+pivot_offset*s,
+                        wy*track*cr/2-wx*wheelbase*sr*s/2+pivot_offset*sr*c,
+                        shaft_height+wy*track*sr/2+wx*wheelbase*cr*s/2-pivot_offset*cr*c))
+    return {"centers": centers, "shaft_origin": (0., 0., shaft_height),
+            "pitch": (left+right)/2, "roll": roll}
+
+
 def raised_wheel_pose(wheelbase, track, radius, pivot_offset, height,
                       raised=0):
     """Rigid rocker geometry; order FL, FR, RL, RR; returns pose diagnostics.
@@ -125,22 +138,31 @@ def raised_wheel_pose(wheelbase, track, radius, pivot_offset, height,
     origin_z = radius+used/4+pivot_offset*math.cos(roll)*(1+math.cos(theta))/2
     roll *= sy
     theta *= sx
-    pitch = theta/2
-    centers = []
-    for wx, wy in ((1,1), (1,-1), (-1,1), (-1,-1)):
-        t = theta if wy == sy else 0.0
-        c, s = math.cos(t), math.sin(t)
-        cr, sr = math.cos(roll), math.sin(roll)
-        centers.append((wx*wheelbase*c/2+pivot_offset*s,
-                        wy*track*cr/2-wx*wheelbase*sr*s/2+pivot_offset*sr*c,
-                        origin_z+wy*track*sr/2+wx*wheelbase*cr*s/2-pivot_offset*cr*c))
-    return {"centers": centers, "contacts": [(x,y,z-radius) for x,y,z in centers],
-            "shaft_origin": (0.0,0.0,origin_z), "pitch": pitch, "roll": roll,
+    pose = rocker_pose(wheelbase, track, pivot_offset, origin_z, roll,
+                       theta if sy == 1 else 0., theta if sy == -1 else 0.)
+    return {**pose, "contacts": [(x,y,z-radius) for x,y,z in pose["centers"]],
             "reach_margin": margin, "valid": margin > 0, "used_height": used}
 
 
+def drive_centers(pose, offset):
+    """Rigid, massless motor brackets follow each side rocker's local up axis."""
+    if not math.isfinite(offset) or offset < 0:
+        raise ValueError("Drive assembly CG offset must be finite and nonnegative.")
+    centers = pose["centers"]
+    cr, sr = math.cos(pose["roll"]), math.sin(pose["roll"])
+    normals = []
+    for side in (0,1):
+        delta = tuple(centers[side][j]-centers[side+2][j] for j in range(3))
+        length = math.sqrt(sum(x*x for x in delta))
+        if length <= 1e-9:
+            raise ValueError("Coincident wheel axles do not define a rocker direction.")
+        c, s = delta[0]/length, (-sr*delta[1]+cr*delta[2])/length
+        normals.append((-s,-sr*c,cr*c))
+    return [tuple(p[j]+offset*normals[i%2][j] for j in range(3)) for i,p in enumerate(centers)]
+
+
 def posed_loaded_cg(pose, radius, pivot_offset, sprung_mass, sprung_x,
-                    sprung_z, unsprung_mass):
+                    sprung_z, unsprung_mass, *, drive_mass=0., drive_cg_offset=0.):
     """Conserve mass; transform mounted hardware, retain wheel/rocker centers.
 
     Sprung CG coordinates refer to original level ground. Equal wheel/drive
@@ -157,13 +179,17 @@ def posed_loaded_cg(pose, radius, pivot_offset, sprung_mass, sprung_x,
     body = (xp, -math.sin(r)*zp, pose["shaft_origin"][2]+math.cos(r)*zp)
     suspension = tuple(sum(p[i] for p in pose["centers"])/4 for i in range(3))
     total = sprung_mass+unsprung_mass
-    return tuple((sprung_mass*b+unsprung_mass*u)/total
-                 for b,u in zip(body,suspension))
+    if not math.isfinite(drive_mass) or not 0 <= drive_mass <= unsprung_mass:
+        raise ValueError("Drive mass must be a nonnegative subset of unsprung mass.")
+    motors = drive_centers(pose, drive_cg_offset)
+    correction = tuple(drive_mass*(sum(p[j] for p in motors)/4-suspension[j]) for j in range(3))
+    return tuple((sprung_mass*b+unsprung_mass*u+correction[j])/total
+                 for j,(b,u) in enumerate(zip(body,suspension)))
 
 
 class ObstacleStability(Discipline):
     CONFIG_INPUTS = ("wheelbase", "track_width", "wheel_diameter",
-                     "rocker_pivot_offset", "obstacle_height")
+                     "rocker_pivot_offset", "obstacle_height", "drive_motor_cg_offset")
     COUPLED_INPUTS = {"loaded_sprung_mass": "kg", "loaded_sprung_cg_x": "m",
                       "loaded_sprung_cg_z": "m", "wheel_mass": "kg",
                       "drive_mass": "kg", "rocker_mass": "kg"}
@@ -193,7 +219,8 @@ class ObstacleStability(Discipline):
                                      v("rocker_pivot_offset"),v("obstacle_height"),wheel)
             cg = posed_loaded_cg(pose,v("wheel_diameter")/2,v("rocker_pivot_offset"),
                                  v("loaded_sprung_mass"),v("loaded_sprung_cg_x"),v("loaded_sprung_cg_z"),
-                                 v("wheel_mass")+v("drive_mass")+v("rocker_mass"))
+                                 v("wheel_mass")+v("drive_mass")+v("rocker_mass"),
+                                 drive_mass=v("drive_mass"), drive_cg_offset=v("drive_motor_cg_offset"))
             cases.append((projected_support_margin(pose["contacts"],cg),wheel,pose,cg))
         margin, wheel, pose, cg = min(cases, key=lambda case: case[0])
         outputs["obstacle_tip_margin"] = margin

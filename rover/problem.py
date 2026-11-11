@@ -5,8 +5,9 @@ import hashlib
 from pathlib import Path
 from dataclasses import replace
 import openmdao.api as om
-from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS, ROUTE, configuration, migrate_inlet_inputs
+from .config import DESIGN, ASSUMPTIONS, REQUIREMENTS, MINIMUM_MARGINS, PA04_STROKES, ROUTE, configuration, migrate_inlet_inputs
 from .components import Mission
+from .mobility import DEPOSITION_STRAIGHT_DISTANCE
 from .models import ModelSet, compliant_plate_frame_models, traversal_models, extended_attachment_models
 from .contracts import validate_interfaces
 
@@ -80,7 +81,6 @@ MOVING_EXCAVATION_MARGINS = {
     "axle_ground_margin": (0.15, "m"),
     "excavation_domain_margin": (0.1, "m"),
     "feed_motor_margin": (300., "N"),
-    "feed_traction_margin": (300., "N"),
     "feed_power_margin": (400., "W"),
 }
 
@@ -89,7 +89,7 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
     """Catch invalid inputs before they become division errors or NaNs in a driver."""
     design = DESIGN if design is None else design
     assumptions = ASSUMPTIONS if assumptions is None else assumptions
-    zero_allowed = {"electronics_power", "actuator_idle_power", "rolling_base",
+    zero_allowed = {"breakout_force", "electronics_power", "actuator_idle_power", "rolling_base", "drive_motor_cg_offset",
                     "scrub_coefficient", "internal_lift_factor", "vertical_cut_fraction",
                     "force_imbalance", "mass_score_weight", "energy_score_weight",
                     "obstacle_height", "rocker_pivot_offset", "slope_angle",
@@ -137,7 +137,7 @@ def validate(values, design=None, assumptions=None, attachment_max=1.):
         raise ValueError("ROUTE needs finite nonnegative distances and nonzero total travel.")
 
 
-def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", actuators="reference", solver_tol=None, freeze=None, ignore_constraints=None, traversal_mode="calculated", optimize_attachment=False, attachment_max=1.):
+def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False, models=None, structure="reference", cobyla_radius=None, motors="reference", actuators="reference", solver_tol=None, freeze=None, ignore_constraints=None, traversal_mode="calculated", optimize_attachment=False, attachment_max=1., driver_factory=None):
     # Plate envelopes contain min/max/contact branches. Use a small-step
     # derivative-free solve for that profile; keep explicit SLSQP available.
     optimizer = optimizer or ("COBYLA" if structure == "plate-frame" else "SLSQP")
@@ -162,6 +162,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     traversal_component = models.traversal_stability()
     obstacle_component = models.obstacle_stability()
     static_wheel_compliance = getattr(traversal_component, "STATIC_WHEEL_COMPLIANCE", False)
+    static_wheel_load_transfer = getattr(traversal_component, "STATIC_WHEEL_LOAD_TRANSFER", False)
     requires_linear_payload = any(getattr(component, "REQUIRES_LINEAR_FILL_PAYLOAD", False)
                                   for component in (traversal_component, obstacle_component))
     if requires_linear_payload and not moving_excavation:
@@ -172,7 +173,8 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         if models.tip_stability is DepositionTipStability:
             models = replace(models, tip_stability=TipStability)
     design, assumptions = configuration(structure, motors, actuators,
-        excavation_mode="moving" if moving_excavation else "legacy")
+        excavation_mode="moving" if moving_excavation else "legacy",
+        actuator_stroke=(overrides or {}).get("actuator_catalog_stroke"))
     retired_excavation_inputs = {}
     if moving_excavation:
         overrides, retired_excavation_inputs = migrate_inlet_inputs(overrides or {})
@@ -191,6 +193,8 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     if frozen_names == set(design):
         raise ValueError("Cannot freeze every design variable; use --baseline for a fixed evaluation.")
     margins = {**MARGINS, **(PLATE_FRAME_MARGINS if structure == "plate-frame" else {})}
+    if static_wheel_load_transfer:
+        margins.update(slope_wheel_load_margin=(500., 'N'), wheel_equilibrium_margin=(1., None))
     diagnostic_screens = {
         "actuator_body_margin": "User removed this constraint; the reserve is diagnostic only and does not affect optimization or feasibility. Actual actuator packaging remains unverified.",
         "dig_froude_margin": "User removed the uncalibrated speed cap; constant capture/lift response assumes no additional high-speed loss.",
@@ -205,7 +209,10 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     ignored_constraints = set([ignore_constraints] if isinstance(ignore_constraints, str) else ignore_constraints or ())
     if moving_excavation:
         margins.pop("dig_reach_margin")
+        margins.pop("dig_traction_margin")
         margins.update(MOVING_EXCAVATION_MARGINS)
+        diagnostic_screens["dig_traction_margin"] = (
+            "Inactive compatibility diagnostic. User assumes exact equal/opposite cutting reactions; excavation feed traction reserve removed.")
         diagnostic_screens["dig_reach_margin"] = (
             "Compatibility alias of operating_reach_margin; use the active operating_reach_margin and axle_ground_margin checks.")
     else:
@@ -257,6 +264,8 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     if motors == "x44-standard" and (values["motor_bus_voltage"] != 12 or values["drive_gear_ratio"] != 100):
         raise ValueError("The selected hardware profile requires 12 V and a fixed 100:1 drive ratio.")
     if actuators == "pa04-900":
+        if values["actuator_installation_allowance"] != 0:
+            raise ValueError("The selected 6/8/9/10-inch PA-04 endpoints already define installed lengths; set actuator_installation_allowance=0")
         for name in ("actuator_force_rating", "actuator_speed"):
             if not math.isclose(values[name], assumptions[name][0], rel_tol=1e-12, abs_tol=0.):
                 raise ValueError("PA-04 900 lbf profile freezes force rating and nominal lowering speed; remove reference force/speed overrides.")
@@ -267,20 +276,23 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
     problem.design_specs, problem.assumption_specs, problem.margin_specs = design, assumptions, margins
     parallel_motion = getattr(models.linkage_loads, "PARALLEL_EXCAVATION_MOTION", False)
     arm_motion = "parallel_operating_poses" if parallel_motion else "custom_or_legacy"
-    problem.model_metadata = {"schema_version": 10, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
+    problem.model_metadata = {"schema_version": 12, "structure_profile": structure, "motor_profile": motors, "actuator_profile": actuators,
                               "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                               "traversal_mode": traversal_mode,
                               "optimize_attachment": optimize_attachment,
                               "attachment_max": attachment_max,
                               "configuration": {"design": design, "assumptions": assumptions, "margins": margins,
+                                                "margin_minimums": dict(MINIMUM_MARGINS),
                                                 "frozen_design": frozen_design,
                                                 "ignored_optimizer_constraints": sorted(ignored_constraints),
                                                 "excavation_mode": "moving" if moving_excavation else "custom_or_legacy",
                                                 "excavation_arm_motion": arm_motion,
                                                 "static_wheel_compliance": static_wheel_compliance,
+                                                "static_wheel_load_transfer": static_wheel_load_transfer,
                                                 "traversal_mode": traversal_mode, "attachment_max": attachment_max},
                               "optimizer_settings": {"optimizer": optimizer, "maxiter": maxiter, "tol": solver_tol, "cobyla_radius": cobyla_radius},
                               "diagnostic_only_screens": diagnostic_screens,
+                              "actuator_load_scope": "Quasi-static gravity only; no extraction allowance or dynamic load factor. Legacy breakout_force input is inactive.",
                               "models": models.metadata(), "calibration": "uncalibrated; see model cards",
                               "source_files_sha256": {p.relative_to(Path(__file__).parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                                                        for p in sorted(Path(__file__).parent.rglob("*.py"))}}
@@ -288,7 +300,7 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         "pose": "Both mirrored drum pairs at deposition_actuator_length during both dumps and the half-loaded turn",
         "sequence": "Loaded travel -> parallel deposition motion -> first dump -> half-loaded turn -> second dump -> parallel empty return to travel",
         "accounting": "Additional time/energy separate from excavation positioning; sampled force/clearance sweep includes deposition",
-        "tip_screen": "Actual deposition half-load CG for moving excavation; explicit legacy excavation retains maximum-extension screen",
+        "tip_screen": "Default checks half-loaded deposition CG and per-rocker drive reactions. Explicit legacy excavation checks gravity at maximum extension.",
         "limitations": "Quasi-static transitions; no dynamic arm-motion, soil discharge height or controller validation"}
     if moving_excavation:
         problem.model_metadata["excavation_operation"] = {
@@ -305,7 +317,9 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
             "arm_accounting": ("Full capability-sweep loads retained; actual front/rear digging commands determine elapsed motion (slower arm per phase) and summed electrical work. No lowering/cutting overlap credit."
                                if parallel_motion else "Explicit custom/legacy load factory retains its own motion accounting."),
             "recovery": "Maximum-extension axle reaches ground; actual driving on drums and motor-body clearance unverified.",
-            "calibration": "No fitted data added; existing capture, cutting, rolling and efficiency assumptions remain uncalibrated.",
+            "force_model": excavation_component.options["force_model"] if "force_model" in excavation_component.options else "custom",
+            "reaction": "User assumes equal/opposite drum cancellation; wheel feed work/force includes rolling and acceleration only; excavation traction reserve removed.",
+            "calibration": "NASA force option uses versioned published trend readings only. nasa_force_source_valid reports unsupported transfer; independent RPM effects, torque conversion and hardware validation remain unidentified. Capture, rolling and efficiency assumptions remain uncalibrated.",
         }
     if actuators == "pa04-900":
         problem.model_metadata["actuator_performance"] = {
@@ -314,8 +328,12 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
             "rated_force_N": values["actuator_force_rating"],
             "installation_allowance_m": values["actuator_installation_allowance"],
             "stroke_domain_m": [.0508, 1.016], "load_domain_N": [0., values["actuator_force_rating"]],
+            "allowed_hardware_strokes_m": sorted(PA04_STROKES),
+            "selected_hardware_stroke_m": values["actuator_catalog_stroke"],
+            "installed_command_interval_m": list(PA04_STROKES[assumptions["actuator_catalog_stroke"][0]]),
+            "installed_endpoints_manifest": "data/actuators/installed_strokes_2026-11-07.json",
             "lowering_assumption": "Rated-load speed/current throughout lowering; gravity-assisted operation unmeasured.",
-            "raising_assumption": "Constant maximum sampled extraction force throughout raising, including breakout allowance.",
+            "raising_assumption": "Constant maximum sampled gravity-only force throughout raising; extraction resistance and dynamic loads are not modeled. Legacy breakout_force input is ignored.",
             "energy_accounting": "Two actuators: 12 V * phase current * phase duration; no additional reference efficiency or idle loss.",
             "validation": "Held-out catalog mass rows only; no independent hardware validation or thermal/duty-cycle qualification.",
             "inactive_reference_inputs": ["actuator_efficiency", "actuator_fixed_mass", "actuator_mass_per_force", "actuator_mass_per_power", "actuator_mass_per_length", "actuator_housing_allowance"],
@@ -330,13 +348,18 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
             "energy_model_revision": 2,
             "combined_efficiencies": {role: values[role+"_efficiency"] for role in ("drive", "drum")},
             "continuous_operation_verified": False,
+            "drive_assembly_mass_each_kg": values["x44_motor_mass"]+values["drive_gearbox_mass"],
+            "drive_assembly_cg_above_axle_m": values["drive_motor_cg_offset"],
+            "drive_bracket": "User assumes perfectly rigid and massless; CG offset rotates with the side rocker",
             "current_limits": {n: values[n] or "undecided; voltage envelope only" for n in ("drive_stator_current_limit", "drum_stator_current_limit")},
             "limitations": "Constant combined efficiencies are uncalibrated; no current/RMS/partial-duty electrical predictions, battery sag or thermal limits. Drum ratio is continuous exploratory; cartridge availability/ratings and motor adapter require verification.",
             "inactive_reference_inputs": ["drive_motor_power", "drum_motor_power", "motor_rated_rpm", "motor_mass_per_watt", "gear_mass_per_torque", "drive_fixed_mass", "drum_fixed_mass"],
             "power_margin_semantics": "Necessary instantaneous manufacturer peak-curve screen, not a continuous rating; torque-speed/current envelope also enforced."}
     problem.model_metadata["actuator_packaging"] = {
-        "status": "Not enforced: actuator packaging reserve is diagnostic only at user request",
-        "catalog_endpoints": "Diagnostics only; commands are not checked against these endpoints",
+        "status": ("Discrete 6/8/9/10-inch installed command interval enforced; body and bracket collisions remain unverified"
+                   if actuators == "pa04-900" else "Not enforced: actuator packaging reserve is diagnostic only at user request"),
+        "catalog_endpoints": ("All four actuator commands are bounded by the selected student-supplied installed endpoints"
+                              if actuators == "pa04-900" else "Diagnostics only; commands are not checked against these endpoints"),
         "reference_allowance": "actuator_housing_allowance affects the generic diagnostic only; inactive for PA-04",
     }
     problem.model_metadata["attachment_coordinates"] = {
@@ -375,6 +398,15 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
             if "actuator_profile" not in component.options:
                 raise ValueError("Deposition actuation replacement must support actuator_profile for PA-04")
             component.options["actuator_profile"] = actuators
+        if slot == "mobility" and "deposition_translation" in component.options:
+            if not moving_excavation:
+                component.options["deposition_translation"] = False
+            if component.options["deposition_translation"]:
+                problem.model_metadata["deposition_operation"].update(
+                    straight_leg_distance_m=DEPOSITION_STRAIGHT_DISTANCE,
+                    sequence="Loaded travel -> parallel deposition motion -> first dump -> reverse 0.5 m -> point turn -> forward 0.5 m -> second dump -> parallel empty return to travel",
+                    turn_time="Total duration of the two straight moves and the point turn, in seconds",
+                )
         model.add_subsystem(slot,component,promotes=["*"])
     inputs = om.IndepVarComp()
     for name, value in values.items():
@@ -397,13 +429,14 @@ def build_problem(overrides=None, *, optimizer=None, maxiter=None, display=False
         model.add_constraint(name, upper=upper*(1-1e-3), ref=upper)
     for name, (scale, _) in margins.items():
         if name not in ignored_constraints:
-            model.add_constraint(name, lower=0. if name in STRICT_SLOPE_MARGINS else 1e-3*scale, ref=scale)
+            minimum = MINIMUM_MARGINS.get(name, (0., None))[0]
+            model.add_constraint(name, lower=minimum if name in STRICT_SLOPE_MARGINS else minimum+1e-3*scale, ref=scale)
     # V2 finite-soil scores are typically tens to hundreds, not the old thousands.
     model.add_objective("construction_points", scaler=-1 / 100.0)  # maximize
     # Deliberately recompute the full model for perturbations: easy to replace models.
     # Avoid complex-step assumptions, derivative coloring, or hand-maintained Jacobians.
     model.approx_totals(method="fd", form="central", step=1e-5, step_calc="rel_avg")
-    problem.driver = om.ScipyOptimizeDriver(optimizer=optimizer, tol=solver_tol)
+    problem.driver = (driver_factory or om.ScipyOptimizeDriver)(optimizer=optimizer, tol=solver_tol)
     problem.driver.options["maxiter"] = maxiter
     problem.driver.options["disp"] = display
     if cobyla_radius is not None:

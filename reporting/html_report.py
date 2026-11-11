@@ -111,12 +111,21 @@ def geometry_svg(values, extended=False, title=None, travel=False, deposition=Fa
         for i, j in PLATE_EDGES:
             svg.append(line(*frame["nodes"][i], *frame["nodes"][j], "#7898b0", v("plate_spoke_width")*scale))
         svg.append(circle(*frame["nodes"][0], v("plate_hub_radius"), "#67839f", "#dce7f0"))
-        for sign in (-1, 1):
-            svg.append(line(0, frame["nodes"][0, 1], sign*v("wheelbase")/2, rw, "#67839f", v("rocker_box_height")*scale))
+        if "rocker_length" in values:
+            half, shaft_z = v("rocker_length")/2, frame["nodes"][0, 1]
+            svg.append(line(-half, shaft_z, half, shaft_z, "#67839f", v("rocker_box_height")*scale))
+            for sign in (-1,1):
+                motor_z = rw+values.get("drive_motor_cg_offset",0.)
+                svg.append(line(sign*half,shaft_z,sign*v("wheelbase")/2,motor_z,"#526a7b",2,"4 3"))
+        else:
+            for sign in (-1, 1):
+                svg.append(line(0, frame["nodes"][0, 1], sign*v("wheelbase")/2, rw, "#67839f", v("rocker_box_height")*scale))
     else:
         svg.append(rect(-v("wheelbase")/2, rw, v("wheelbase"), 2*rw+v("chassis_height")-rw, "#dce7f0", "#67839f"))
     for sign in (-1,1):
         svg += [circle(sign*v("wheelbase")/2,rw,rw,"#354657","#cbd6df",3)]
+        if "rocker_length" in values:
+            svg.append(circle(sign*v("wheelbase")/2,rw+values.get("drive_motor_cg_offset",0.),.006,"#168578","#168578",1))
         path=" ".join(f'{point(sign*x,y)[0]:.2f},{point(sign*x,y)[1]:.2f}' for x,y in poses)
         svg += [f'<polyline points="{path}" fill="none" stroke="#9aafba" stroke-width="2" stroke-dasharray="3 5"/>',
                 line(sign*v("pivot_x"),v("bottom_pivot_height"),sign*end_x,end_y,"#246f99",7),
@@ -184,10 +193,10 @@ def top_view_svg(values):
     members = chassis_members(values)
     if 'cross_tube_span' in values:
         span = rocker_bearing_span(values)
-        # A top footprint of each sloping box rocker and the central round axle.
+        # Saved old records retain their prior footprint; new records own rocker_length.
         pieces.append(box(0,0,v('axle_outer_diameter'),span,'#526a7b','#304859',kind='rocker-axle'))
         for sy in (-1,1):
-            pieces.append(box(0,sy*span/2,wb,v('rocker_box_width'),'#9aafbd','#536c7f',kind='rocker'))
+            pieces.append(box(0,sy*span/2,values.get('rocker_length',wb),v('rocker_box_width'),'#9aafbd','#536c7f',kind='rocker'))
             for sx in (-1,1):
                 pieces.append(line(sx*wb/2,sy*span/2,sx*wb/2,sy*track/2,
                                    '#526a7b',3,kind='wheel-axle'))
@@ -242,16 +251,26 @@ def stability_svg(values):
     """Scientific SVG of the declared gravity screens, not terrain animation."""
     from rover.alternatives.traversal_stability import slope_support, rock_path_screen
     fraction = .5 if "plate_spoke_width" in values else 1.
-    rock = rock_path_screen(values, rocker_centroid_fraction=fraction, include_trace=True)
     max_angle = min(89., max(40., math.degrees(values["slope_angle"])+5))
     angles = [max_angle*i/80 for i in range(81)]
-    slope = [slope_support(values["wheelbase"], values["track_width"], values["loaded_cg_x"],
-                           values.get("tipping_loaded_cg_z", values["loaded_cg_z"]), math.radians(a)) for a in angles]
+    if 'wheel_spring_compliance' in values:
+        from rover.alternatives.compliant_tipping import StaticWheelModel, slope_cardinals
+        wheel_model = StaticWheelModel.from_values(values, fraction)
+        rock = rock_path_screen(values, wheel_model=wheel_model, include_trace=True)
+        pairs = [slope_cardinals(wheel_model, math.radians(a)) for a in angles]
+        slope = [{'slope_pitch_tip_margin': p, 'slope_roll_tip_margin': r} for p, r, _ in pairs]
+    else:
+        rock = rock_path_screen(values, rocker_centroid_fraction=fraction, include_trace=True)
+        slope = [slope_support(values["wheelbase"], values["track_width"], values["loaded_cg_x"],
+                               values.get("tipping_loaded_cg_z", values["loaded_cg_z"]), math.radians(a)) for a in angles]
     height = [r["height"] for r in rock["trace"]]
+    subtitle = ('Linear springs + hard stops. Curves after wheel unloading are guarded continuations; slope and rock are separate cases.'
+                if 'wheel_spring_compliance' in values else
+                'One wheel raised at a time on horizontal platforms. Curves are model calculations; no physical rock profile is simulated.')
     parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 410" role="img" aria-label="Static slope and one-wheel articulation stability curves">',
              '<rect width="1200" height="410" fill="#f7fafc"/><g font-family="sans-serif" fill="#203249">',
              '<text x="22" y="28" font-size="20">Loaded travel pose: gravity stability screens</text>',
-             '<text x="22" y="52" font-size="13">One wheel raised at a time on horizontal platforms. Curves are model calculations; no physical rock profile is simulated.</text>']
+             f'<text x="22" y="52" font-size="13">{escape(subtitle)}</text>']
 
     def panel(index, title, xs, curves, xmax, xlabel, ylabel, marker=None):
         left, top, width, high = 58+index*398, 110, 315, 220
@@ -336,6 +355,15 @@ def write_report(record, output, iterations=(), *, download_links=None):
     top = top_view_svg(values)
     from .obstacle_drawing import obstacle_pose_svg
     obstacle = obstacle_pose_svg(values) if "obstacle_height" in values else ""
+    from .actuator_force_drawing import force_stroke_data, force_stroke_svg
+    try:
+        force_data = force_stroke_data(values)
+        actuator = tuple(force_stroke_svg(force_data, units) for units in ("metric", "imperial"))
+    except (ValueError, KeyError) as exc:
+        actuator = (f'<p class="callout">Actuator force plot unavailable: {escape(str(exc))}.</p>', "")
+    for suffix, svg in zip(("actuator_force", "actuator_force_imperial"), actuator):
+        if svg.startswith('<svg'):
+            (output.parent/f"{output.stem}_{suffix}.svg").write_text(svg, encoding="utf-8")
     excavation, feed = "", ""
     if "front_dig_depth" in values:
         from .moving_excavation_drawing import moving_excavation_svg, feed_rpm_svg
@@ -361,5 +389,5 @@ def write_report(record, output, iterations=(), *, download_links=None):
                          route_svg(values.get("outbound_travel_time", values["traversal_time_one_way"]),
                                    values.get("return_travel_time", values["traversal_time_one_way"])), frames, top_drawing=top,
                          download_links=download_links, obstacle_drawing=obstacle,
-                         excavation_drawing=excavation, feed_drawing=feed)
+                         excavation_drawing=excavation, feed_drawing=feed, actuator_drawings=actuator)
     output.with_suffix(".html").write_text(html, encoding="utf-8")

@@ -52,7 +52,7 @@ def normalized_violation(state, metadata):
 
 
 def geometry_seed(reference, fraction, layout, rotation):
-    """Construct actual pin lengths from varied pivots and matched arm angles."""
+    """Construct actual pin lengths; screening rejects unavailable hardware poses."""
     state = reference["final"]
     v = {n:i["value"] for group in ("design", "assumptions", "outputs") for n,i in state[group].items()}
     bx,bz,ax,az,scale = LAYOUTS[layout]
@@ -62,9 +62,12 @@ def geometry_seed(reference, fraction, layout, rotation):
     values.update(pivot_x=v["pivot_x"]+bx, bottom_pivot_height=v["bottom_pivot_height"]+bz,
                   actuator_pivot_x=v["actuator_pivot_x"]+ax, top_pivot_height=v["top_pivot_height"]+az,
                   arm_length=v["arm_length"]*scale, lin_act_side_arm_offset=(fraction-1)*v["arm_length"]*scale)
-    for pose,length in (("travel", "travel_actuator_length"), ("stowed", "actuator_retracted_length"),
+    for pose,length in (("travel", "travel_actuator_length"), ("deposition", "deposition_actuator_length"), ("stowed", "actuator_retracted_length"),
                          ("extended", "actuator_extended_length")):
-        angle = math.atan2(v[pose+"_y"]-v["bottom_pivot_height"], v[pose+"_x"]-v["pivot_x"])+rotation
+        # Historical records without a deposition command use the travel pose,
+        # matching the normal explicit input migration.
+        source_pose = "travel" if pose == "deposition" and "deposition_y" not in v else pose
+        angle = math.atan2(v[source_pose+"_y"]-v["bottom_pivot_height"], v[source_pose+"_x"]-v["pivot_x"])+rotation
         pin_x = values["pivot_x"]+fraction*values["arm_length"]*math.cos(angle)-values["lin_act_top_arm_offset"]*math.sin(angle)
         pin_z = values["bottom_pivot_height"]+fraction*values["arm_length"]*math.sin(angle)+values["lin_act_top_arm_offset"]*math.cos(angle)
         values[length] = math.hypot(pin_x-values["actuator_pivot_x"], pin_z-values["top_pivot_height"])
@@ -190,7 +193,10 @@ def screen_seeds(reference, count, attachment_max=1.,fractions=(1.,.85,.7,.55)):
     from rover.config import configuration
     from reporting.report import snapshot
     actuators = reference['model_metadata'].get('actuator_profile', 'reference')
-    design,_ = configuration("plate-frame", "x44-standard", actuators)
+    hardware = {n: item["value"] for group in ("design", "assumptions")
+                for n, item in reference["final"][group].items()}
+    design,_ = configuration("plate-frame", "x44-standard", actuators,
+                             actuator_stroke=hardware.get("actuator_catalog_stroke"))
     screened = []
     for fraction in fractions:
         pool = []

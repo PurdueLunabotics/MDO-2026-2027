@@ -4,84 +4,158 @@ Checked locally using the repository's `.venv`. This page
 describes the current implementation; Git history retains earlier run notes.
 Software verification is separate from physical calibration and validation.
 
-## Static tipping compression (2026-11-05)
+## PA-04 10-inch option (2026-11-09)
 
-The current default plate-frame selection uses the uniform-compression static
-tipping adapters in [STATIC_TIPPING.md](STATIC_TIPPING.md). Explicit
-`ModelSet()` and `plate_frame_models()` preserve their original rigid factories,
-including the historical stationary motor regression's exact expectations.
-No mass boundary, score, energy equation, constraint or numerical reserve was
-relaxed. Schema 10 records the optional compression/height diagnostics.
+Added 0.254 m to the existing discrete choices, using the supplied A/B table:
+17.87/27.87 in = 0.453898/0.707898 m. All four command bounds and the existing
+endpoint manifest include this choice. Defaults and saved cases are unchanged;
+no new code files, equations or calibration were added. All five focused
+geometry-requirement tests passed; independent inch conversion and endpoint
+stroke difference were checked. Broader verification limitations from the
+preceding 9-inch addition remain unchanged.
 
-At identical saved `design_baseline.json` geometry:
+## Additional PA-04 stroke choice (2026-11-09)
+
+The existing 8-inch choice is retained; 9 inches (0.2286 m) is added to the
+same configuration table. The student-supplied A/B table gives 16.87/25.87 in,
+converted to 0.428498/0.657098 m. The existing endpoint manifest records this
+source. All four commands use the selected interval; saved inputs and defaults
+are unchanged. Mass/current/speed approximations and their validation status
+are unchanged. No new code files or fitted relationships were added.
+
+All five geometry-requirement tests passed, including enumeration of all three
+choices and invalid-stroke/domain rejection. A 9-inch plate-frame/X44 full-model
+evaluation completed (actuator unit mass 2.62813628 kg), and the required reference
+baseline completed with raw infeasibility retained. Full unittest discovery was
+started and interrupted after the initial passing modules; no new full-suite
+pass is claimed. The required derivative/one-iteration command was started
+and interrupted before completion; no fresh derivative or optimizer success is
+claimed for this configuration-only addition. Logs are under ignored
+`results/actuator_9inch_*`.
+
+## NASA force selection, continuous rockers and drive placement (2026-11-08)
+
+Only existing model, report, study and test files were edited; no new code
+files were added for this change. The saved student baseline retains 30 RPM
+and 0.03 m/s feed. Each side now has one straight, unchanged-section box tube
+through the rocker shaft, with length `wheelbase - 0.0635 m`. The baseline
+length is 0.4865 m; the two tubes together weigh 0.8209671081 kg. Four drive
+assemblies weigh 6 kg total, with centers 0.05842 m above their axles in the
+local rocker-up direction. End brackets are rigid and massless by assumption.
+
+The plate-frame profile selects the existing NASA IPEx Figure 13 surface;
+the generic reference keeps its pressure law. At the student's baseline the
+prediction is 44.6440741 N per drum, or 178.5762964 N summed magnitudes.
+Opposing-drum horizontal reactions are assumed to cancel exactly, so cutting
+force/work is removed from wheel feed demand and `feed_traction_margin` is
+removed. Rolling and acceleration demands remain. The compatibility
+`dig_traction_margin` output is explicitly diagnostic only for moving digging.
+Report schema is 12. NASA did not identify an independent RPM response or
+shaft-torque law: tip/feed ratio 18.797 versus tested 8.5 and unsupported drum
+geometry remain visibly flagged (`nasa_force_source_valid=0`). The retained
+force-times-radius torque mapping is an unvalidated sizing assumption.
+
+Verification used the local `.venv`:
+
+- Full `python -m unittest discover -s tests -v` completed: 274 test methods,
+  1490.417 seconds, initially eight failures and one error. Two affected
+  methods were corrected and passed focused reruns: standalone study adapters
+  now prepare the selected surface outside `compute()`, and the synthetic
+  zero-resistance motor limit explicitly zeroes the selected force law.
+  All 14 excavation and all five geometry-requirement tests passed on rerun.
+  Across discovery and focused reruns, 272 of 274 distinct methods have passing
+  coverage; the full suite is **not green**. The two remaining failing methods
+  are the historical frozen-actuator-bound assertion (0.403098 versus current
+  generic 0.3 m) and the old motor-interface regression fixtures (six failing
+  subcases). Those fixtures predate the 25 mm deposition reserve and the new
+  plate-frame rocker mass/CG. No bounds, margins or tolerances were loosened.
+- Reference baseline evaluation and the required total-derivative step-size
+  check completed. A one-evaluation, one-second-budget COBYLA smoke run retained
+  `optimizer_success=false` and failed/infeasible status; no converged
+  optimization is claimed. The plate/X44 smooth total-derivative test also
+  passed in full discovery.
+- Independent mass and mission-energy sums close. The 6 kg drive mass is
+  counted once; the raised motor centers increase nominal loaded CG height by
+  exactly `6*0.05842/(dry_mass+payload_mass) = 0.00210091546 m`.
+  Independent straight-beam curvature integration, articulated global and
+  differential moment balance, compression limits and invalid domains passed.
+  N2 checks confirm motor-offset, rocker-mass, wheel/drum mass and digging-energy
+  connections. Side, top and obstacle SVGs were rendered and visually inspected.
+
+The regenerated, unoptimized baseline is
+`results/nasa_rocker_baseline.json` / `.html`; its dry mass is
+44.7493548 kg. Eight failed checks remain: ground clearance, empty and loaded
+slope traversal, turning traction, wheel-first geometry, startup position,
+structure stress and slope wheel load. Raw signed failures are retained.
+Logs, derivative records and `nasa_rocker_physics_audit.json` remain under ignored
+`results/`. No hardware experiment, new calibration or independent NASA
+validation was performed. See [IPEX_FORCE_SURFACE.md](IPEX_FORCE_SURFACE.md)
+for the versioned published-trend data and unresolved source-depth discrepancy.
+
+## Coupled wheel compression and 64 mm stop (2026-11-05)
+
+The existing compliant tipping model solves unequal normal reactions and
+body/rocker pose together, replacing uniform heave in place. It reuses the
+existing rocker geometry, CG placement, reactions and rock sweep. There are no
+new source/test files or parallel uniform-compression factory. The student's
+linear spring/64 mm stop law is provisional; no FEA or hardware calibration
+is claimed. See [STATIC_TIPPING.md](STATIC_TIPPING.md).
+
+All 17 focused tests passed after the solver correction: independent force/moment/differential
+balance, rigid/flat limits, reference-fill/grouser accounting, downhill lean,
+hard-stop load conservation, unloading/unstable/invalid cases, near-zero-angle
+solver regression, mirrors/dense headings, unchanged mass/energy, records/N2,
+dependencies and smooth total derivatives. Full discovery ran 240 tests in
+917.027 s: 237 passed and three errored when an unconstrained limiting-angle
+step left the physical domain. The corrected solver retries those same equations
+with bounded angles and retains the residual/validity checks. All three affected
+tests passed on rerun (the complete 10-test deposition module plus the extended-arm
+and frozen-hardware regressions). The 17 tipping tests and an added assertion for
+the formerly failing hardware case also passed. This provides passing coverage
+for all 240 distinct tests; a second full discovery run was not performed.
+The saved plate-frame baseline and generic reference both passed the full
+CLI derivative step-size check. Eight geometry corners (180/359 mm diameter,
+380/650 mm wheelbase and 500/699 mm track) closed their equilibrium equations
+within 1e-7 m; negative wheel reactions were retained.
+
+At identical saved baseline geometry, stiffness is 11.458732 N/mm per wheel:
 
 | Quantity | Fill 0.4 | Fill 0.9 |
 | --- | ---: | ---: |
-| Loaded mass, kg | 98.950264 | 167.791636 |
-| Same-design 0.9-fill reference mass, kg | 167.791636 | 167.791636 |
-| Wheel compression, mm | 21.170986 | 35.900000 |
-| Nominal loaded CG height, mm | 412.617344 | 428.210556 |
-| Compressed CG height used for slope tipping, mm | 391.446358 | 392.310556 |
-| Previous 30-degree pitch reserve, mm | 11.775265 | 2.772520 |
-| Revised 30-degree pitch reserve, mm | 23.998340 | 23.499395 |
-| Revised 30-degree roll reserve, mm | 58.998340 | 58.499395 |
-| Revised all-heading static tip angle, degrees | 32.564626 | 32.507335 |
+| Coupled 30-degree pitch reserve, mm | 5.332270 | -11.369505 |
+| Coupled 30-degree roll reserve, mm | 44.486524 | 30.874374 |
+| Global hull-zero inclination, degrees | 30.541876 | 28.764464 |
+| First wheel-unloading inclination, degrees | 28.420442 | 26.606094 |
+| Worst required normal at 30 degrees, N | -10.622629 | -39.053613 |
+| 30 cm rock-sweep hull reserve, mm | 147.594412 | 129.132673 |
+| 30 cm rock-sweep minimum normal, N | 64.149105 | 46.713593 |
 
-The near-equal revised margins follow from the prescribed compression nearly
-offsetting the nominal CG rise; weight cancels from static moment balance.
-The 18 mm rigid grousers are inside the overall 359 mm diameter and are not
-added twice. Center contacts remain the student's chosen boundary. Unequal
-wheel compression, soil sinkage and grouser penetration are unmodeled; these
-results are not calibrated wheel/soil validation.
+The negative normals reject four-contact equilibrium; continued geometry is
+guarded, not a post-lift prediction. First unloading need not mean complete
+rollover. The fills retain 13/15 failed modeled checks. Same-input comparisons
+against the previous uniform model show zero change in dry/payload mass,
+nominal CG, level dumping/clearance, digging/cycle energy, time and score.
+Energy accounting closes exactly at recorded precision, and both snapshots'
+physics source hashes match. Existing slope curves evaluate the coupled poses;
+no graph type or prior-year standalone artifact was added or changed.
 
-The same-input pre/post comparison found **zero difference** in dry/payload
-mass, nominal mass-property heights, endpoint and swept rock reserves/reactions,
-level dumping reserve, digging/cycle energy and score. The largest absolute
-cycle energy accounting residual was `3.64e-12 J`. Uniform hardware lowering
-at fixed platform contacts leaves projected rock moment arms unchanged.
-The 0.4/0.9 evaluations retain 12/13 failed modeled checks, respectively;
-neither baseline is declared feasible. Saved source hashes match the final
-physics files. The existing N2 connections include explicit mass/fill and
-corrected-height dependencies; no auto-IVC source supplies the added inputs.
+The required reference baseline completed. The generic reference optimization
+passed derivatives and was stopped after two recorded driver evaluations:
+its existing maximum clearance 0.1907 m is 12.5 mm below the unchanged 0.2032 m
+requirement. No optimizer termination/convergence is claimed. The reason is
+recorded in `results/static_tipping_reference_optimization_interrupted.json`.
+An affected-profile bounded run (`--maxiter 1`, increased to 38 by SciPy,
+39 recorded evaluations) completed with success false and
+`failed_or_infeasible`. Physical and slightly violated inlet-depth bounds remain
+failed; its numerical equilibrium margin is positive (0.714153).
 
-The full final discovery run passed **all 231 tests in 714.754 s**. The eight
-focused compression tests also passed, including independent zero/half/
-rated total-load limits, fixed reference mass across fills, gravitational moment
-balance, grouser accounting, invariant rock/dump/energy outputs, invalid-domain
-and extrapolation rejection, factory preservation, recorded outputs, N2 and
-smooth total derivatives. The saved plate-frame baseline's **full** derivative
-step-size check also passed. Existing slope graphics use the corrected height;
-no new plots were introduced.
-
-The required generic baseline command completed, retaining its failures. The
-required generic `--check-derivatives` run passed its derivative check, then
-was interrupted after **four recorded driver evaluations**. Its existing
-ground-clearance upper bound is
-`0.8*(0.359/2)+0.10-0.055/2-0.0254 = 0.1907 m`, below the unchanged 0.2032 m
-requirement by 12.5 mm. No optimizer termination or converged candidate is
-claimed. The reason, recording and derivative result are saved in
-`results/static_tipping_reference_optimization_interrupted.json`.
-
-A bounded affected-profile optimizer smoke run (`--maxiter 1`, raised by SciPy
-to 39 evaluations) completed with optimizer success false and
-`failed_or_infeasible`. All final physical and design-bound failures, including
-a slightly out-of-bounds inlet depth, remain reported. This checks failure
-reporting, not convergence or physical validation.
-
-Reproduction commands, using the local `.venv`:
-
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe main.py --baseline --output results/static_tipping_reference_baseline.json
-.\.venv\Scripts\python.exe main.py --check-derivatives --output results/static_tipping_reference_optimization.json
-.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --check-derivatives --output results/static_tipping_fill09.json
-.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --set fill_fraction=0.4 --output results/static_tipping_fill04.json
-.\.venv\Scripts\python.exe main.py --inputs design_baseline.json --optimize --maxiter 1 --output results/static_tipping_plate_optimization.json
-```
-
-Local run logs, comparison JSON, SQL and generated reports remain ignored under
-`results/static_tipping_*`. On this restricted Windows runner, `TEMP` and `TMP`
-were directed to `results/static_tipping_tmp` for temporary-file tests.
+Reproduce with the local `.venv`: full `unittest discover -s tests -v`,
+`main.py --baseline`, `main.py --check-derivatives`, and
+`main.py --inputs design_baseline.json --check-derivatives`; use `--set
+fill_fraction=0.4` for the other fill and `--optimize --maxiter 1` for the bounded
+profile check. Logs, reports, SQL, N2 and comparison JSON are ignored under
+`results/load_transfer_*`. On this restricted Windows runner, tests use
+`results/static_tipping_tmp` for `TEMP` and `TMP`.
 
 The 2026-10-30 report release adds a fresh baseline and the saved fixed-hardware
 candidate, with all physical failures retained. See [release verification](REPORT_RELEASE.md#verification)
@@ -1066,7 +1140,7 @@ Full test output is retained locally in `results/report_graphics_tests.log`.
 ## Published baseline refresh (2026-10-24)
 
 The curated `docs/design_reports/baseline.html`, its seven SVG drawings and
-`output/pdf/baseline.pdf` were regenerated from the unchanged
+`output/baseline.pdf` were regenerated from the unchanged
 `design_baseline.json`. The published HTML embeds the exact fixed-evaluation
 record; its source SHA-256 and every supplied input were checked against the
 saved baseline. The report gives 52.67914912 kg dry mass and 3230.488448

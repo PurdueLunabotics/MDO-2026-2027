@@ -60,6 +60,10 @@ class ParallelExcavationTests(unittest.TestCase):
                 self.addCleanup(p.cleanup)
                 p.run_model()
                 v = lambda n: p.get_val(n).item()
+                gravity_only = [v(n) for n in ('required_actuator_force', 'arm_energy', 'actuation_time')]
+                p.set_val('breakout_force', 1e12)  # Old case files cannot add an allowance.
+                p.run_model()
+                self.assertEqual([v(n) for n in ('required_actuator_force', 'arm_energy', 'actuation_time')], gravity_only)
                 self.assertAlmostEqual(v('actuation_time'), v('excavation_lowering_time')+v('excavation_raising_time'))
                 self.assertIn('excavation_lowering_time', snapshot(p)['outputs'])
                 conns = p.model._conn_global_abs_in2out
@@ -71,8 +75,8 @@ class ParallelExcavationTests(unittest.TestCase):
                                        step=3e-5, step_calc='rel_avg', out_stream=None)
                 assert_check_totals(checks, atol=1e-3, rtol=2e-3)
                 if profile == 'pa04-900':
-                    p.set_val('breakout_force', 10000.)
-                    p.run_model()
+                    p.set_val('linkage_loads.actuator_leverage_max', 10000.)
+                    p.model.linkage_loads.run_solve_nonlinear()
                     self.assertLess(v('actuator_curve_margin'), 0)
                     self.assertLess(v('actuator_force_margin'), 0)
                     self.assertGreater(v('arm_energy'), 0)

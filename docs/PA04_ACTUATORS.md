@@ -3,12 +3,17 @@ Current attachment interface: [axle-relative side/top offsets, revision 2](ARM_O
 # PA-04 900 lbf actuator model — revision 1
 
 The student froze the **900 lbf, 12 V PA-04** selection on 2026-10-27.
-`design_baseline.json` selects `actuators: "pa04-900"`; catalog stroke remains
-an exploratory continuous design variable. `ModelSet()` and the reference
+`design_baseline.json` selects `actuators: "pa04-900"`. Since 2026-11-07 catalog
+stroke is a discrete hardware choice: **6, 8, 9 or 10 inches**. `ModelSet()` and the reference
 configuration retain generic actuator physics for comparisons. Select the
 hardware with `--actuators pa04-900` or
 `build_problem(actuators="pa04-900")`. It composes with either structure and
 motor profile through `ModelSet.linkage` and `ModelSet.linkage_loads`.
+
+Select 8 inches with `--set actuator_catalog_stroke=0.2032`, or 9 inches with
+`--set actuator_catalog_stroke=0.2286`, or 10 inches with
+`--set actuator_catalog_stroke=0.254`. All four commanded lengths must lie
+inside the selected interval. Existing defaults and saved cases are unchanged.
 
 ## Source and domain
 
@@ -30,14 +35,29 @@ only **2–40 inches**. The combined profile uses the narrower 2–40 inch domai
 it does not invent missing mass at 1, 50 or 60 inches. Installed end hardware
 and allowance mass were not supplied and are outside the actuator mass fit.
 
-## Continuous geometry and mass
+## Catalog geometry, discrete hardware and mass
+
+The student supplied the 6/8-inch endpoints on 2026-11-07 and added the 9/10-inch options from the A/B dimension table on 2026-11-09:
+
+| Catalog stroke | Minimum command | Maximum command |
+| --- | --- | --- |
+| 6 in (0.1524 m) | 0.352298 m | 0.504698 m |
+| 8 in (0.2032 m) | 0.403098 m | 0.606298 m |
+| 9 in (0.2286 m) | 0.428498 m | 0.657098 m |
+| 10 in (0.254 m) | 0.453898 m | 0.707898 m |
+
+`data/actuators/installed_strokes_2026-11-07.json` records this specification.
+`rover/config.py:PA04_STROKES` sets the bounds on all four commands. Stroke is
+fixed within a run, selected by the case's `actuator_catalog_stroke`; intermediate
+strokes are rejected. The existing geometry study retains its separate 6/8-inch search choices. The old
+161.3408 mm installation allowance is not added to these supplied endpoints.
 
 For catalog stroke `s` in metres and configurable installation allowance `a`:
 
 ```text
 catalog_retracted_length = s + 7.87*0.0254 + a
 catalog_extended_length  = 2*s + 7.87*0.0254 + a
-a = actuator_installation_allowance = 0.1613408 m by default
+a = actuator_installation_allowance = 0 m for the selected installed endpoints
 mass_one_actuator = (4.376918958521191 + 0.1574588593327322*s/0.0254)*0.45359237 kg
 linkage_mass = 2*(mass_one_actuator + arm_linear_mass*arm_length)
 ```
@@ -56,7 +76,7 @@ tolerance or independent hardware accuracy. Reproduce with:
 .\.venv\Scripts\python.exe data/actuators/fit_pa04.py
 ```
 
-`actuator_catalog_stroke` is optimized. `actuator_force_rating` is frozen at
+`actuator_catalog_stroke` is fixed to one of the two hardware cases. `actuator_force_rating` is frozen at
 4003.39945373445 N, and `actuator_speed` is frozen at rated-load lowering speed,
 0.009906 m/s. Incompatible overrides fail explicitly. Reference actuator mass,
 efficiency and housing coefficients remain recorded but are inactive in this
@@ -65,23 +85,29 @@ profile; `actuator_idle_power` still applies to other motor disciplines.
 The existing `actuator_retracted_length` port means the **commanded compact
 pose**, not necessarily the hardware's minimum length. `travel_actuator_length`
 and `actuator_extended_length` remain the commanded raised-travel and digging
-poses. Actual hardware needs all three commands inside its installed catalog interval. At the user’s request the model no longer enforces that criterion. In this
-profile `actuator_body_margin` remains the minimum signed distance of those three
+poses. All four commands, including deposition, must now remain inside the
+selected installed interval. In this profile `actuator_body_margin` remains the minimum signed distance of those four
 commands to both hardware travel limits, replacing the generic body-length
 surrogate as a diagnostic only. It is absent from optimizer constraints and feasibility decisions; catalog endpoints remain visible. `stroke` retains its meaning as commanded dig-minus-travel distance;
 it is distinct from available `actuator_catalog_stroke`.
 
-Continuous sizes must be replaced with available catalog sizes and reevaluated
-with final mounting geometry before purchase. Rounding up increases both the
-minimum and maximum installed length; it cannot automatically fix packaging.
+These command bounds do not verify actuator-body/bracket collisions or joint
+packaging. Manufacturer-chart mass and speed/current errors and their validation
+limits are unchanged. Generic actuator reference physics remains available.
 
 ## Load, time and electrical energy
 
-The existing sampled virtual-work leverage and extraction load are retained:
+2026-11-08: the student removed the assumed breakout allowance. Both reference
+and PA-04 actuator calculations now use quasi-static gravity loads only, including
+arm weight and the carried drum pair/payload. No breakout work is added to energy.
+The legacy `breakout_force` input remains accepted but inactive (default zero),
+so older saved cases cannot reintroduce the allowance. Extraction resistance and
+dynamic loads require a separate physical calculation; none is added here.
+
+The sampled virtual-work leverage is applied to the gravity load:
 
 ```text
-F = ((drum_mass/2 + payload_mass/2 + arm_linear_mass*arm_length/2)*g
-     + breakout_force)*actuator_leverage_max
+F = (drum_mass/2 + payload_mass/2 + arm_linear_mass*arm_length/2)*g*actuator_leverage_max
 q = F / (900*4.4482216152605)
 raising_speed = (0.47 - 0.08*q)*0.0254 m/s
 raising_current = 4 + 10*q A
@@ -96,7 +122,7 @@ arm_peak_power = 2*12*max(raising_current,14) W
 
 Both actuators move in parallel, so their times are not added together. Force,
 speed and current are per actuator; energy and peak power include **two**.
-Raising applies maximum sampled loaded extraction force, including breakout,
+Raising applies maximum sampled loaded gravity force, excluding extraction resistance,
 throughout the motion. Lowering conservatively assumes rated-load current and
 speed throughout because a directional load history is missing. Actual
 gravity-assisted behavior, partial filling, controller limits, thermal behavior
@@ -141,7 +167,23 @@ now defaults to the baseline start only; `--seed` adds an explicitly chosen
 second start with matching hardware. The historical `design_optimized.json`
 retains its old profile and is rejected as a PA-04 seed until explicitly migrated.
 
-## Historical baseline and verification
+## Force-versus-stroke report plot
+
+New HTML reports include a gridded actuator force plot before the excavation
+feed information. The N/cm and lbf/in buttons switch both axis units. Forces
+apply to one actuator; stroke is extension from the catalog minimum installed
+length, not the model's separate dig-minus-travel `stroke` output. Generic
+actuator reports use the shortest commanded length as zero instead.
+
+The plot uses the existing 81 capability-sweep poses and arm equilibrium
+helper. Two curves show empty and full gravity loads,
+with no breakout allowance or dynamic load factor. The dashed capacity is rating divided
+by actuator safety factor. This is a quasi-static sizing envelope, not a force
+history during soil entry. Overloads remain visible; unreachable/toggle poses
+produce an explicit unavailable message. The report adds no new fitted physics
+or feasibility decisions. Both unit versions are exported as SVG files.
+
+## Historical baseline and verification (before the 2026-11-07 endpoint update)
 
 An **8 inch stroke is a provisional start**, not a final size choice. Its installed
 limits are 564.4388–767.6388 mm, while the current baseline travel command is
@@ -173,10 +215,12 @@ The existing physical arm-extension corrections compose with PA-04 geometry and
 electrical curves. Tail mass enters once, and the uniform arm gravity moment
 uses the full physical length squared. Reference overhang equations are reused;
 the mass and force corrections are tested against independent expressions.
-The pivot multistart study retains the selected actuator profile and does not
-replace a frozen PA-04 force rating with the generic 6000 N seed assumption.
+The pivot multistart study retains the selected actuator profile and discrete
+stroke, including 6-inch seeds. It does not replace a frozen PA-04 force rating
+with the generic 6000 N seed assumption. Generated commands outside the selected
+hardware interval are rejected, never clipped into a different pose.
 
-Freezing the current 500 mm travel and 726 mm dig lengths cannot produce valid
+Historically, freezing 500 mm travel and 726 mm dig lengths could not produce valid
 PA-04 packaging at any continuous catalog stroke with the current allowance.
 The minimum installed length requires `s <= 138.7612 mm`, while the maximum
 requires `s >= 182.3806 mm`. These intervals do not overlap. Revise the commanded

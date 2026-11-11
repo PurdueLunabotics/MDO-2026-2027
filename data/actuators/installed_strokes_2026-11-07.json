@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "revision": "student-installed-endpoints-2026-11-09",
+  "source": "Student supplied 6/8-inch installed endpoints on 2026-11-07 and confirmed 8-inch / added 9/10-inch using the attached A/B dimension table on 2026-11-09. A is retracted length; B is extended length; inches converted with 0.0254 m/in.",
+  "units": "m",
+  "installation_allowance": 0.0,
+  "choices": [
+    {"stroke_inches": 6, "stroke": 0.1524, "minimum_length": 0.352298, "maximum_length": 0.504698},
+    {"stroke_inches": 8, "stroke": 0.2032, "minimum_length": 0.403098, "maximum_length": 0.606298},
+    {"stroke_inches": 9, "stroke": 0.2286, "minimum_length": 0.428498, "maximum_length": 0.657098},
+    {"stroke_inches": 10, "stroke": 0.254, "minimum_length": 0.453898, "maximum_length": 0.707898}
+  ],
+  "validation": "Specified hardware endpoints, not an experimental calibration. Existing manufacturer-chart mass/load approximations are unchanged. Body and bracket collision verification remains outstanding."
+}

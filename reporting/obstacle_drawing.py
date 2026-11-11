@@ -2,6 +2,7 @@
 import math
 from html import escape
 from rover.alternatives.parallel_cylinder_clearance import cylinder_clearance_cases, chassis_point_in_world
+from rover.alternatives.obstacle_stability import drive_centers
 from .frame_members import chassis_members, rocker_bearing_span
 
 
@@ -57,16 +58,30 @@ def obstacle_pose_svg(values):
         return chassis_point_in_world(p,pose,rw+values['rocker_pivot_offset'])
     span = rocker_bearing_span(values) if 'rocker_box_width' in values else values['track_width']
     shafts = []
+    motor_points = drive_centers(pose,values.get('drive_motor_cg_offset',0.))
     for side in (-1,1):
         shaft = (origin[0],origin[1]+side*span/2*cr,
                  origin[2]+side*span/2*sr)
         shafts.append(shaft)
+        ends=[]
         for wi in ([0,2] if side==1 else [1,3]):
             center = pose['centers'][wi]
             overhang = side*(values['track_width']-span)/2
             bearing = (center[0],center[1]-overhang*cr,center[2]-overhang*sr)
-            layer('rocker',(shaft,bearing),line(shaft,bearing,'#668095',7))
+            if 'rocker_length' in values:
+                front,rear = (0,2) if side==1 else (1,3)
+                direction=tuple((pose['centers'][front][j]-pose['centers'][rear][j])/values['wheelbase'] for j in range(3))
+                sign=1 if wi==front else -1
+                end=tuple(shaft[j]+sign*values['rocker_length']/2*direction[j] for j in range(3))
+                ends.append(end)
+                layer('motor-bracket',(end,motor_points[wi]),line(end,motor_points[wi],'#526a7b',3,'4 3'))
+                mx,my=project(motor_points[wi])
+                layer('drive-cg',(motor_points[wi],),f'<circle cx="{mx:.2f}" cy="{my:.2f}" r="3" fill="#168578"/>')
+            else:
+                layer('rocker',(shaft,bearing),line(shaft,bearing,'#668095',7))
             layer('wheel-axle',(bearing,center),line(bearing,center,'#526a7b',3))
+        if ends:
+            layer('rocker',ends,line(*ends,'#668095',7))
     layer('rocker-axle',shafts,line(*shafts,'#394f63',max(4,values.get('axle_outer_diameter',0)*scale*.7)))
     plate_y = values.get('cross_tube_span',values['track_width'])/2
     for side in (-1,1):

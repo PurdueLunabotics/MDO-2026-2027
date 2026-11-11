@@ -113,7 +113,7 @@ class PA04LinkageGeometry(LinkageGeometry):
 class PA04LinkageLoads(Discipline):
     model_evidence = {"status": "chart approximation with conservative phase load envelopes; unvalidated hardware",
                       "manifest": "data/actuators/manifest.json"}
-    CONFIG_INPUTS = tuple(names("gravity actuator_safety_factor breakout_force arm_length lin_act_side_arm_offset"))
+    CONFIG_INPUTS = tuple(names("gravity actuator_safety_factor arm_length lin_act_side_arm_offset"))
     COUPLED_INPUTS = {"drum_mass": "kg", "payload_mass": "kg", "arm_linear_mass": "kg/m",
                       "actuator_leverage_max": None, "stroke": "m", "lowering_time": "s"}
     OUTPUT_UNITS = {"required_actuator_force": "N", "actuator_force_margin": "N",
@@ -121,7 +121,7 @@ class PA04LinkageLoads(Discipline):
                     "actuator_loaded_speed": "m/s", "actuator_raising_current": "A",
                     "actuator_lowering_current": "A", "actuator_raising_time": "s",
                     "actuation_time": "s", "arm_energy": "J", "arm_peak_power": "W"}
-    force_inputs = names("drum_mass payload_mass arm_linear_mass arm_length lin_act_side_arm_offset gravity breakout_force actuator_leverage_max")
+    force_inputs = names("drum_mass payload_mass arm_linear_mass arm_length lin_act_side_arm_offset gravity actuator_leverage_max")
     DEPENDENCIES = {
         "required_actuator_force": force_inputs,
         "actuator_force_margin": force_inputs | {"actuator_safety_factor"},
@@ -139,7 +139,7 @@ class PA04LinkageLoads(Discipline):
         v = lambda n: scalar(inputs, n)
         weight = (v("drum_mass")/2 + v("payload_mass")/2
                   + v("arm_linear_mass")*physical_length(v("arm_length"),v("lin_act_side_arm_offset"))**2/(2*v("arm_length")))*v("gravity")
-        force = (weight+v("breakout_force"))*v("actuator_leverage_max")
+        force = weight*v("actuator_leverage_max")
         outputs["required_actuator_force"] = force
         outputs["actuator_force_margin"] = RATED_FORCE/v("actuator_safety_factor")-force
         outputs["actuator_curve_margin"] = min(force, RATED_FORCE-force)

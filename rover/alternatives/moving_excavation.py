@@ -90,20 +90,21 @@ class MovingExcavation(Excavation):
         "feed_speed_limit": "m/s", "feed_time": "s", "pair_cutting_time": "s",
         "soil_supply_rate": "m**3/s", "scoop_throughput": "m**3/s",
         "feed_drive_energy": "J", "feed_drive_peak_power": "W",
-        "feed_motor_margin": "N", "feed_traction_margin": "N", "feed_power_margin": "W"}
+        "feed_motor_margin": "N", "feed_power_margin": "W",
+        "nasa_force_source_valid": None, "nasa_tip_feed_ratio": None}
     _capacity = names("drum_diameter drum_length inlet_depth fill_fraction usable_volume_fraction")
     _mass = _capacity | {"stored_soil_density"}
     _fresh = _mass | names("soil_density capture_fraction")
     _path = _fresh | {"inlet_depth"}
     _rate = names("drum_length inlet_depth feed_speed")
     _bite = names("feed_speed drum_rpm scoops_per_revolution")
-    _force = _bite | names("drum_length cut_pressure")
+    _force = _bite | names("drum_length cut_pressure inlet_depth drum_diameter")
     _pose = names("drum_diameter inlet_depth arm_length pivot_x bottom_pivot_height actuator_pivot_x top_pivot_height lin_act_side_arm_offset lin_act_top_arm_offset")
     _reach = _pose | names("travel_y extended_y travel_actuator_length actuator_extended_length")
     _time = _path | _pose | names("feed_speed acceleration")
     _torque = _mass | _force | names("gravity drum_diameter internal_lift_factor")
     _spin = _mass | names("drum_mass drum_diameter drum_rpm dump_rpm drum_spinup_time")
-    _driveforce = _force | _mass | names("dry_mass gravity rolling_base acceleration vertical_cut_fraction traction_coefficient")
+    _driveforce = _mass | names("dry_mass gravity rolling_base acceleration traction_coefficient")
     _drivework = _driveforce | _time | names("feed_speed wheel_diameter")
 
     DEPENDENCIES = {
@@ -133,7 +134,8 @@ class MovingExcavation(Excavation):
         "dump_time": names("dump_revolutions dump_rpm drum_spinup_time"),
         "penetration_margin": _force | names("dry_mass gravity vertical_cut_fraction"),
         "dig_traction_margin": _driveforce,
-        "feed_traction_margin": _driveforce,
+        "nasa_force_source_valid": names("inlet_depth feed_speed drum_length drum_diameter drum_rpm"),
+        "nasa_tip_feed_ratio": names("feed_speed drum_diameter drum_rpm"),
         "cut_depth_margin": names("inlet_depth drum_diameter"),
         "dump_power": _torque | _spin | names("actuator_idle_power"),
         "dump_energy": _torque | _spin | names("dump_revolutions actuator_idle_power"),
@@ -148,7 +150,30 @@ class MovingExcavation(Excavation):
         "feed_power_margin": _driveforce | {"feed_speed"},
     }
 
+    def initialize(self):
+        super().initialize()
+        self.options.declare("force_model", default="pressure", values=("pressure", "nasa-ipex"))
+
+    def prepare_force_model(self):
+        """Prepare immutable source data outside compute, including study adapters."""
+        self.force_surface = None
+        if self.options["force_model"] == "nasa-ipex":
+            # Deterministic, versioned preparation happens outside compute().
+            from studies.ipex_force_surface import IpexForceSurface, fit_surface, load_data
+            rows, manifest = load_data()
+            self.force_surface = IpexForceSurface(fit_surface(rows), manifest["source_envelope"])
+            self.model_evidence = {
+                "force": "NASA IPEx Figure 13 v1: depth*(a+b*feed)*whole drum width, per drum; four magnitudes summed",
+                "source": manifest["source"], "coefficients_SI": self.force_surface.coefficients,
+                "data_kind": manifest["data_kind"], "manifest": "data/excavation/ipex_force_v1/manifest.json",
+                "validity": "nasa_force_source_valid=0 explicitly identifies unsupported geometry, feed/depth or tip/feed ratio; no independent RPM law",
+                "validation": "Published-trend approximation only; no independent hardware validation; source depth labels conflict",
+                "torque": "Existing force*radius mapping retained as an unvalidated sizing assumption, not NASA shaft-torque data",
+                "reaction": "User assumes exact opposing-drum cancellation; no horizontal cutting reaction/work charged to wheel drive",
+            }
+
     def setup(self):
+        self.prepare_force_model()
         provider = self.options["motor_model"]
         base = set(self.CONFIG_INPUTS)
         old = ReferenceMotorProvider.input_names("drum") | ReferenceMotorProvider.input_names("drive")
@@ -172,12 +197,12 @@ class MovingExcavation(Excavation):
         dump_fr = (values["dump_rpm"]*math.pi/30)**2*radius/values["gravity"]
         _, dump_lift = self.granular_response(inputs, dump_fr)
         result = moving_performance(values, self.options["motor_model"],
-                                    responses=(capture, lift, dump_lift))
+                                    responses=(capture, lift, dump_lift), force_surface=self.force_surface)
         for name, value in result.items():
             outputs[name] = value
 
 
-def moving_performance(values, motor_provider=ReferenceMotorProvider, *, responses=None):
+def moving_performance(values, motor_provider=ReferenceMotorProvider, *, responses=None, force_surface=None):
     """Pure staged-pass force, motion, work and electrical accounting.
 
     ``values`` contains scalar SI configuration and coupled state. A selected
@@ -220,8 +245,12 @@ def moving_performance(values, motor_provider=ReferenceMotorProvider, *, respons
         middle_time, middle_peak = 0., 0.
     feed_time = 2*first_time+middle_time
     cutting_time = first_time+(middle_time if result["feed_distance"] > separation else 0.)
-    # The entire axial inlet width cuts; no fractional-width credit.
-    force = v("cut_pressure")*4*length*result["feed_per_scoop"]
+    # Horizontal per-drum NASA force is not the net reaction of opposing drums.
+    estimate = None if force_surface is None else force_surface.evaluate(
+        depth_m=depth, feed_speed_m_s=v("feed_speed"), drum_width_m=length,
+        drum_diameter_m=2*radius, rpm=v("drum_rpm"), allow_extrapolation=True)
+    force = (v("cut_pressure")*4*length*result["feed_per_scoop"] if estimate is None
+             else estimate.four_drum_force_magnitude_sum_N)
     internal = mass*v("gravity")*radius*lift
     dump_internal = mass*v("gravity")*radius*dump_lift
     inertia = (v("drum_mass")+mass)*radius*radius
@@ -236,24 +265,26 @@ def moving_performance(values, motor_provider=ReferenceMotorProvider, *, respons
     # shared-cut interval; retain that conservative allowance for short lanes.
     dig_time = feed_time+4*v("drum_spinup_time")
     dump_time = 2*(v("dump_revolutions")*60/v("dump_rpm")+v("drum_spinup_time"))
-    # Pressure-law cutting force is proportional to instantaneous feed.
-    # Integrate that term by distance; internal lifting follows rotation time.
-    drum_work = (force*radius*omega*result["feed_distance"]/v("feed_speed")
+    # Integrate the selected law across the existing acceleration schedule.
+    # NASA's intercept acts over cutting time; its velocity term integrates by distance.
+    cutting_work = (force*radius*omega*result["feed_distance"]/v("feed_speed") if estimate is None
+                    else 4*length*depth*radius*omega*(force_surface.coefficients[0]*cutting_time
+                         +force_surface.coefficients[1]*result["feed_distance"]))
+    drum_work = (cutting_work
                  +.5*internal*omega*cutting_time+inertia*omega*omega)
     dump_work = .5*dump_internal*dump_omega*(dump_time-2*v("drum_spinup_time"))/2+.5*inertia*dump_omega*dump_omega
     provider = motor_provider
     drum_motor, drive_motor = provider.create(v, "drum"), provider.create(v, "drive")
     drum_e = drum_motor.evaluate(drum_work/2, drum_peak/2)
     dump_e = drum_motor.evaluate(dump_work/2, dump_peak)
-    # Full horizontal tool force is resisted; no opposing-drum cancellation credit.
+    # USER: equal opposing drum reactions cancel. Rolling and inertia remain.
     full_mass = v("dry_mass")+mass
-    steady_force = full_mass*v("gravity")*v("rolling_base")+force
+    steady_force = full_mass*v("gravity")*v("rolling_base")
     drive_force = steady_force+full_mass*v("acceleration")
-    normal = v("dry_mass")*v("gravity")-force*v("vertical_cut_fraction")
+    normal = v("dry_mass")*v("gravity")
     traction = v("traction_coefficient")*normal-drive_force
     wheel_rpm = v("feed_speed")/(v("wheel_diameter")/2)*30/math.pi
     drive_work = ((v("dry_mass")+.5*mass)*v("gravity")*v("rolling_base")*distance
-                  + force*result["feed_distance"]
                   +.5*full_mass*(2*first_peak**2+middle_peak**2))
     drive_peak = drive_force*v("feed_speed")
     drive_e = drive_motor.evaluate(drive_work/4, drive_peak/4)
@@ -288,7 +319,9 @@ def moving_performance(values, motor_provider=ReferenceMotorProvider, *, respons
         "dig_froude_margin": v("max_dig_froude")-fr,
         "dump_froude_margin": v("max_dump_froude")-dump_omega*dump_omega*radius/v("gravity"),
         "penetration_margin": v("dry_mass")*v("gravity")-force*v("vertical_cut_fraction"),
-        "dig_traction_margin": traction, "feed_traction_margin": traction,
+        "dig_traction_margin": traction,  # inactive compatibility output for legacy consumers
+        "nasa_force_source_valid": -1. if estimate is None else float(not estimate.source_envelope_violations),
+        "nasa_tip_feed_ratio": math.pi*2*radius*v("drum_rpm")/(60*v("feed_speed")),
         "feed_motor_margin": 4*drive_motor.available_torque(wheel_rpm)/(v("wheel_diameter")/2)-drive_force,
         "feed_power_margin": 4*drive_motor.peak_power()-drive_peak,
         "feed_drive_energy": feed_energy, "feed_drive_peak_power": feed_peak,

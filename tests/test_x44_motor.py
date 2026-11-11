@@ -187,7 +187,10 @@ class X44Tests(unittest.TestCase):
         for name in ("cut_pressure","internal_lift_factor","actuator_idle_power"):
             inputs[name][:]=0.
         outputs={n:np.zeros(1) for n in c._var_rel_names["output"]}
-        c.compute(inputs,outputs)
+        # Synthetic zero-resistance limit, not a refit of the NASA source.
+        surface=replace(c.force_surface,coefficients=(0.,0.)) if c.force_surface is not None else None
+        with patch.object(c,"force_surface",surface):
+            c.compute(inputs,outputs)
         value=lambda n:np.asarray(inputs[n]).item()
         radius=value("drum_diameter")/2
         inertia=(value("drum_mass")+np.asarray(outputs["payload_mass"]).item())*radius**2

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "01_operating_conditions",
+    "title": "Where the published tests sit",
+    "caption": "NASA S/M/L + feed labels each represent two coincident NP conditions (the two figure-labelled cut depths).\nK labels group A/B/C at each RPM; G-ST/HV use reported configuration-average feed. These are condition locations, not trial IDs.\nGalati and Li are indexed in the source register; their numerical points remain unavailable. No force prediction is shown.",
+    "file": "01_operating_conditions.png"
+  },
+  {
+    "name": "02_nasa_horizontal_force",
+    "title": "NASA horizontal-force markers",
+    "caption": "28 recoverable visible marker centres; not 48 reconstructed trials. Hollow markers have distinct cores within overlapping groups.\nUnresolved/occluded marks are omitted, so this subset cannot estimate the full sample distribution. Drum size/run identity is unknown.\nDepth labels conflict with Tables 1-2. Approximate reading resolution: 1 N/m, not instrument uncertainty. No trend lines used.",
+    "file": "02_nasa_horizontal_force.png"
+  },
+  {
+    "name": "03_nasa_performance",
+    "title": "NASA collection and energy points",
+    "caption": "Labels abbreviate CSV IDs: L25-30 = NP-L25-30 (large drum, figure-labelled depth 25 mm, feed 30 mm/s).\nCondition summaries read from published markers. Printed energy units are retained without conversion or pooling with other studies.\nS/M/L geometry and calculated RPM are recorded in CSV. The source depth discrepancy also applies here.",
+    "file": "03_nasa_performance.png"
+  },
+  {
+    "name": "04_kafi_torque_fill",
+    "title": "Independent RPM levels: torque and filling",
+    "caption": "Kafi et al., Table II: nine reported condition summaries, with three repeats per condition described in the methods.\nFixed-position silica-sand tests. Designs A/C are contextual geometries; B is the bucket-drum-inspired baseline.\nA/B/C diameters and widths differ. Torque is not converted into horizontal force. Source consistency flags remain attached.",
+    "file": "04_kafi_torque_fill.png"
+  },
+  {
+    "name": "05_kafi_performance",
+    "title": "Reported performance and a source check",
+    "caption": "As-printed numbers are preserved. K-A15 reports 56.59 J, 1.424 kg and 80.59 J/kg; E/m instead gives 39.74 J/kg.\nThe original rate, duration and torque/energy entries have additional inconsistencies listed in CSV/README. No values were repaired.\nThe dashed diagonal is an arithmetic identity; it is not interpolation or a model fit.",
+    "file": "05_kafi_performance.png"
+  },
+  {
+    "name": "06_giel_trials",
+    "title": "Low-RPM travelling drum trials",
+    "caption": "Giel et al.: about 7.5 RPM throughout. Figure 4 supplies 14 visible trial markers; Table II supplies four Dragon trials.\nRates calculated from each trial mass/time are labelled as derived values. Feed 27/72 mm/s is a configuration mean.\nAll outcomes apply to the complete two-drum tool. Unknown depth/feed/force values stay blank. No source regression lines are copied.",
+    "file": "06_giel_trials.png"
+  },
+  {
+    "name": "07_capacity_and_summary",
+    "title": "Capacity and summary estimates",
+    "caption": "NC points are per-drum averages. G-SUM is continuous two-drum tool excavation; G-BATCH is an estimated excavation/haul/dump cycle.\nGiel summary energy uses estimated average electrical power; the full cycle adds travel and platform consumption.\nThese summaries are not additional soil-force trials and cannot be pooled with single-drum mechanical-energy results.",
+    "file": "07_capacity_and_summary.png"
+  }
+]

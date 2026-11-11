@@ -22,13 +22,19 @@ LABELS = {
     "grouser_height": "Radial grouser height (inside overall diameter)",
     "tipping_radius_deflection_fraction": "Rated radial wheel compression for static tipping",
     "tipping_reference_fill_fraction": "Drum fill at rated compression load",
+    "wheel_compression_hard_stop": "Maximum radial wheel compression at the hard stop",
+    "wheel_spring_compliance": "Assumed radial spring compliance (zero means rigid)",
+    "slope_wheel_load_margin": "Slope: minimum normal wheel reaction",
+    "wheel_equilibrium_margin": "Static wheel equilibrium and regular-branch reserve",
+    "slope_contact_limit_angle": "First four-contact unloading angle",
+    "slope_tip_angle": "Global support-zero slope angle",
     "tipping_reference_mass": "Static tipping: reference loaded mass",
     "tipping_wheel_outer_radius": "Unloaded overall wheel radius",
     "tipping_wheel_tread_radius": "Unloaded tread radius without grousers",
     "tipping_wheel_deflection": "Loaded static wheel compression",
     "tipping_wheel_deflection_ratio": "Loaded static radial compression ratio",
     "tipping_wheel_support_height": "Loaded static wheel-center height",
-    "tipping_loaded_cg_z": "Loaded CG height used for static slope tipping",
+    "tipping_loaded_cg_z": "Loaded CG height at static level equilibrium",
     "differential_bar_clearance_allowance": "Differential-bar clearance allowance",
     "actuator_body_margin": "Actuator packaging reserve (diagnostic only)",
     "wheel_diameter": "Wheel diameter", "wheel_width": "Wheel width",
@@ -47,11 +53,13 @@ LABELS = {
     "operating_reach_margin": "Moving excavation: operating-pose reach",
     "excavation_domain_margin": "Moving excavation: geometry domain",
     "feed_motor_margin": "Excavation feed: motor-force reserve",
-    "feed_traction_margin": "Excavation feed: traction reserve",
+    "nasa_force_source_valid": "NASA source conditions (1=inside, 0=outside, -1=inactive)",
+    "nasa_tip_feed_ratio": "Drum tip speed / feed speed",
     "feed_power_margin": "Excavation feed: shaft-power reserve",
     "feed_drive_energy": "Feed-drive electrical energy", "feed_drive_peak_power": "Feed-drive peak electrical power",
     "dump_rpm": "Dumping speed", "drum_gear_ratio": "Drum reduction ratio",
     "drive_gear_ratio": "Drive reduction ratio", "arm_length": "Arm length",
+    "drive_motor_cg_offset": "Drive assembly CG above wheel axle (rocker local up)",
     "arm_box_width": "Aluminum arm box width", "arm_box_height": "Aluminum arm box height",
     "arm_wall": "Arm wall thickness", "arm_tube_diameter": "Round-arm diameter (reference model)",
     "travel_actuator_length": "Travel actuator length", "deposition_actuator_length": "Deposition actuator length",
@@ -67,6 +75,7 @@ LABELS = {
     "top_pivot_height": "Actuator pivot height", "bottom_pivot_height": "Arm pivot height",
     "pivot_x": "Arm pivot longitudinal position", "actuator_pivot_x": "Actuator pivot longitudinal position",
     "rocker_pivot_offset": "Rocker pivot above wheel centers", "cross_tube_span": "aluminum cross-tube span / plate spacing",
+    "rocker_length": "Continuous rocker box-tube length (each side)",
     "cross_tube_wall": "Aluminum cross-tube wall thickness", "plate_spoke_width": "Plate strip width",
     "cross_tube_density": "Aluminum cross-tube density",
     "cross_tube_youngs_modulus": "Aluminum cross-tube Young's modulus",
@@ -153,7 +162,7 @@ def badge(status):
     return f'<span class="status {status.lower().replace(" ", "-")}">{escape(status)}</span>'
 
 
-def render_report(record, output, drawings, frame_drawing, stability_drawing, route_drawing, frames, top_drawing="", download_links=None, obstacle_drawing="", excavation_drawing="", feed_drawing=""):
+def render_report(record, output, drawings, frame_drawing, stability_drawing, route_drawing, frames, top_drawing="", download_links=None, obstacle_drawing="", excavation_drawing="", feed_drawing="", actuator_drawings=()):
     final, start = record["final"], record["baseline"]
     metadata = record.get("model_metadata", final.get("model_metadata", {}))
     context = record.get("report_context", {})
@@ -277,11 +286,16 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     if parallel_motion:
         excavation_total = val("dig_time")+val("actuation_time")
         deposition_total = val("dump_time")+val("turn_time")+val("deposition_actuation_time")
+        straight_distance = metadata.get("deposition_operation", {}).get("straight_leg_distance_m")
+        deposition_steps = "Position both arms, dump, turn, dump, and return arms to travel."
+        if straight_distance:
+            deposition_steps = (f"Position both arms, dump, reverse {straight_distance:g} m, point turn, "
+                                f"drive forward {straight_distance:g} m, dump, and return arms to travel.")
         performance_rows[1:1] = [
             row(["Excavation including arm motion", escape(quantity(excavation_total, "s")),
                  "Both arms lower together, feed/cut, then both raise together."]),
-            row(["Deposition including arm motion and turn", escape(quantity(deposition_total, "s")),
-                 "Position both arms, dump, turn, dump, and return arms to travel."]),
+            row(["Deposition including arm motion and maneuver", escape(quantity(deposition_total, "s")),
+                 deposition_steps]),
             row(["Excavation + deposition", escape(quantity(excavation_total+deposition_total, "s")),
                  "Excludes route, fresh-site relocation and alignment overhead."]),
         ]
@@ -324,7 +338,7 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     energy_bars = bars(energy_items, val("cycle_energy"), "W*h")
 
     load_specs = [
-        ("required_actuator_force", "Required force per actuator", "Loaded raising/extraction envelope, including the model's breakout allowance."),
+        ("required_actuator_force", "Required force per actuator", "Quasi-static gravity envelope for loaded drums and arm; extraction resistance and dynamic loads are not modeled."),
         ("frame_gravity_actuator_force", "Frame gravity reaction at each actuator", "Mirrored loaded gravity sweep; includes the structural load factor. Separate from actuator sizing load."),
         ("frame_nominal_wheel_reaction", "Nominal force per wheel", "Equal-share level-ground weight. Not a rock or slope wheel-load envelope."),
         ("cut_force", "Total cutting force", "Across four drums at the selected bite and engagement."),
@@ -355,7 +369,16 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     if metadata.get("actuator_profile") == "pa04-900":
         motor_note += f'<details open><summary>PA-04 actuators · 900 lbf / 12 V</summary><p>Two actuators. Continuous catalog stroke: {q("actuator_catalog_stroke")}; installed hardware limits: {q("actuator_catalog_retracted_length")} to {q("actuator_catalog_extended_length")}. These include {q("actuator_installation_allowance")} added to each endpoint. Compact, travel, deposition and digging commands are compared with these limits diagnostically; packaging is not an active constraint.</p><p>Mass per actuator: {q("actuator_unit_mass")}. Raising envelope: {q("actuator_loaded_speed")} and {q("actuator_raising_current")}; maximum-reach diagnostic times: raising {q("actuator_raising_time")}, lowering {q("lowering_time")}. Lowering assumes rated-load speed and 14 A. Electrical energy uses 12 V × current × time for both actuators, including motor losses.</p><p>Mass fit supports 2–40 inch strokes; load curves support 0–900 lbf. Guarded out-of-domain diagnostics retain failed checks. Independent hardware, gravity-assisted lowering, duty cycle, temperature and installation-hardware mass remain unverified. A continuous stroke must be replaced with an available catalog size and reevaluated before purchase.</p></details>'
     obstacle_note = "Guarded pose: requested height is unreachable. Endpoint and path diagnostics are evaluated at a guarded height, not the requested rock height." if val("obstacle_pose_valid", 1) < .5 else "Requested endpoint rock pose is geometrically reachable; this alone does not establish traversal."
-    if "tipping_loaded_cg_z" in outputs:
+    if 'wheel_spring_compliance' in outputs:
+        obstacle_note += (f' Static wheel reactions and body/rocker pose are solved together with linear springs and a '
+                          f'{val("wheel_compression_hard_stop")*1000:.1f} mm rigid compression stop. '
+                          'Stop contact can carry extra reaction; forces are not capped. Negative normal reactions reject the four-contact pose. '
+                          'The global support limit and first wheel unloading are separate diagnostics. '
+                          'After unloading or an invalid solve, continued geometry is guarded and is not a predicted post-lift trajectory. '
+                          'The heading search uses a 5-degree grid with bounded refinement; it is a numerical search, not a proof over all headings. '
+                          'Finite contact patches, wheel camber corrections, lateral compliance and soil sinkage are unmodeled. '
+                          'Wheel stiffness and the stop are student assumptions pending FEA and physical tests. Geometry/clearance schematics remain nominal.')
+    elif "tipping_loaded_cg_z" in outputs:
         obstacle_note += (f' Static tipping uses {val("tipping_wheel_deflection")*1000:.2f} mm uniform wheel compression '
                           f'at this load, referenced to {val("tipping_reference_mass"):.2f} kg at '
                           f'{val("tipping_reference_fill_fraction"):.2f} fill. '
@@ -403,11 +426,19 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     if attachment_note:
         mobility_notice += '<p class="callout">Actuator offsets are measured from the drum axle: positive side is outward along the arm; positive top is above the arm. The straight tube extension is included in mass and loads. The normal bracket is assumed rigid and massless; its mass, strength and interference remain unverified.</p>'
     if metadata.get("actuator_packaging"):
-        mobility_notice += '<p class="callout">Actuator packaging is not enforced. Its reserve and catalog endpoints are diagnostics only; they do not affect optimization or feasibility.</p>'
+        mobility_notice += '<p class="callout">Actuator body packaging remains unverified. New PA-04 runs enforce the selected 6/8/9/10-inch command endpoints; the body/bracket collision reserve remains diagnostic.</p>'
+    if metadata.get("excavation_operation", {}).get("force_model") == "nasa-ipex":
+        source_status = ("Outside published source conditions; the force is a provisional transfer."
+                         if val("nasa_force_source_valid",0) < .5 else "Inside the published coordinate conditions only; not independently hardware validated.")
+        mobility_notice += (f'<p class="callout"><strong>NASA IPEx horizontal-force model.</strong> {source_status} '
+                            f'Tip/feed ratio: {val("nasa_tip_feed_ratio"):.3f}; source condition: 8.5. '
+                            'Source depth labels conflict with its tables. Shaft torque still uses the existing unvalidated force-times-radius assumption. '
+                            'Equal/opposite drum reactions are assumed to cancel; wheel feed work covers rolling and acceleration.</p>')
     optimizer_notice = ('<article class="panel"><strong>Constraints excluded from optimizer: '+
                         escape(', '.join(ignored))+'.</strong><p>These checks are still calculated and included in full model feasibility. '
                         'Optimizer success with a failed excluded check is not a feasible design.</p></article>') if ignored else ''
     input_hint = f'{len(context.get("input_file_names", []))} inputs supplied by file; {len(context.get("cli_override_names", []))} CLI overrides; {len(default_names)} remaining inputs use model defaults.' if context else 'Effective values are captured below. Original input source was not recorded.'
+    input_hint += " Legacy breakout_force is inactive; actuator loads use gravity only."
     if not fixed:
         input_hint += ' Optimizer-selected design values appear in the bounds table.'
     frozen_design = metadata.get("configuration", {}).get("frozen_design", {})
@@ -429,6 +460,18 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     if parallel_motion:
         cycle_sequence = "Lower both pairs together → drive the excavation pass → raise both pairs together → outbound → move both pairs to deposition → dump one pair → turn → dump second pair → return both pairs to travel → return route → relocate to a fresh lane."
         cycle_overlap_note = "Each excavation arm phase lasts as long as the slower arm needs at its actual digging position. Lowering and cutting do not overlap. Maximum extension remains a separate load/capability check."
+    actuator_section = ''
+    if actuator_drawings:
+        metric, imperial = actuator_drawings
+        controls = ('<div class="pose-controls" role="group" aria-label="Actuator force graph units">'
+                    '<button type="button" data-actuator-units="metric" aria-pressed="true">N / cm</button>'
+                    '<button type="button" data-actuator-units="imperial" aria-pressed="false">lbf / in</button></div>') if imperial else ''
+        actuator_section = ('<section id="actuator-force"><div class="section-heading"><span>Linkage / Actuator loads</span>'
+                            '<h2>Actuator force versus stroke</h2></div><article class="panel">'+controls+
+                            '<div class="actuator-chart-view" data-actuator-view="metric">'+metric+'</div>'+
+                            ('<div class="actuator-chart-view" data-actuator-view="imperial" hidden>'+imperial+'</div>' if imperial else '')+
+                            '</article></section>')
+        nav_html = nav_html.replace('<a href="#performance">', '<a href="#actuator-force">Actuator force</a><a href="#performance">')
     excavation_section = ''
     if moving:
         excavation_guard_note = ('<p class="callout">Guarded moving-excavation trial: the requested geometry is outside the model domain. Diagnostic values and drawings do not establish valid operation.</p>'
@@ -469,6 +512,7 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
 <main><header><div class="eyebrow">{mode}</div><h1>{escape(name)}</h1><p class="subtitle">Revision {escape(revision)} · {escape(metadata.get("structure_profile", "reference"))} frame · {escape(metadata.get("motor_profile", "reference"))} motors</p><div class="header-bottom">{warning}<span class="muted">{escape(context.get("generated_utc", "Saved analysis"))}</span></div></header>{mobility_notice}{optimizer_notice}
 <section id="overview"><div class="verdict {overall}"><div><strong>{title_status}</strong><p>{len(physical)-sum(not c["passed"] for c in physical.values())} / {len(physical)} physical model checks pass · {len(UNASSESSED)} capabilities not assessed</p></div><a class="button" href="#requirements">Review checks ↓</a></div><p class="muted">{conditional} These are predictions from the stated inputs, not measured performance.</p>{guard_note}<div class="metrics">{metrics}</div><div class="score-summary"><h2>Construction score</h2><p class="muted">Continuous mission estimate using the configured mass and energy weights. The complete-cycle estimate is reported in Performance &amp; mass.</p><div class="metrics score-metrics">{score_metrics}</div></div></section>
 <section id="geometry"><div class="section-heading"><span>01 / Rover configuration</span><h2>Geometry at the evaluated inputs</h2><p>Level-ground schematics and one prescribed obstacle pose. Check statuses below determine whether envelopes and clearance requirements are satisfied.</p></div><article class="panel geometry-top">{top_drawing}<p class="muted">Travel-pose plan view. Four wheels and four drums are shown at their model stations. <a href="{prefix}_top.svg">Top-down SVG</a></p></article><article class="panel geometry-sides"><div class="pose-controls" role="group" aria-label="Linkage pose"><button data-pose="travel" aria-pressed="true">Travel</button>{deposition_button}<button data-pose="retracted" aria-pressed="false">Compact</button><button data-pose="extended" aria-pressed="false">{extension_caption}</button></div><div id="pose-travel" class="pose">{drawings[1]}</div>{deposition_view}<div id="pose-retracted" class="pose" hidden>{drawings[0]}</div><div id="pose-extended" class="pose" hidden>{drawings[2]}</div><p class="muted">Blue: arm · orange: actuator. Each visible drum represents a shaft-linked pair. Drawings are not CAD.</p><p class="screen-only"><a href="{prefix}_travel.svg">Travel SVG</a> · <a href="{prefix}_retracted.svg">Compact SVG</a> · <a href="{prefix}_extended.svg">{extension_caption} SVG</a>{deposition_link}</p></article>{deposition_table}{extra_geometry}</section>
+{actuator_section}
 {excavation_section}
 <section id="performance"><div class="section-heading"><span>02 / Predicted output</span><h2>Performance & mass</h2><p>Complete-cycle estimates and continuous MDO estimates are labeled separately.</p></div><article class="panel">{table(["Prediction", "Value", "Meaning"], performance_rows)}</article><div class="two-col"><article class="panel"><h3>Dry mass breakdown</h3><p class="muted">Each assembly is counted once.</p>{mass_bars}</article><article class="panel"><h3>Electrical energy per cycle</h3><p class="muted">Work / provisional efficiency, plus auxiliaries.</p>{energy_bars}</article></div><details class="panel"><summary>Route & cycle accounting</summary><div class="two-col">{route_drawing}<div><h3>{route_schedule}</h3><p>{cycle_sequence}</p><p>{cycle_overlap_note} The deposition turn and fresh-site relocation are additional to the timed route. Modeled full cycle: {q("cycle_time")}.</p></div></div></details></section>
 <section id="requirements"><div class="section-heading"><span>03 / Gaps to resolve</span><h2>Requirements & model checks</h2><p>Failures are listed first. “Not assessed” means the model does not verify that capability.</p></div><article class="panel"><div class="toolbar"><label>Show <select id="check-filter"><option value="attention">Needs attention</option><option value="all">All checks & gaps</option><option value="fail">Failed checks</option><option value="pass">Passed checks</option><option value="not-assessed">Not assessed</option><option value="bounds">Optimizer search ranges</option></select></label><label class="search-label">Search checks <input id="check-search" type="search" placeholder="e.g. actuator, slope, clearance"></label><span id="check-count" aria-live="polite"></span></div>{table(["Check", "Prediction / reserve", "Limit / criterion", "Signed margin", "Status"], check_rows, "checks")}<p class="muted">Positive margins satisfy the modeled criterion. Status uses the saved model's numerical tolerance. Search ranges are hidden by default and available in the filter; they remain part of saved feasibility. Margins use their own units and cannot be ranked directly across unlike checks.</p><p id="empty-checks" hidden>No matching checks.</p></article></section>
@@ -581,6 +625,10 @@ window.addEventListener('afterprint', () => {
 document.querySelectorAll('[data-pose]').forEach(button=>button.addEventListener('click',()=>{
   document.querySelectorAll('[data-pose]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
   document.querySelectorAll('.pose').forEach(p=>p.hidden=p.id!=='pose-'+button.dataset.pose);
+}));
+document.querySelectorAll('[data-actuator-units]').forEach(button=>button.addEventListener('click',()=>{
+  document.querySelectorAll('[data-actuator-units]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+  document.querySelectorAll('[data-actuator-view]').forEach(view=>view.hidden=view.dataset.actuatorView!==button.dataset.actuatorUnits);
 }));
 const filter=document.getElementById('check-filter'), search=document.getElementById('check-search');
 function filterChecks(){let shown=0;document.querySelectorAll('[data-check]').forEach(r=>{

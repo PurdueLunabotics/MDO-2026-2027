@@ -1,5 +1,11 @@
 # Rover MDO equations and assumptions — version 2
 
+The 2026-11-07 requirement sets a 25 mm minimum for asymmetric deposition
+support. The report subtracts 25 mm from `tip_stability_margin` to show reserve.
+PA-04 selection now enumerates only
+6/8/9/10-inch strokes with student-supplied installed command endpoints and no extra
+installation allowance. See [the geometry study](docs/GEOMETRY_STUDY.md).
+
 This is an OpenMDAO conceptual sizing model under Earth gravity. FEASIBLE means only that its declared numeric screens pass. All unmeasured coefficients are editable assumptions, not calibrated BP-1 data. Read [model cards](docs/MODEL_CARDS.md), [development guide](docs/MODEL_DEVELOPMENT.md), and [experiment plans](docs/EXPERIMENTS.md) before replacing a discipline.
 
 ## Requirements and architecture
@@ -8,7 +14,7 @@ Four wheels with side rockers and skid steering; four bucket drums on front/rear
 
 The supplied 9/17/26 Lunabotics Guidebook sections 13.3/13.4/13.9 supplied the 1.50 x 0.75 x 0.75 m stowed envelope, 80 kg inspection mass (without regolith), 2.50 m deployed height and penetration-force requirement. Section 17.1 supplies the 4.4 and 1.5 score multipliers. Section 11.1 describes BP-1 and an approximately 0.45 m pit. The supplied requirements CSV identifies additional manual checks. Confirm current event interpretations independently.
 
-The one-way route is 2/3/3/1 m with 90/45/45-degree turns. Default calculated mode predicts separate loaded outbound and empty return times from bounded BWR/motor profiles; `traversal_time_one_way` is inactive. Explicit fixed mode uses that input for each leg (45 s unless overridden). Outbound turns are assumed left; return reverses sequence and yaw signs. A separate 180-degree deposition turn carries only the front pair's remaining payload.
+The one-way route is 2/3/3/1 m with 90/45/45-degree turns. Default calculated mode predicts separate loaded outbound and empty return times from bounded BWR/motor profiles. Explicit fixed mode uses `traversal_time_one_way` for each leg (45 s unless overridden). Outbound turns are assumed left. The return reverses sequence and yaw signs. Between dumps the half-loaded rover reverses 0.5 m, turns 180 degrees and drives forward 0.5 m.
 
 ## Data flow and interfaces
 
@@ -98,8 +104,9 @@ electrical work; neither arm is timed to maximum extension during normal digging
 Cut force=`cut_pressure*4*L*feed_per_scoop`, with the full drum width engaged.
 The radial geometry screen remains `R/4-inlet_depth >= 0`; the obsolete
 half-opening-depth heuristic is retired with the separate opening setting.
-The compatibility output `cut_depth` equals `inlet_depth` and supplies linkage
-breakout work; it is not an independent input. Feed wheel drive contributes
+The compatibility output `cut_depth` equals `inlet_depth`; it is not an independent input.
+Actuator force and raising work use gravity loads only. Extraction resistance and
+dynamic loads are not modeled; the legacy `breakout_force` input is ignored. Feed wheel drive contributes
 electrical work/peak power to digging and has separate motor, power and traction
 reserves after tool unloading. Both imposed operating poses must be reachable.
 The additional `axle_ground_margin=-extended_y` requires maximum-extension axle
@@ -109,6 +116,31 @@ model is no longer active by default. See [equations, domains, staging and
 limitations](docs/MOVING_EXCAVATION.md).
 
 ## Drum speed, torque and energy
+
+2026-11-08 selection: the existing plate-frame moving-excavation component now
+uses the provisional NASA IPEx Figure 13 surface `sum(Fx)=4*L*d*(a+b*v)`,
+with a=1477.5027926 Pa and b=128437.76405 Pa*s/m. The generic pressure-law
+reference remains available. Source coordinate/geometry/RPM-condition failures
+are explicitly reported; the 30 RPM, 30 mm/s case has unsupported tip/feed
+ratio 18.797 versus 8.5. This is not independent hardware validation or a fitted
+RPM response. See [the versioned source/model card](docs/IPEX_FORCE_SURFACE.md).
+User assumes exact equal/opposite cutting reaction cancellation: no cutting
+reaction or tool-feed work is charged to wheel motors, and excavation feed
+traction checks are removed. Rolling/inertia and motor/power limits remain.
+The existing conversion from horizontal force to `force*radius` cutting torque
+is still an unvalidated sizing assumption. Affine NASA cutting work integrates
+as `4*L*d*R*omega*(a*t_cut+b*feed_distance)`.
+
+The plate-frame rockers are now one straight box tube per side through the
+existing shaft pivot, length `wheelbase-0.0635 m`, with the previous cross-section.
+Uniform rocker CG is at its shaft bearing. Rigid massless end brackets transmit
+wheel loads beyond the shortened tube; structural deflection includes their
+rotation. Drive assembly CG is 0.05842 m above each wheel axle in rocker local
+coordinates; all nominal, articulated and compressed-wheel CG/reaction paths
+include that offset. Current baseline assembly mass is 1.5 kg each, four total.
+Schema 12 adds `drive_motor_cg_offset`, `rocker_length` and NASA source-condition
+diagnostics, and removes `feed_traction_margin`; `dig_traction_margin` remains
+an inactive moving-model compatibility output.
 
 ```text
 omega=rpm*pi/30; Fr=omega^2*R/g
@@ -268,9 +300,9 @@ errors, failures, soil preparation mismatch and missing prototype calibration.
 
 ## Uneven-load tip stability
 
-The default static screen checks one front/rear drum pair full, the other empty, with both pairs at the common commanded deposition pose. Each full drum holds one quarter of `payload_mass`. Symmetric dry hardware cancels longitudinally, so the reference inventory gives `CG_x = (payload_mass/2)*deposition_x/(dry_mass+payload_mass/2)` and `CG_y = 0`. The signed margin is `min(wheelbase/2 - abs(CG_x), track_width/2)`, using the wheel-center support rectangle. The mass-properties component supplies the CG so replacement inventories can change its distribution. Front-full and rear-full cases are mirrored. `tip_worst_mask` is 3 (front pair full); mask 12 is equivalent.
+The default screen checks one drum pair full and the other empty at the commanded deposition pose. The reference inventory gives `CG_x = (payload_mass/2)*deposition_x/(dry_mass+payload_mass/2)` and `CG_y = 0`. The screen uses the inventory's half-loaded CG and yaw inertia. Wheel-shaft torque `T_wheel` is the larger of straight-drive demand (rolling resistance plus acceleration) and point-turn demand (rolling resistance, scrub and yaw acceleration). The screen applies both shaft reactions per rocker with half the total weight `W` on each side. The signed margin is `min(wheelbase/2 - abs(CG_x) - 4*T_wheel/W, track_width/2)`. Front-full and rear-full cases are mirrored. `tip_worst_mask` is 3 (front pair full) and mask 12 is equivalent.
 
-The half-loaded turn also uses deposition CG and yaw inertia. Loaded outbound and empty return use travel mass properties. The two pairs move together while fully loaded before dumping, stay at the deposition command through both dumps/turn, then return empty to travel. The added transitions have explicit time and energy costs. Control software must prevent other half-loaded arm poses; that interlock is unverified. The static screen omits soil shifting, dumping reaction, slopes and individual wheel unloading; separate route-turn dynamic screens remain enforced. Explicit legacy excavation retains the maximum-extension `TipStability` component. See [DEPOSITION_STATES.md](docs/DEPOSITION_STATES.md) for the schema 8 contracts and equations.
+Loaded outbound and empty return use travel mass properties. The two pairs move together while fully loaded before dumping, stay at the deposition command through both dumps and the turn, then return empty to travel. The added transitions have explicit time and energy costs. Control software must prevent other half-loaded arm poses. The pitch screen uses nominal level-ground geometry and omits soil shifting, dumping reaction and coupled suspension motion. Mobility separately screens lateral stability in the turn. Explicit legacy excavation retains the gravity-only maximum-extension screen. See [DEPOSITION_STATES.md](docs/DEPOSITION_STATES.md) for the equations.
 
 ## Fresh-site motion
 
@@ -307,30 +339,33 @@ Empty relocation translates to a neighboring fresh lane with two 90-degree turns
 
 ## Mission and numerical verification
 
-The plate-frame profile now selects static tipping adapters with uniform wheel
-compression: `delta=(wheel_diameter/2)*0.20*(dry_mass+payload_mass)/
-(dry_mass+payload_mass*0.9/fill_fraction)`. The student's 20% uses the unloaded
-overall radius, including rigid 18 mm grousers. Tread radius is overall radius
-minus grouser height; tip-supported axle height is overall radius minus delta,
-without adding the grousers twice. Slope support uses `loaded_cg_z-delta`.
-Wheel-center contacts are retained by student choice. Uniform heave leaves
-horizontal-platform rock and level-dump reserves unchanged; posed CG-z
-diagnostics decrease by delta. Original rigid ModelSet factories remain
-available. Unequal compression, grouser penetration and soil sinkage are
-unmodeled; no calibration is implied. The reference mass is for the same
-design at 0.9 fill, independent of the current run's fill. Above-reference
-loads are rejected. See [static tipping equations, research and schema 10](docs/STATIC_TIPPING.md).
+The plate-frame profile selects static tipping with individual wheel springs
+and coupled rocker/body load transfer. Reference stiffness is
+`k=(dry_mass+payload_mass*0.9/fill_fraction)*gravity/(4*0.20*(wheel_diameter/2))`.
+The student's provisional linear law extends to a 64 mm compression hard stop;
+additional stop reaction can increase without further compression. Normal
+forces are not capped. Each wheel's compression and actual CG/pose are solved
+with gravity, global moments and the ideal average-angle differential.
+Downhill body tilt is included; equal wheel compression is no longer imposed.
+The 18 mm rigid grousers are inside overall diameter and point contacts remain
+at their tips. Global support and first wheel unloading are separate outputs;
+negative required normals remain failures. A 5-degree heading grid with bounded
+refinement searches the unchanged slope requirement, with explicit numerical
+resolution limits. Rock endpoint and 41-height cases also use coupled springs
+and stops. Rigid reference factories remain available.
+No FEA, wheel/soil fit, contact-patch or sinkage calibration is implied. See
+[equations, guards, assumptions and schema 11](docs/STATIC_TIPPING.md).
 
 `ModelSet.traversal_stability` additionally enforces 30-degree full-load travel
-support using the gravity-line intersection with the planar support rectangle.
+support using the gravity-line intersection with the posed support polygon.
 It samples each single-wheel raise from zero to obstacle_height at 41 heights,
 retaining rocker kinematics. Both the global hull and nonnegative wheel normals
-under ideal differential pitch-torque balance are required. Three new margins
+under ideal differential pitch-torque balance are required. These margins
 are additive to the endpoint obstacle and uneven-dump contracts. Slope and rock
 are separate cases; failed four-contact poses are not replaced with invented
 three-wheel poses. See [traversal equations](docs/OBSTACLE_TRAVERSAL.md#slope-and-intermediate-height-stability).
 
-Cycle sums dig, dump, travel_time (2*traversal_time_one_way in fixed mode, outbound+return in calculated mode), deposition turn, parallel actual-pose excavation actuator positioning, parallel loaded/empty deposition pose changes, relocation and alignment. Moving excavation sets lowering/cutting overlap to zero. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. cycles=run_time/cycle; berm_volume=cycles*payload*delivery_efficiency/berm_density. Score=4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh), with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
+Cycle time sums dig, dump, route travel, `turn_time` for the half-loaded deposition maneuver, parallel excavation actuator positioning, parallel deposition pose changes, relocation and alignment. Moving excavation sets lowering/cutting overlap to zero. Electrical energy sums dig/dump, mobility, arms, relocation and electronics over the cycle. Battery usable energy and peak C-rate are constrained. `cycles=run_time/cycle` and `berm_volume=cycles*payload*delivery_efficiency/berm_density`. Score is `4.4*V_cm3/(t_min*dry_mass_kg)+1.5*V_cm3/(t_min*E_Wh)`, with user weights. Whole completed cycles are reported separately with idle remainder and no partial-dump credit.
 
 Central whole-model FD supports deterministic replacement components. Tests audit omitted dependencies, geometry/conservation limits, mass properties, drive limits, invalid domains and complete optimization. Nonsmooth branches still exist; SLSQP is local and COBYLA is available. Failed final iterates remain labeled failed; numerical consistency/convergence is not empirical validation. Reports identify component factories. Old outputs must be rerun before comparison. Manual inspection still covers 3D packaging, E-stop, radio, materials, autonomy, dust, berm placement and legal zones.
 

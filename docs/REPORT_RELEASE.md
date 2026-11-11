@@ -1,4 +1,17 @@
-# Report release - 2026-10-30
+# Report releases
+
+## 2026-11-11
+
+The baseline report evaluates the saved `design_baseline.json` and records ten
+failed modeled checks. The candidate report preserves the final iterate from
+the November 9 `CDR_Baseline_optimization_test` run. Its saved empty-climb,
+loaded-climb, and startup-position checks fail. `design_optimized.json` holds
+the final inputs from that run. Each HTML report embeds its numeric snapshot.
+
+The printable reports are [Baseline](../output/baseline.pdf) and
+[CDR candidate](../output/optimized.pdf).
+
+## 2026-10-30
 
 The baseline report evaluates the saved inputs in `design_baseline.json`,
 with its current values preserved. It describes the baseline configuration,
@@ -36,7 +49,7 @@ soil/hardware measurements or experimental validation are claimed.
 - Baseline inputs: `design_baseline.json`.
 - Candidate effective inputs and original run context: `design_optimized.json`.
 - Self-contained HTML and geometry: `docs/design_reports/`.
-- PDFs: `output/pdf/baseline.pdf`, `output/pdf/optimized.pdf`.
+- PDFs were published under the report filenames now used in `output/`.
 - Full run records, optimizer SQL and verification logs remain in ignored
   `results/`; they are not added to Git. Full numeric records are embedded in
   the published HTML reports.

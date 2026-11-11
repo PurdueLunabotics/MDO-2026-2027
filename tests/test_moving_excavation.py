@@ -55,9 +55,9 @@ class MovingExcavationTests(unittest.TestCase):
         self.assertAlmostEqual(p.get_val("actuation_time").item(),
                                2*stroke/p.get_val("actuator_speed").item())
 
-    def component(self, provider=ReferenceMotorProvider, component=MovingExcavation, **changes):
+    def component(self, provider=ReferenceMotorProvider, component=MovingExcavation, force_model="pressure", **changes):
         problem = om.Problem(reports=False)
-        problem.model.add_subsystem("excavation", component(motor_model=provider), promotes=["*"])
+        problem.model.add_subsystem("excavation", component(motor_model=provider, force_model=force_model), promotes=["*"])
         problem.setup()
         self.addCleanup(problem.cleanup)
         values = dict(dry_mass=60., drum_mass=8., extended_x=.6, extended_y=-.02,
@@ -144,7 +144,7 @@ class MovingExcavationTests(unittest.TestCase):
         normal = self.component(actuator_idle_power=0.)
         doubled = self.component(DoubleElectricalProvider, actuator_idle_power=0.)
         for name in ("payload_mass", "cut_force", "feed_time", "drum_torque_margin",
-                     "feed_motor_margin", "feed_traction_margin"):
+                     "feed_motor_margin", "dig_traction_margin"):
             self.assertEqual(self.value(normal, name), self.value(doubled, name))
         for name in ("dig_energy", "dig_power", "dump_energy", "dump_power",
                      "feed_drive_energy", "feed_drive_peak_power"):
@@ -204,6 +204,52 @@ class MovingExcavationTests(unittest.TestCase):
         self.assertEqual(migration["retired_inputs"], old)
         with self.assertRaisesRegex(ValueError, "mix"):
             build_problem(dict(inlet_depth=.014, cut_depth=.012))
+
+
+    def test_opposing_reactions_remove_cutting_work_from_wheel_drive(self):
+        normal=self.component(cut_pressure=1000.,actuator_idle_power=0.)
+        heavy=self.component(cut_pressure=100000.,actuator_idle_power=0.)
+        self.assertGreater(self.value(heavy,"cut_force"),self.value(normal,"cut_force"))
+        for name in ("feed_drive_energy","feed_drive_peak_power","feed_motor_margin","feed_power_margin"):
+            self.assertEqual(self.value(normal,name),self.value(heavy,name),name)
+        quiet=self.component(cut_pressure=100000.,rolling_base=0.,feed_speed=1e-6,actuator_idle_power=0.)
+        self.assertGreater(self.value(quiet,"cut_force"),0.)
+        self.assertLess(self.value(quiet,"feed_drive_energy"),1e-8)
+        from rover.problem import build_problem
+        p=build_problem();self.addCleanup(p.cleanup)
+        self.assertNotIn("feed_traction_margin",p.margin_specs)
+        self.assertNotIn("dig_traction_margin",p.margin_specs)
+        self.assertNotIn("feed_traction_margin",MovingExcavation.OUTPUT_UNITS)
+
+    def test_nasa_force_whole_width_source_support_and_unsupported_rpm(self):
+        diameter,width,speed=.4371,.3526,.03
+        rpm=60*8.5*speed/(math.pi*diameter)
+        p=self.component(force_model="nasa-ipex",drum_diameter=diameter,drum_length=width,
+                         inlet_depth=.025,feed_speed=speed,drum_rpm=rpm)
+        normalized=self.value(p,"cut_force")/(4*width)
+        # Independently digitized Figure 13 trend, not the fitted coefficient formula.
+        self.assertLess(abs(normalized-134.8964),6.)
+        self.assertEqual(self.value(p,"nasa_force_source_valid"),1.)
+        original=self.value(p,"cut_force")
+        p.set_val("drum_rpm",30.);p.run_model()
+        self.assertEqual(self.value(p,"cut_force"),original)
+        self.assertEqual(self.value(p,"nasa_force_source_valid"),0.)
+        p.set_val("feed_speed",.2);p.run_model()
+        self.assertEqual(self.value(p,"nasa_force_source_valid"),0.)
+        self.assertGreater(self.value(p,"cut_force"),original)
+        from studies.ipex_force_surface import normalized_force
+        self.assertEqual(normalized_force(0.,speed,p.model.excavation.force_surface.coefficients),0.)
+        with self.assertRaises(ValueError):normalized_force(-.01,speed,p.model.excavation.force_surface.coefficients)
+
+    def test_nasa_cutting_work_constant_speed_limit_and_loss_once(self):
+        p=self.component(force_model="nasa-ipex",feed_speed=.03,drum_rpm=30.,inlet_depth=.025,
+                         internal_lift_factor=0.,actuator_idle_power=0.,acceleration=1e12)
+        v=lambda n:self.value(p,n)
+        radius=v("drum_diameter")/2;omega=v("drum_rpm")*math.pi/30
+        inertia=(v("drum_mass")+v("payload_mass"))*radius**2
+        cutting=v("cut_force")*radius*omega*v("feed_distance")/v("feed_speed")
+        expected=(cutting+inertia*omega**2)/v("drum_efficiency")
+        self.assertAlmostEqual(v("dig_energy")-v("feed_drive_energy"),expected,places=7)
 
 
 if __name__ == "__main__":

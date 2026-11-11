@@ -205,7 +205,7 @@ class LinkageLoads(SimpleComponent):
     def setup(self):
         self.inputs_from_config("gravity", "actuator_speed",
             "actuator_force_rating",
-            "actuator_efficiency", "actuator_safety_factor", "breakout_force", "cut_depth",
+            "actuator_efficiency", "actuator_safety_factor", "cut_depth",
             "arm_length", "lin_act_side_arm_offset", "actuator_idle_power")
         self.add_input("arm_linear_mass", units="kg/m")
         for name, units in {"payload_mass": "kg", "drum_mass": "kg", "travel_y": "m", "extended_y": "m", "lowering_time": "s", "actuator_leverage_max": None}.items():
@@ -219,12 +219,12 @@ class LinkageLoads(SimpleComponent):
         empty_weight = (v("drum_mass") / 2 + v("arm_linear_mass") * physical_length(v("arm_length"), v("lin_act_side_arm_offset"))**2 / (2*v("arm_length"))) * v("gravity")
         loaded_weight = empty_weight + v("payload_mass") / 2 * v("gravity")
         # Maximum virtual-work leverage across the travel-to-dig arm sweep.
-        force = (loaded_weight + v("breakout_force")) * v("actuator_leverage_max")
+        force = loaded_weight * v("actuator_leverage_max")
         lift = max(v("travel_y") - v("extended_y"), 0)
         outputs["actuation_time"] = 2 * v("lowering_time")
         outputs["required_actuator_force"] = force
         outputs["actuator_force_margin"] = v("actuator_force_rating") / v("actuator_safety_factor") - force
         # Both pairs raise loaded and lower empty in parallel; no regeneration credited.
-        outputs["arm_energy"] = 2 * ((loaded_weight + empty_weight) * lift + v("breakout_force") * v("cut_depth")) / v("actuator_efficiency")
+        outputs["arm_energy"] = 2 * ((loaded_weight + empty_weight) * lift) / v("actuator_efficiency")
         outputs["arm_energy"] += 2 * v("actuator_idle_power") * outputs["actuation_time"]
         outputs["arm_peak_power"] = 2 * force * v("actuator_speed") / v("actuator_efficiency") + 2 * v("actuator_idle_power")

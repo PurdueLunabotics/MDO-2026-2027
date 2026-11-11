@@ -66,6 +66,12 @@ class MovingExcavationReportTests(unittest.TestCase):
             self.assertNotIn('Dig and lower concurrently', html)
             self.assertTrue(output.with_name('moving_excavation.svg').exists())
             self.assertTrue(output.with_name('moving_feed_rpm.svg').exists())
+            self.assertLess(html.index('id="actuator-force"'), html.index('id="excavation"'))
+            self.assertIn('data-actuator-units="metric"', html)
+            self.assertIn('data-actuator-units="imperial"', html)
+            self.assertIn('data-actuator-view="imperial" hidden', html)
+            self.assertTrue(output.with_name('moving_actuator_force.svg').exists())
+            self.assertTrue(output.with_name('moving_actuator_force_imperial.svg').exists())
 
     def test_zero_or_negative_domain_reserve_is_never_tolerated_as_valid(self):
         problem = build_problem()

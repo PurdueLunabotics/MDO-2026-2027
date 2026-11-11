@@ -223,11 +223,11 @@ class PhysicsTests(unittest.TestCase):
         self.assertAlmostEqual(extended_pair_tip_margin(dry,payload,wb,track,-x),expected)
         self.assertAlmostEqual(extended_pair_tip_margin(dry,0,wb,track,x),wb/2)
         self.assertLess(extended_pair_tip_margin(dry,160,.2,track,.7),0)
-        p=self.problem()
+        p=self.problem(models=ModelSet(excavation=Excavation))
         self.assertAlmostEqual(p.get_val('tip_stability_margin').item(),extended_pair_tip_margin(
             p.get_val('dry_mass').item(),p.get_val('payload_mass').item(),
             p.get_val('wheelbase').item(),p.get_val('track_width').item(),
-            p.get_val('deposition_x').item()))
+            p.get_val('extended_x').item()))
         self.assertEqual(p.get_val('tip_worst_mask').item(),3)
 
     def test_actuator_pivot_moves_independently(self):

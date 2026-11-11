@@ -106,6 +106,7 @@ def state_route(soil, values, motor, mass, inertia, route=ROUTE):
                             duration, peak = travel_profile(distance, turn_speed, turn_a)
                             profiles.append(("turn", distance, duration, peak, turn_a))
                     result = {"profiles": profiles, "duration": sum(p[2] for p in profiles),
+                              "steady_point": steady, "moving_point": moving,
                               "acceleration": acceleration, "speed_limit": speed,
                               "upper_bounds_reached": speed == v("travel_speed") and turn_speed == v("travel_speed")*v("turn_speed_fraction"),
                               "slip": max(steady["slip"], moving["slip"]),
@@ -175,22 +176,31 @@ class CalculatedTraversalMobility(BekkerWongReeceMobility):
     def route_plan(self, values):
         inputs = {name: values(name) for name in self._var_rel_names["input"]}
         motor = self.options["motor_model"].create(values, "drive", rated_torque_limit=False)
-        plans = []
+        plans, wheel_points = [], {}
         for prefix,state,mass in (("outbound", "loaded", values("dry_mass")+values("payload_mass")),
                                   ("return", "empty", values("dry_mass"))):
             route = state_route(self.soil, inputs, motor, mass, values(state+"_yaw_inertia"))
+            wheel_points[mass, route["acceleration"]] = (route["steady_point"], route["moving_point"])
             profiles = route["profiles"] if state == "loaded" else list(reversed(route["profiles"]))
             diagnostics = dict(zip((prefix+"_"+suffix for suffix in
                 ("travel_time", "route_acceleration", "straight_speed_limit", "bwr_slip", "bwr_sinkage", "bwr_transfer_flag_count")),
                 (route["duration"], route["acceleration"], route["speed_limit"], route["slip"], route["sinkage"], len(route["transfer_flags"]))))
             plans.append(([(mass,state,p) for p in profiles], diagnostics))
         segments = plans[0][0]+plans[1][0]
+        from .bekker_wong_reece import straight_segment_response
+
+        def straight_response(*, mass, drag, accel, peak, distance):
+            steady, moving = wheel_points[mass, accel]
+            return straight_segment_response(values("wheel_diameter"), steady, moving,
+                                             accel, peak, distance)
         return {"segments": segments, "travel_time": sum(p[2][2] for p in segments),
                 "translation_time": sum(p[2][2] for p in segments if p[2][0] == "straight"),
                 "route_turn_time": sum(p[2][2] for p in segments if p[2][0] == "turn"),
                 "peak_speed": max(p[2][3] for p in segments if p[2][0] == "straight"),
                 "peak_acceleration": max(p[2][4] for p in segments),
-                "diagnostics": {**plans[0][1], **plans[1][1]}}
+                "diagnostics": {**plans[0][1], **plans[1][1]},
+                "straight_response": (straight_response if type(self).straight_responder
+                                      is BekkerWongReeceMobility.straight_responder else None)}
 
     def compute(self, inputs, outputs):
         try:

@@ -58,6 +58,10 @@ def snapshot(problem, configuration=None):
     if specs.get("static_wheel_compliance"):
         from rover.alternatives.compliant_tipping import COMPLIANCE_OUTPUTS
         output_units.update(COMPLIANCE_OUTPUTS)
+    if specs.get("static_wheel_load_transfer"):
+        from rover.alternatives.compliant_tipping import EXTRA_OUTPUTS
+        output_units.update(EXTRA_OUTPUTS)
+        output_units['obstacle_equilibrium_valid'] = None
     loads = getattr(getattr(problem, "model", None), "linkage_loads", None)
     if (getattr(loads, "PARALLEL_EXCAVATION_MOTION", False)
             or specs.get("excavation_arm_motion") == "parallel_operating_poses"):
@@ -90,7 +94,13 @@ def snapshot(problem, configuration=None):
         margin = upper - get(name)
         constraints[name] = {"margin": margin, "units": units, "passed": margin >= -1e-6 * upper}
     for name, (scale, units) in margins.items():
-        constraints[name] = {"margin": get(name), "units": units, "passed": get(name) >= -1e-6 * scale}
+        minimum = specs.get("margin_minimums", {}).get(name, (0., units))[0]
+        reserve = get(name)-minimum
+        constraints[name] = {"margin": reserve, "units": units, "passed": reserve >= -1e-6 * scale}
+        if minimum:
+            constraints[name].update(actual=get(name), required_minimum=minimum,
+                                     passed=bool(get(name) >= minimum),
+                                     criterion="Raw support-edge distance must reach the required minimum; reported margin is the remaining reserve")
         if name == "excavation_domain_margin":
             constraints[name].update(passed=bool(get(name) > 0),
                                      criterion="Strictly positive shell and operating geometry domain; guarded diagnostics are not valid predictions")

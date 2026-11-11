@@ -8,6 +8,7 @@ inside OpenMDAO. See docs/MODEL_DEVELOPMENT.md and examples/empirical_excavation
 """
 from dataclasses import dataclass, replace
 from typing import Callable
+from functools import partial
 from .excavation import Excavation
 from .alternatives.moving_excavation import MovingExcavation
 from .structure import StructureGeometry, StructureLoads
@@ -61,7 +62,8 @@ def plate_frame_models():
     from .alternatives.plate_frame import PlateMassProperties, PlateObstacleStability
     from .alternatives.aluminum_box_arm import BoxArmPlateStructureGeometry, BoxArmPlateStructureLoads
     from .alternatives.traversal_stability import PlateTraversalStability
-    return ModelSet(structure_geometry=BoxArmPlateStructureGeometry, structure_loads=BoxArmPlateStructureLoads,
+    return ModelSet(excavation=partial(MovingExcavation, force_model="nasa-ipex"),
+                    structure_geometry=BoxArmPlateStructureGeometry, structure_loads=BoxArmPlateStructureLoads,
                     mass_properties=PlateMassProperties, obstacle_stability=PlateObstacleStability,
                     traversal_stability=PlateTraversalStability)
 

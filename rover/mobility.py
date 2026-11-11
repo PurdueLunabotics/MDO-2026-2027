@@ -4,6 +4,26 @@ from .components import SimpleComponent, scalar, travel_profile
 from .config import ROUTE
 from .motors import ReferenceMotorProvider, motor_dependencies
 
+DEPOSITION_STRAIGHT_DISTANCE = 0.5  # m, each side of the point turn
+
+
+def wheel_contact_area(diameter, width, deflection_fraction):
+    """Existing four-wheel contact-area approximation [m2], without soil fitting."""
+    radius = diameter/2
+    delta = deflection_fraction*diameter
+    return 4*width*2*math.sqrt(2*radius*delta-delta**2)
+
+
+def peak_ground_pressure(rocker_factor, gravity, area, pressure_factors):
+    """Existing route pressure envelope from explicit (mass, axle factor) pairs."""
+    return rocker_factor*max(m*f for m, f in pressure_factors)*gravity/area
+
+
+def rolling_resistance_force(weight, area, rocker_factor, rolling_base, pressure_scale):
+    """Empirical rolling resistance for the reference motion model [N]."""
+    pressure = rocker_factor * weight / area
+    return (rolling_base + pressure / pressure_scale) * weight
+
 
 def route_profiles(track, speed, accel, turn_fraction, turn_accel_fraction, one_way_time):
     """(kind, distance at wheel rim, duration, peak rim speed, acceleration).
@@ -43,9 +63,10 @@ class Mobility(SimpleComponent):
 
     def initialize(self):
         self.options.declare("motor_model", default=ReferenceMotorProvider)
+        self.options.declare("deposition_translation", default=True, types=bool)
 
     def straight_response(self, values, *, mass, drag, accel, peak, distance):
-        """Mechanical straight segment; alternatives must preserve turn physics."""
+        """Reference response for straight route segments."""
         force = drag + mass * accel
         return {"force": force, "power": force * peak,
                 "work": drag * distance + .5 * mass * peak**2,
@@ -102,35 +123,52 @@ class Mobility(SimpleComponent):
         """Account for one explicit route plan; timing and work share profiles."""
         v = lambda n: scalar(inputs, n)
         radius = v("wheel_diameter") / 2
-        delta = v("wheel_deflection_fraction") * 2 * radius
-        contact_length = 2 * math.sqrt(2 * radius * delta - delta**2)
-        area = 4 * v("wheel_width") * contact_length
+        area = wheel_contact_area(v("wheel_diameter"), v("wheel_width"), v("wheel_deflection_fraction"))
         dry, payload, g = v("dry_mass"), v("payload_mass"), v("gravity")
-
-        def resistance(mass):
-            pressure = v("rocker_load_factor") * mass * g / area
-            return (v("rolling_base") + pressure / v("rolling_pressure_scale")) * mass * g
 
         half_track = v("track_width") / 2
         turn_path = v("turn_angle") * half_track
-        turn_accel = v("acceleration") * v("turn_accel_fraction")
-        turn_time, turn_peak = travel_profile(turn_path, v("travel_speed") * v("turn_speed_fraction"), turn_accel)
+        deposition_accel = v("acceleration") * v("turn_accel_fraction")
+        deposition_speed = v("travel_speed") * v("turn_speed_fraction")
+        turn_time, turn_peak = travel_profile(turn_path, deposition_speed, deposition_accel)
+        half_mass = dry + payload / 2
+        turn_segment = (half_mass, "deposition_half", ("turn", turn_path, turn_time, turn_peak, deposition_accel))
+        route_segments = list(plan["segments"])
+        segments = [*route_segments, turn_segment]
+        deposition_time = turn_time
+        if self.options["deposition_translation"]:
+            distance = DEPOSITION_STRAIGHT_DISTANCE
+            straight_time, straight_peak = travel_profile(distance, deposition_speed, deposition_accel)
+            profile = (distance, straight_time, straight_peak, deposition_accel)
+            segments = [*route_segments,
+                        (half_mass, "deposition_half", ("deposition_reverse", *profile)),
+                        turn_segment,
+                        (half_mass, "deposition_half", ("deposition_forward", *profile))]
+            deposition_time += 2 * straight_time
         motor = self.options["motor_model"].create(v, "drive", rated_torque_limit=False)
         stall_force = 4*motor.available_torque(0.)/radius
         no_load_speed = motor.free_rpm*math.pi/30*radius
         rating = 4*motor.peak_power()
-        segments = list(plan["segments"])
-        segments += [(dry + payload / 2, "deposition_half", ("turn", turn_path, turn_time, turn_peak, turn_accel))]
-        straight_response = self.straight_responder(v, segments)
-        forces, powers, motor_margins, traction_margins = {}, {}, {}, {}
+        # Calculated timing can explicitly carry its already-solved wheel
+        # responses into work accounting. Fixed/custom planners retain their
+        # existing responder. Nothing persists between compute calls.
+        straight_response = plan.get("straight_response")
+        if straight_response is None:
+            straight_response = self.straight_responder(v, [*route_segments, turn_segment])
+        powers, motor_margins, traction_margins = {}, {}, {}
         electrical = {"straight": [], "turn": []}
         for kind in ("straight", "turn"):
-            forces[kind], powers[kind], motor_margins[kind], traction_margins[kind] = [], [], [], []
+            powers[kind], motor_margins[kind], traction_margins[kind] = [], [], []
         stability = []
         pressure_factors = []
         straight_speed_factors = []
+        route_straight_forces = []
         for mass, state, (kind, d, t, peak, accel) in segments:
-            drag = resistance(mass)
+            route_straight = kind == "straight"
+            if kind in ("deposition_reverse", "deposition_forward"):
+                kind = "straight"
+            drag = rolling_resistance_force(mass * g, area, v("rocker_load_factor"),
+                                            v("rolling_base"), v("rolling_pressure_scale"))
             effective_mass = mass
             cg_x, cg_z = abs(v(state+"_cg_x")), v(state+"_cg_z")
             offset_force = 0.0
@@ -151,13 +189,13 @@ class Mobility(SimpleComponent):
             # Resistance work plus one acceleration from rest; no regeneration.
             work = drag*d + 0.5*effective_mass*peak**2
             peak_rim_speed = peak
-            if kind == "straight":
+            if route_straight:
                 response = straight_response(mass=mass, drag=drag, accel=accel, peak=peak, distance=d)
                 force, power, work = (response[n] for n in ("force", "power", "work"))
                 peak_rim_speed = response["peak_rim_speed"]
+                route_straight_forces.append(force)
                 straight_speed_factors.append(response["ground_speed_factor"])
             electrical[kind].append(motor.evaluate(work/4, power/4))
-            forces[kind].append(force)
             powers[kind].append(power)
             motor_margins[kind].append(4*motor.available_torque(peak_rim_speed/radius*30/math.pi)/radius-force)
             # Equal wheel torque is limited by the lighter axle; a torque allocator
@@ -166,7 +204,7 @@ class Mobility(SimpleComponent):
             traction_margins[kind].append(v("traction_coefficient") * mass * g * light_axle_factor - math.hypot(force,offset_force))
         idle = 4 * v("actuator_idle_power")
         outputs["travel_time"] = plan["travel_time"]
-        outputs["turn_time"] = turn_time  # deposition-only; route turns already in 90 s
+        outputs["turn_time"] = deposition_time  # reverse, point turn, forward between dumps
         outputs["route_translation_time"] = plan["translation_time"]
         outputs["route_turn_time"] = plan["route_turn_time"]
         outputs["route_distance"] = 2 * sum(p[0] for p in ROUTE)
@@ -174,16 +212,17 @@ class Mobility(SimpleComponent):
         outputs["actual_travel_speed"] = plan["peak_speed"]
         outputs["route_peak_acceleration"] = plan["peak_acceleration"]
         all_electrical = electrical["straight"]+electrical["turn"]
-        duration = plan["travel_time"]+turn_time
+        duration = plan["travel_time"]+deposition_time
         outputs["mobility_energy"] = 4*sum(p["energy"] for p in all_electrical)+idle*duration
         outputs["drive_peak_power"] = 4*max(p["peak"] for p in electrical["straight"])+idle
         outputs["turn_peak_power"] = 4*max(p["peak"] for p in electrical["turn"])+idle
-        outputs["ground_pressure"] = v("rocker_load_factor") * max(m*f for m,f in pressure_factors) * g / area
+        outputs["ground_pressure"] = peak_ground_pressure(v("rocker_load_factor"), g, area, pressure_factors)
         outputs["mobility_stability_margin"] = min(stability)
         outputs["ground_pressure_margin"] = v("allowable_ground_pressure") - outputs["ground_pressure"]
         outputs["no_load_speed"], outputs["stall_drive_force"] = no_load_speed, stall_force
-        outputs["loaded_motor_speed_limit"] = motor.speed_limit(max(forces["straight"])*radius/4)*math.pi/30*radius
-        outputs["loaded_power_speed_limit"] = rating / max(forces["straight"])
+        route_force = max(route_straight_forces)
+        outputs["loaded_motor_speed_limit"] = motor.speed_limit(route_force*radius/4)*math.pi/30*radius
+        outputs["loaded_power_speed_limit"] = rating / route_force
         # Optional straight-slip models express these diagnostic limits in ground
         # speed. Reference factors are exactly one; turn outputs are unaffected.
         outputs["loaded_motor_speed_limit"] *= min(straight_speed_factors)

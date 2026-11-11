@@ -1,0 +1,11 @@
+{
+  "csv_records": 72,
+  "all_kafi_numeric_cells_verified_against_source_pdf": 72,
+  "csv_hashes_verified": true,
+  "pdf_pages": 8,
+  "pdf_searchable_plot_titles": true,
+  "unavailable_values_not_imputed": true,
+  "NASA_force_marker_centres_checked_against_source_RGB": 28,
+  "rover_and_baseline_fingerprint_unchanged": true,
+  "pdf_all_eight_pages_visually_reviewed": true
+}
