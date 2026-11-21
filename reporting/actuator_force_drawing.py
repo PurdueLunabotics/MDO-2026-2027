@@ -100,12 +100,13 @@ def force_stroke_svg(data, units="metric"):
         '<text x="30" y="65" font-size="17">Force per actuator or arm · quasi-static gravity loads, unfactored</text>',
         f'<rect x="{left:g}" y="{top:g}" width="{width:g}" height="{height:g}" fill="white"/>',
     ]
-    for i in range(6):
-        fraction = i/5
-        x = xmin+(xmax-xmin)*fraction
+    xticks = ([xmin+(xmax-xmin)*i/5 for i in range(6)] if imperial
+              else range(math.ceil(xmin), math.floor(xmax)+1))
+    for x in xticks:
+        label = f'{x:.2f}' if imperial else f'{x:g}'
         parts += [
             f'<line data-grid="x" x1="{px(x):.2f}" y1="{top:g}" x2="{px(x):.2f}" y2="{top+height:g}" stroke="#d9e2e8"/>',
-            f'<text x="{px(x):.2f}" y="424" text-anchor="middle" font-size="15">{x:.2f}</text>',
+            f'<text x="{px(x):.2f}" y="424" text-anchor="middle" font-size="15">{label}</text>',
         ]
     ystep = ymax/5 if imperial else 100.
     label_every = 1 if imperial else max(1, math.ceil(ymax/100/10))

@@ -48,7 +48,8 @@ class ActuatorForceReportTests(unittest.TestCase):
         metric, imperial = (ET.fromstring(force_stroke_svg(data, u)) for u in ('metric', 'imperial'))
         for root in (metric, imperial):
             lines = list(root.iter(ns+'line'))
-            self.assertEqual(sum(n.get('data-grid') == 'x' for n in lines), 6)
+            self.assertEqual(sum(n.get('data-grid') == 'x' for n in lines),
+                             81 if root is metric else 6)
             self.assertEqual(sum(n.get('data-grid') == 'y' for n in lines),
                              3 if root is metric else 6)
             self.assertEqual(sum(n.get('data-load') == 'compression'
@@ -56,6 +57,8 @@ class ActuatorForceReportTests(unittest.TestCase):
         capacity = lambda root: next(float(n.get('data-capacity')) for n in root.iter() if n.get('data-load') == 'capacity')
         self.assertEqual(capacity(metric), 100.)
         self.assertAlmostEqual(capacity(imperial), 100/4.4482216152605)
+        self.assertEqual([n.text for n in metric.iter(ns+'text') if n.get('y') == '424'],
+                         [str(i) for i in range(81)])
         self.assertEqual([n.text for n in metric.iter(ns+'text') if n.get('x') == '94'],
                          ['0', '100', '200'])
         self.assertIn('Force per actuator / arm (N)', ''.join(metric.itertext()))
