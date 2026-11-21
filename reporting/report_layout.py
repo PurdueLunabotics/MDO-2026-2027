@@ -463,15 +463,15 @@ def render_report(record, output, drawings, frame_drawing, stability_drawing, ro
     actuator_section = ''
     if actuator_drawings:
         metric, imperial = actuator_drawings
-        controls = ('<div class="pose-controls" role="group" aria-label="Actuator force graph units">'
+        controls = ('<div class="pose-controls" role="group" aria-label="Actuator and arm force graph units">'
                     '<button type="button" data-actuator-units="metric" aria-pressed="true">N / cm</button>'
                     '<button type="button" data-actuator-units="imperial" aria-pressed="false">lbf / in</button></div>') if imperial else ''
-        actuator_section = ('<section id="actuator-force"><div class="section-heading"><span>Linkage / Actuator loads</span>'
-                            '<h2>Actuator force versus stroke</h2></div><article class="panel">'+controls+
+        actuator_section = ('<section id="actuator-force"><div class="section-heading"><span>Linkage / Actuator and arm loads</span>'
+                            '<h2>Actuator force and arm compression versus stroke length</h2></div><article class="panel">'+controls+
                             '<div class="actuator-chart-view" data-actuator-view="metric">'+metric+'</div>'+
                             ('<div class="actuator-chart-view" data-actuator-view="imperial" hidden>'+imperial+'</div>' if imperial else '')+
                             '</article></section>')
-        nav_html = nav_html.replace('<a href="#performance">', '<a href="#actuator-force">Actuator force</a><a href="#performance">')
+        nav_html = nav_html.replace('<a href="#performance">', '<a href="#actuator-force">Actuator / arm force</a><a href="#performance">')
     excavation_section = ''
     if moving:
         excavation_guard_note = ('<p class="callout">Guarded moving-excavation trial: the requested geometry is outside the model domain. Diagnostic values and drawings do not establish valid operation.</p>'

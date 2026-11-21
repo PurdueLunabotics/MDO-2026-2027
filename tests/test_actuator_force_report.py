@@ -25,6 +25,10 @@ class ActuatorForceReportTests(unittest.TestCase):
         for point in data['points']:
             self.assertAlmostEqual(point['empty_force_n'], 30*point['length_m'])
             self.assertAlmostEqual(point['loaded_force_n'], 70*point['length_m'])
+            # z=1-length^2/2; the loaded axial force varies linearly from
+            # -70-10*z at the root to -70+10*z just before the drum/pin.
+            self.assertAlmostEqual(point['compression_force_n'],
+                                   70+10*abs(1-point['length_m']**2/2))
             self.assertAlmostEqual(point['stroke_m'], point['length_m']-1.)
         self.assertAlmostEqual(max(p['loaded_force_n'] for p in data['points']), 126.)
         self.assertEqual(data['allowable_force_n'], 100.)  # Overload remains visible.
@@ -45,12 +49,18 @@ class ActuatorForceReportTests(unittest.TestCase):
         for root in (metric, imperial):
             lines = list(root.iter(ns+'line'))
             self.assertEqual(sum(n.get('data-grid') == 'x' for n in lines), 6)
-            self.assertEqual(sum(n.get('data-grid') == 'y' for n in lines), 6)
+            self.assertEqual(sum(n.get('data-grid') == 'y' for n in lines),
+                             3 if root is metric else 6)
+            self.assertEqual(sum(n.get('data-load') == 'compression'
+                                 for n in root.iter(ns+'polyline')), 1)
         capacity = lambda root: next(float(n.get('data-capacity')) for n in root.iter() if n.get('data-load') == 'capacity')
         self.assertEqual(capacity(metric), 100.)
         self.assertAlmostEqual(capacity(imperial), 100/4.4482216152605)
-        self.assertIn('Force per actuator (N)', ''.join(metric.itertext()))
-        self.assertIn('Stroke from hardware minimum (in)', ''.join(imperial.itertext()))
+        self.assertEqual([n.text for n in metric.iter(ns+'text') if n.get('x') == '94'],
+                         ['0', '100', '200'])
+        self.assertIn('Force per actuator / arm (N)', ''.join(metric.itertext()))
+        self.assertIn('Arm compression: full drums', ''.join(metric.itertext()))
+        self.assertIn('Stroke length from hardware minimum (in)', ''.join(imperial.itertext()))
         self.assertIn('39.370', ''.join(imperial.itertext()))  # One metre, independent inch conversion.
 
     def test_zero_load_limit_and_generic_stroke_reference(self):
@@ -61,7 +71,7 @@ class ActuatorForceReportTests(unittest.TestCase):
         self.assertFalse(data['hardware_origin'])
         self.assertEqual(data['origin_m'], 1.1)
         for point in data['points']:
-            for name in ('empty', 'loaded'):
+            for name in ('empty', 'loaded', 'compression'):
                 self.assertEqual(point[name+'_force_n'], 0.)
 
     def test_guarded_poses_and_nonfinite_loads_do_not_become_force_curves(self):

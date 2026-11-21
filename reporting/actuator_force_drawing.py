@@ -1,6 +1,7 @@
 """Report-only force sweep using the existing arm equilibrium helper.
 
-Forces are axial magnitudes for ONE actuator. Stroke is extension from the
+Forces are axial magnitudes for ONE actuator or compression in ONE loaded arm.
+Stroke is extension from the
 hardware minimum length (or the shortest command for the generic actuator).
 Nothing here changes model outputs, sizing envelopes, or feasibility.
 """
@@ -42,6 +43,7 @@ def force_stroke_data(values):
     if not math.isfinite(origin):
         raise ValueError("Nonfinite stroke origin")
     arm_weight = v("arm_linear_mass")*physical_length(arm, side)*v("gravity")
+    tube_length = physical_length(arm, side)
     empty_weight = v("drum_mass")/2*v("gravity")
     loaded_weight = empty_weight+v("payload_mass")/2*v("gravity")
     points = []
@@ -53,6 +55,18 @@ def force_stroke_data(values):
         for name, weight in (("empty", empty_weight), ("loaded", loaded_weight)):
             reaction = offset_mount_loads(bottom, upper, drum, weight, arm_weight, side, top)[2]
             point[name+"_force_n"] = math.hypot(*reaction)
+            if name == "loaded":
+                # Same axial section balance as offset_beam_screen: evaluate
+                # both sides of the drum/pin loads and the tube endpoints.
+                direction = ((drum[0]-bottom[0])/arm, (drum[1]-bottom[1])/arm)
+                axial_pin = sum(f*u for f, u in zip(reaction, direction))
+                axial = [
+                    -arm_weight*(1-s/tube_length)*direction[1]
+                    -(weight*direction[1] if arm > s or (arm == s and left) else 0.)
+                    +(axial_pin if arm+side > s or (arm+side == s and left) else 0.)
+                    for s in (0., arm, arm+side, tube_length) for left in (True, False)
+                ]
+                point["compression_force_n"] = max(0., -min(axial))
         points.append(point)
     return {"points": sorted(points, key=lambda p: p["stroke_m"]),
             "origin_m": origin, "hardware_origin": hardware_min is not None,
@@ -71,32 +85,40 @@ def force_stroke_svg(data, units="metric"):
     xmax = max(p["stroke_m"] for p in points)*distance_scale
     xmax = max(xmax, xmin+.01*distance_scale)
     ymax = max(data["allowable_force_n"], *(p[n+"_force_n"] for p in points
-                                          for n in ("empty", "loaded")))*force_scale*1.12
+                                          for n in ("empty", "loaded", "compression")))*force_scale*1.12
+    if not imperial:
+        ymax = math.ceil(ymax/100)*100
     left, top, width, height = 108., 100., 970., 300.
     px = lambda x: left+(x-xmin)/(xmax-xmin)*width
     py = lambda y: top+height-y/ymax*height
     parts = [
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 620" role="img" '
-        f'aria-label="Actuator force versus stroke in {force_unit} and {distance_unit}" data-force-units="{units}">',
+        f'aria-label="Actuator force and arm compression versus stroke length in {force_unit} and {distance_unit}" data-force-units="{units}">',
         '<rect width="1140" height="620" rx="14" fill="#f7fafc"/>',
         '<g font-family="sans-serif" fill="#203249">',
-        '<text x="30" y="36" font-size="25" font-weight="700">Actuator force versus stroke</text>',
-        '<text x="30" y="65" font-size="17">Axial force per actuator · quasi-static capability sweep</text>',
+        '<text x="30" y="36" font-size="25" font-weight="700">Actuator force and arm compression versus stroke length</text>',
+        '<text x="30" y="65" font-size="17">Force per actuator or arm · quasi-static gravity loads, unfactored</text>',
         f'<rect x="{left:g}" y="{top:g}" width="{width:g}" height="{height:g}" fill="white"/>',
     ]
     for i in range(6):
         fraction = i/5
-        x, y = xmin+(xmax-xmin)*fraction, ymax*fraction
+        x = xmin+(xmax-xmin)*fraction
         parts += [
             f'<line data-grid="x" x1="{px(x):.2f}" y1="{top:g}" x2="{px(x):.2f}" y2="{top+height:g}" stroke="#d9e2e8"/>',
-            f'<line data-grid="y" x1="{left:g}" y1="{py(y):.2f}" x2="{left+width:g}" y2="{py(y):.2f}" stroke="#d9e2e8"/>',
             f'<text x="{px(x):.2f}" y="424" text-anchor="middle" font-size="15">{x:.2f}</text>',
-            f'<text x="94" y="{py(y)+5:.2f}" text-anchor="end" font-size="15">{y:,.0f}</text>',
         ]
+    ystep = ymax/5 if imperial else 100.
+    label_every = 1 if imperial else max(1, math.ceil(ymax/100/10))
+    for i in range(round(ymax/ystep)+1):
+        y = i*ystep
+        parts.append(f'<line data-grid="y" x1="{left:g}" y1="{py(y):.2f}" x2="{left+width:g}" y2="{py(y):.2f}" stroke="#d9e2e8"/>')
+        if i % label_every == 0:
+            parts.append(f'<text x="94" y="{py(y)+5:.2f}" text-anchor="end" font-size="15">{y:,.0f}</text>')
     parts.append(f'<path d="M{left:g} {top:g} V{top+height:g} H{left+width:g}" fill="none" stroke="#536579" stroke-width="2"/>')
     for index, (name, caption, color) in enumerate((
-            ("empty", "Empty drums + arm", "#176a67"),
-            ("loaded", "Full drums + arm", "#246f99"))):
+            ("empty", "Actuator: empty drums", "#176a67"),
+            ("loaded", "Actuator: full drums", "#246f99"),
+            ("compression", "Arm compression: full drums", "#c26a20"))):
         coords = ' '.join(f'{px(p["stroke_m"]*distance_scale):.2f},{py(p[name+"_force_n"]*force_scale):.2f}' for p in points)
         parts += [f'<polyline data-load="{name}" points="{coords}" fill="none" stroke="{color}" stroke-width="3"/>',
                   f'<line x1="{108+index*318}" y1="490" x2="{138+index*318}" y2="490" stroke="{color}" stroke-width="3"/>',
@@ -105,9 +127,9 @@ def force_stroke_svg(data, units="metric"):
     parts += [
         f'<line data-load="capacity" data-capacity="{capacity:.12g}" x1="{left:g}" y1="{py(capacity):.2f}" x2="{left+width:g}" y2="{py(capacity):.2f}" stroke="#755b91" stroke-width="2.5" stroke-dasharray="8 5"/>',
         '<line x1="108" y1="520" x2="138" y2="520" stroke="#755b91" stroke-width="2.5" stroke-dasharray="8 5"/>',
-        f'<text x="146" y="525" font-size="16">Allowable force: {capacity:,.1f} {force_unit} (rating / safety factor)</text>',
-        f'<text x="593" y="460" text-anchor="middle" font-size="17">Stroke from {"hardware minimum" if data["hardware_origin"] else "shortest command"} ({distance_unit})</text>',
-        f'<text x="26" y="250" transform="rotate(-90 26 250)" text-anchor="middle" font-size="17">Force per actuator ({force_unit})</text>',
+        f'<text x="146" y="525" font-size="16">Allowable actuator force: {capacity:,.1f} {force_unit} (rating / safety factor)</text>',
+        f'<text x="593" y="460" text-anchor="middle" font-size="17">Stroke length from {"hardware minimum" if data["hardware_origin"] else "shortest command"} ({distance_unit})</text>',
+        f'<text x="26" y="250" transform="rotate(-90 26 250)" text-anchor="middle" font-size="17">Force per actuator / arm ({force_unit})</text>',
         f'<text x="30" y="562" font-size="16">Stroke zero = {data["origin_m"]*distance_scale:.3f} {distance_unit} pin-to-pin length.</text>',
         '<text x="30" y="588" font-size="15">Quasi-static gravity loads only. Extraction resistance and dynamic loads are not modeled.</text>',
         '</g></svg>',

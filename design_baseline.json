@@ -43,7 +43,7 @@
     "rocker_wall": 0.0015875,
     "axle_outer_diameter": 0.033,
     "axle_wall": 0.001,
-    "rocker_pivot_offset": 0.0962,
+    "rocker_pivot_offset": 0.0525,
     "gravity": 9.80665,
     "run_time": 900.0,
     "traversal_time_one_way": 45.0,

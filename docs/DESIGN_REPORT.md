@@ -16,6 +16,12 @@ run and provenance; the curated folder needs no duplicate analysis JSON.
 
 ## Evaluate and refresh
 
+The stroke plot includes empty/full-drum actuator force and peak axial
+compression along one arm with full drums. All three curves use unfactored
+quasi-static gravity loads and share the force axis (N or lbf); the dashed
+allowable-force line applies only to the actuator. Compression uses the existing
+arm section equilibrium, including self-weight and the axle-relative pin offsets.
+
 Run these commands from the repository root, in order:
 
 ```powershell

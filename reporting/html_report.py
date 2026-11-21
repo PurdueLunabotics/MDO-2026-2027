@@ -360,7 +360,7 @@ def write_report(record, output, iterations=(), *, download_links=None):
         force_data = force_stroke_data(values)
         actuator = tuple(force_stroke_svg(force_data, units) for units in ("metric", "imperial"))
     except (ValueError, KeyError) as exc:
-        actuator = (f'<p class="callout">Actuator force plot unavailable: {escape(str(exc))}.</p>', "")
+        actuator = (f'<p class="callout">Actuator and arm force plot unavailable: {escape(str(exc))}.</p>', "")
     for suffix, svg in zip(("actuator_force", "actuator_force_imperial"), actuator):
         if svg.startswith('<svg'):
             (output.parent/f"{output.stem}_{suffix}.svg").write_text(svg, encoding="utf-8")
